@@ -1,0 +1,25 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+type Theme = "dark" | "light" | "system";
+
+interface ThemeState {
+  theme: Theme;
+  accentColor: string;
+  setTheme: (theme: Theme) => void;
+  setAccentColor: (color: string) => void;
+}
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    (set) => ({
+      theme: 'system',
+      accentColor: '221.2 83.2% 53.3%', // Default Blue
+      setTheme: (theme) => set({ theme }),
+      setAccentColor: (color) => set({ accentColor: color }),
+    }),
+    {
+      name: 'theme-storage',
+    }
+  )
+);

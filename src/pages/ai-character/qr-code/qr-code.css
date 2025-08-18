@@ -1,0 +1,6 @@
+.bg-grid-pattern {
+  background-color: #ffffff;
+  background-image: linear-gradient(#ccc 1px, transparent 1px),
+                    linear-gradient(90deg, #ccc 1px, transparent 1px);
+  background-size: 10px 10px;
+}

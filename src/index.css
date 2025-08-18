@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 1rem;
+    
+    /* Розширені змінні для більш гнучкого дизайну */
+    --container-padding: 1rem;
+    --card-box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --focus-ring: 0 0 0 2px hsla(var(--primary)/0.4);
+    
+    /* Responsive breakpoints as CSS variables */
+    --breakpoint-sm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1024px;
+    --breakpoint-xl: 1280px;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 210 40% 98%;
+    --card: 230 21% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 222 16% 14%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 16% 17%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 14% 22%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-color: hsl(var(--background)) !important;
+    background-image: none !important;
+  }
+  /* Dark theme – plain black background */
+  html.dark, .dark body, body.dark {
+    background: #000 !important;
+
+  }
+
+}
+
+/* -------------------------------------------------- */
+/*  Custom Utilities                                  */
+/* -------------------------------------------------- */
+@layer utilities {
+  /* Dark mode form elements */
+  .dark input,
+  .dark select,
+  .dark textarea {
+    @apply bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500;
+  }
+  /* Hero gradient backgrounds */
+  .bg-hero-light {
+    @apply bg-gradient-to-br from-white via-sky-50 to-sky-100;
+  }
+  /* Override in dark mode – solid black with no gradient */
+  .dark .bg-hero-light {
+    @apply bg-black;
+    background-image: none !important;
+  }
+  /* Dark theme hero background - solid black */
+  .dark .bg-hero-dark {
+    @apply bg-black;
+  }
+  /* Ensure any gradient overlay is also black */
+  .dark .bg-hero-gradient {
+    @apply bg-black;
+  }
+
+  /* Glassmorphism card */
+  .glass-card {
+    @apply backdrop-blur-md bg-white/40 dark:bg-neutral-900 border border-white/30 dark:border-neutral-700 shadow-lg rounded-[var(--radius)];
+  }
+
+  /* Neon primary button effect */
+  .btn-neon {
+    @apply relative overflow-hidden text-white font-medium transition-shadow;
+  }
+  .btn-neon::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(90deg, hsla(var(--primary)/0.9) 0%, hsla(var(--primary)/0.3) 100%);
+    filter: blur(12px);
+    opacity: 0;
+    transition: opacity 0.4s;
+    border-radius: inherit;
+  }
+  .btn-neon:hover::before {
+    opacity: 1;
+  }
+}
