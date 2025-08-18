@@ -30,6 +30,7 @@ interface SupplierPrice {
   supplier_url: string | null;
   supplier_status: string;
   price: number | null;
+  promo_price: number | null; // Додаємо акційну ціну
   availability: number | null;
   site_id: number | null;
   date: string | null;
@@ -77,14 +78,22 @@ export default function InverterPriceComparison() {
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
     id: number | null;
     price: number | null;
+    promo_price: number | null;
+    availability: string | null;
     productName: string;
-  }>({ id: null, price: null, productName: '' });
+  }>({ id: null, price: null, promo_price: null, availability: null, productName: '' });
 
   const [getInverterComparison, { isLoading }] = useGetSupplierInverterComparisonMutation();
 
+  // Прапор для відстеження, чи були застосовані фільтри користувачем
+  const [filtersApplied, setFiltersApplied] = useState(false);
+
   useEffect(() => {
-    fetchComparisonData();
-  }, [filters]);
+    // Виконуємо запит тільки якщо фільтри були застосовані
+    if (filtersApplied) {
+      fetchComparisonData();
+    }
+  }, [filters, filtersApplied]);
 
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
@@ -158,6 +167,8 @@ export default function InverterPriceComparison() {
   const handleFiltersChange = (newFilters: Partial<InverterPriceListRequestSchema>) => {
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
     setPage(1);
+    // Встановлюємо прапор, що фільтри були застосовані
+    setFiltersApplied(true);
   };
 
   // Format price with comma as a thousands separator
@@ -199,7 +210,9 @@ export default function InverterPriceComparison() {
       setSelectedPriceInfo({
         id: supplierPrice.site_id,
         price: supplierPrice.price,
-        productName: inverter.full_name
+        promo_price: supplierPrice.promo_price || null,
+        availability: supplierPrice.availability !== undefined ? String(supplierPrice.availability) : null,
+        productName: `${inverter.full_name} (${supplierName})`
       });
       setUpdatePriceModalOpen(true);
     }
@@ -264,7 +277,12 @@ export default function InverterPriceComparison() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="h-[calc(100vh-300px)] max-h-[800px] overflow-auto">
           <div className="p-2 sm:p-4">
-            {isLoading ? (
+            {!filtersApplied ? (
+              <div className="text-center py-10 text-gray-500">
+                <p className="font-medium">Застосуйте фільтри для відображення даних</p>
+                <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
+              </div>
+            ) : isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="w-full h-10" />
                 <Skeleton className="w-full h-10" />
@@ -501,6 +519,8 @@ export default function InverterPriceComparison() {
         onClose={() => setUpdatePriceModalOpen(false)}
         onSubmit={handlePriceUpdate}
         currentPrice={selectedPriceInfo.price}
+        currentPromoPrice={selectedPriceInfo.promo_price}
+        currentAvailability={selectedPriceInfo.availability}
         productName={selectedPriceInfo.productName}
         siteId={selectedPriceInfo.id!}
       />

@@ -13,7 +13,13 @@ import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { updateSolarPanelSitePrice, UpdateSitePriceRequest } from '@/services/sitePrice.api';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/Tooltip";
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -25,6 +31,8 @@ interface SupplierPrice {
   availability: number | null;
   site_id: number | null;
   date: string | null;
+  recommended_price: number | null;
+  promo_price: number | null;
 }
 
 // Інтерфейс для сонячної панелі з цінами постачальників
@@ -52,7 +60,7 @@ interface SolarPanelComparisonResponse {
 }
 
 export default function SolarPanelPriceComparison() {
-  const pageSize = 10; // Фіксований розмір сторінки
+  const [pageSize, setPageSize] = useState(10); // Динамічний розмір сторінки
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<SolarPanelPriceListRequestSchema>({
     page: page,
@@ -72,14 +80,22 @@ export default function SolarPanelPriceComparison() {
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
     id: number | null;
     price: number | null;
+    promo_price: number | null;
+    availability: string | null;
     productName: string;
-  }>({ id: null, price: null, productName: '' });
+  }>({ id: null, price: null, promo_price: null, availability: null, productName: '' });
 
   const [getSolarPanelComparison, { isLoading }] = useGetSupplierSolarPanelComparisonMutation();
 
+  // Прапор для відстеження, чи були застосовані фільтри користувачем
+  const [filtersApplied, setFiltersApplied] = useState(false);
+
   useEffect(() => {
-    fetchComparisonData();
-  }, [filters]);
+    // Виконуємо запит тільки якщо фільтри були застосовані
+    if (filtersApplied) {
+      fetchComparisonData();
+    }
+  }, [filters, filtersApplied]);
 
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
@@ -150,6 +166,8 @@ export default function SolarPanelPriceComparison() {
   const handleFiltersChange = (newFilters: Partial<SolarPanelPriceListRequestSchema>) => {
     setFilters((prev: SolarPanelPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
     setPage(1);
+    // Встановлюємо прапор, що фільтри були застосовані
+    setFiltersApplied(true);
   };
   
   // Ця функція не використовується в поточній реалізації, але залишена для майбутнього використання
@@ -158,6 +176,41 @@ export default function SolarPanelPriceComparison() {
   const formatPrice = (price: number | null) => {
     if (price === null) return '-';
     return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
+  // Format date with hours and minutes
+  const formatDateWithTime = (dateString: string | null) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('uk-UA', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Determine price color based on recommended price comparison
+  const getPriceColorClass = (price: number | null, recommendedPrice: number | null) => {
+    if (price === null || recommendedPrice === null) return '';
+    
+    // Calculate percentage difference
+    const percentDiff = ((price - recommendedPrice) / recommendedPrice) * 100;
+    
+    if (percentDiff <= 15) return 'text-green-600 font-medium';
+    if (percentDiff <= 20) return 'text-yellow-600 font-medium';
+    if (percentDiff <= 25) return 'text-orange-500 font-medium';
+    return 'text-red-600 font-medium';
+  };
+
+  // Check if panel needs warning icon (has site_id but no recommended price)
+  const needsWarningIcon = (panel: SolarPanelWithSupplierPrices) => {
+    return panel.supplier_prices.some(sp => 
+      sp.site_id !== null && 
+      sp.site_id !== undefined && 
+      sp.recommended_price === null
+    );
   };
 
   // Determine if any supplier has this panel available
@@ -192,6 +245,8 @@ export default function SolarPanelPriceComparison() {
       setSelectedPriceInfo({
         id: supplierPrice.site_id,
         price: supplierPrice.price,
+        promo_price: supplierPrice.promo_price || null,
+        availability: supplierPrice.availability !== undefined ? String(supplierPrice.availability) : null,
         productName: `${panel.full_name} (${supplierName})`,
       });
       setUpdatePriceModalOpen(true);
@@ -250,7 +305,12 @@ export default function SolarPanelPriceComparison() {
       <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
         <div className="h-[calc(100vh-300px)] max-h-[800px] overflow-auto">
           <div className="p-4">
-            {isLoading ? (
+            {!filtersApplied ? (
+              <div className="text-center py-10 text-gray-500">
+                <p className="font-medium">Застосуйте фільтри для відображення даних</p>
+                <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
+              </div>
+            ) : isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="w-full h-10" />
                 <Skeleton className="w-full h-10" />
@@ -322,6 +382,23 @@ export default function SolarPanelPriceComparison() {
                     ))}
                     <TableHead
                       className="text-right"
+                      onClick={() => requestSort('recommendedPrice')}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Рекомендована ціна</span>
+                        {sortConfig?.key === 'recommendedPrice' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="text-right"
                       onClick={() => requestSort('totalAvailability')}
                     >
                       <div className="flex items-center justify-end gap-1">
@@ -350,7 +427,25 @@ export default function SolarPanelPriceComparison() {
                           : "hover:bg-muted/50 dark:hover:bg-muted/70 opacity-70"
                       }
                     >
-                      <TableCell className="font-medium" noWrap>{panel.full_name}</TableCell>
+                      <TableCell className="font-medium" noWrap>
+                        <div className="flex items-center gap-1">
+                          {needsWarningIcon(panel) && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <AlertCircle className="h-4 w-4 text-red-500" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-red-500 text-white">
+                                  <p>Немає в наявності у постачальників</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {panel.full_name}
+                        </div>
+                      </TableCell>
                       <TableCell noWrap>{panel.brand}</TableCell>
                       <TableCell className="hidden sm:table-cell">{panel.power ? `${panel.power} Вт` : '-'}</TableCell>
                       <TableCell className="hidden md:table-cell">{panel.thickness}</TableCell>
@@ -368,9 +463,16 @@ export default function SolarPanelPriceComparison() {
                           >
                             <div className="flex flex-col items-end space-y-2">
                               {price !== null ? (
-                                <span className="text-primary dark:text-primary-foreground font-medium">
-                                  {formatPrice(price)}&nbsp;₴
-                                </span>
+                                <>
+                                  <span className={`${panel.supplier_prices.some(sp => sp.recommended_price !== null) ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null) : 'text-primary dark:text-primary-foreground font-medium'}`}>
+                                    {formatPrice(price)}&nbsp;₴
+                                  </span>
+                                  {getSupplierPriceObject(panel, supplier)?.date && (
+                                    <span className="text-xs text-gray-500">
+                                      {formatDateWithTime(getSupplierPriceObject(panel, supplier)?.date as string)}
+                                    </span>
+                                  )}
+                                </>
                               ) : (
                                 '-'
                               )}
@@ -390,6 +492,19 @@ export default function SolarPanelPriceComparison() {
                           </TableCell>
                         );
                       })}
+                      
+                      {/* Recommended price column */}
+                      <TableCell className="text-right font-medium">
+                        {panel.supplier_prices.some(sp => sp.recommended_price !== null) ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-purple-700 dark:text-purple-400 font-medium">
+                              {formatPrice(panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;₴
+                            </span>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
                       
                       {/* Total availability column */}
                       <TableCell className="text-right">
@@ -420,8 +535,29 @@ export default function SolarPanelPriceComparison() {
         {comparisonData && (
           <div className="p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="text-xs sm:text-sm text-muted-foreground">
-                Показано {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}
+              <div className="flex items-center gap-2">
+                <div className="text-xs sm:text-sm text-muted-foreground">
+                  Показано {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs sm:text-sm text-muted-foreground">На сторінці:</span>
+                  <select
+                    className="p-1 text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 bg-background"
+                    value={pageSize}
+                    onChange={(e) => {
+                      const newSize = Number(e.target.value);
+                      setPageSize(newSize);
+                      setFilters(prev => ({ ...prev, page: 1, page_size: newSize }));
+                      setPage(1);
+                    }}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
               </div>
               <Pagination
                 currentPage={page}
@@ -439,6 +575,8 @@ export default function SolarPanelPriceComparison() {
         onClose={() => setUpdatePriceModalOpen(false)}
         onSubmit={handlePriceUpdate}
         currentPrice={selectedPriceInfo.price}
+        currentPromoPrice={selectedPriceInfo.promo_price}
+        currentAvailability={selectedPriceInfo.availability}
         productName={selectedPriceInfo.productName}
         siteId={selectedPriceInfo.id!} // Додаємо обов'язковий параметр site_id
       />

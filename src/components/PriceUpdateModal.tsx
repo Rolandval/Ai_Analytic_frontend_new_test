@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Label } from './ui/Label';
@@ -34,6 +34,15 @@ export function PriceUpdateModal({
   const [availability, setAvailability] = useState<string>(currentAvailability || '');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  
+  // Оновлюємо стан при зміні вхідних даних або коли модальне вікно відкривається
+  useEffect(() => {
+    if (isOpen) {
+      setPrice(currentPrice ? currentPrice.toString() : '');
+      setPromoPrice(currentPromoPrice ? currentPromoPrice.toString() : '');
+      setAvailability(currentAvailability || '');
+    }
+  }, [isOpen, currentPrice, currentPromoPrice, currentAvailability]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
