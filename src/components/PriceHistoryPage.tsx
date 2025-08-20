@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { useToast } from '@/hooks/use-toast';
 
 // Minimal column definition for a generic table
@@ -24,6 +25,7 @@ export interface PricesHookReturn<T, CreatePayload, UpdatePayload> {
   pageSize: number;
   loading: boolean;
   setPage: (p: number) => void;
+  setPageSize?: (size: number) => void;
   filters: Record<string, unknown>;
   setFilters: (f: Record<string, unknown>) => void;
   createPrice: (payload: CreatePayload) => Promise<void>;
@@ -52,13 +54,14 @@ interface PriceHistoryPageProps<T, CreatePayload = any, UpdatePayload = any> {
   filterComponent?: React.ReactNode;
   createFormComponent?: React.ReactNode;
   chartConfig?: ChartConfig; // optional chart support
+  topSearchComponent?: React.ReactNode; // новий компонент для пошуку зверху
 }
 
 export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   props: PriceHistoryPageProps<T, CreatePayload, UpdatePayload>
 ) {
   const { title, currencySymbol, columns, hook, filterComponent, createFormComponent, chartConfig } = props;
-  const { rows, total, page, pageSize, setPage, loading } = hook;
+  const { rows, total, page, pageSize, setPage, setPageSize, loading } = hook;
   
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<{ id: number; price: number } | null>(null);
@@ -86,6 +89,39 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   const [chartSrc, setChartSrc] = useState<string>('');
   const [chartLoading, setChartLoading] = useState(false);
   const [selectedSuppliers, setSelectedSuppliers] = useState<number[]>([]);
+  
+  // Застосувати тільки необхідні фільтри (модель, бренди, постачальники, Вт/Ah, $/Вт/$/Ah, ₴ з нац, контакт), зберегти usd_rate/markup
+  const applyEssentialFilters = () => {
+    const f = (hook.filters as any) || {};
+    hook.setFilters({
+      full_name: f.full_name || undefined,
+      brands: Array.isArray(f.brands) && f.brands.length ? f.brands : undefined,
+      suppliers: Array.isArray(f.suppliers) && f.suppliers.length ? f.suppliers : undefined,
+      // Power fields for solar panels and inverters
+      power_min: f.power_min !== undefined ? f.power_min : undefined,
+      power_max: f.power_max !== undefined ? f.power_max : undefined,
+      price_per_w_min: f.price_per_w_min !== undefined ? f.price_per_w_min : undefined,
+      price_per_w_max: f.price_per_w_max !== undefined ? f.price_per_w_max : undefined,
+      // Battery-specific fields (Ah, A)
+      volume_min: f.volume_min !== undefined ? f.volume_min : undefined,
+      volume_max: f.volume_max !== undefined ? f.volume_max : undefined,
+      c_amps_min: f.c_amps_min !== undefined ? f.c_amps_min : undefined,
+      c_amps_max: f.c_amps_max !== undefined ? f.c_amps_max : undefined,
+      // Price fields
+      price_min: f.price_min !== undefined ? f.price_min : undefined,
+      price_max: f.price_max !== undefined ? f.price_max : undefined,
+      price_markup_uah_min: f.price_markup_uah_min !== undefined ? f.price_markup_uah_min : undefined,
+      price_markup_uah_max: f.price_markup_uah_max !== undefined ? f.price_markup_uah_max : undefined,
+      // Contact fields
+      contact: f.contact || undefined,
+      phone: f.phone || undefined,
+      telegram: f.telegram || undefined,
+      // Essential settings
+      usd_rate: f.usd_rate,
+      markup: f.markup,
+      page: 1,
+    });
+  };
   
   // Функція для збереження налаштувань видимості колонок в localStorage
   const saveColumnSettings = (newVisibility: Record<string, boolean>) => {
@@ -265,6 +301,13 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">{title}</h1>
       
+      {/* Top search and active filters section */}
+      {props.topSearchComponent && (
+        <div className="mb-4">
+          {props.topSearchComponent}
+        </div>
+      )}
+      
       {/* Top controls */}
       <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         {filterComponent}
@@ -337,14 +380,13 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 });
             }}
           >
-            {copying ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-            {copying ? "Скопійовано!" : "Копіювати таблицю"}
+            {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
 
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-1" /> Налаштування
+                <Settings className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80">
@@ -371,16 +413,54 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        const newVisibility = {};
+                        const newVisibility = {} as Record<string, boolean>;
+                        // Базові колонки для всіх сторінок
+                        let desired = ['full_name', 'brand', 'supplier'];
+                        
+                        // Додаємо специфічні колонки залежно від типу продукту
+                        const availableColumns = columns.map(col => col.key as string);
+                        
+                        // Для сонячних панелей та інверторів: +Вт, $/Вт, ₴ з нац.
+                        if (availableColumns.includes('power')) {
+                          desired.push('power'); // +Вт
+                        }
+                        if (availableColumns.includes('price_per_w')) {
+                          desired.push('price_per_w'); // $/Вт
+                        }
+                        if (availableColumns.includes('price_markup_uah')) {
+                          desired.push('price_markup_uah'); // ₴ з нац.
+                        }
+                        
+                        // Для акумуляторів: +Ah, +A, ₴ з нац.
+                        if (availableColumns.includes('volume')) {
+                          desired.push('volume'); // +Ah
+                        }
+                        if (availableColumns.includes('c_amps')) {
+                          desired.push('c_amps'); // +A
+                        }
+                        if (availableColumns.includes('price_uah')) {
+                          desired.push('price_uah'); // ₴ з нац. (для акумуляторів)
+                        }
+                        
+                        // +Контакт (завжди включаємо якщо доступний)
+                        if (availableColumns.includes('contact') || availableColumns.includes('phone') || availableColumns.includes('telegram')) {
+                          if (availableColumns.includes('contact')) desired.push('contact');
+                          if (availableColumns.includes('phone')) desired.push('phone');
+                          if (availableColumns.includes('telegram')) desired.push('telegram');
+                        }
+                        
                         columns.forEach(column => {
                           const columnKey = column.key as string;
-                          // Визначаємо необхідні колонки - наприклад, важливі поля
-                          const essentialColumns = ['id', 'name', 'brand', 'power', 'price', 'supplier'];
-                          newVisibility[columnKey] = essentialColumns.some(essential => 
-                            columnKey.toLowerCase().includes(essential));
+                          newVisibility[columnKey] = desired.includes(columnKey);
                         });
                         setVisibleColumns(newVisibility);
                         saveColumnSettings(newVisibility);
+                        // Також вмикаємо тільки необхідні кнопки
+                        const btns = { contact: true, edit: true, delete: false, chart: false };
+                        setButtonsVisibility(btns);
+                        saveButtonsSettings(btns);
+                        // Та застосовуємо тільки необхідні фільтри
+                        applyEssentialFilters();
                       }}
                     >
                       Необхідні
@@ -434,14 +514,20 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        const newVisibility = {
-                          contact: true,
-                          edit: true,
-                          delete: false,
-                          chart: false
-                        };
+                        const newVisibility = { contact: true, edit: true, delete: false, chart: false };
                         setButtonsVisibility(newVisibility);
                         saveButtonsSettings(newVisibility);
+                        // Узгоджено встановимо і колонки до необхідних
+                        const cols: Record<string, boolean> = {};
+                        const desired = ['full_name', 'brand', 'supplier', 'power', 'price_per_w', 'price_markup_uah'];
+                        columns.forEach(column => {
+                          const key = column.key as string;
+                          cols[key] = desired.includes(key);
+                        });
+                        setVisibleColumns(cols);
+                        saveColumnSettings(cols);
+                        // Та застосуємо тільки необхідні фільтри
+                        applyEssentialFilters();
                       }}
                     >
                       Необхідні
@@ -449,19 +535,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox 
-                      id="button-contact" 
-                      checked={buttonsVisibility.contact}
-                      onCheckedChange={(checked: boolean) => {
-                        const newVisibility = { ...buttonsVisibility, contact: checked };
-                        setButtonsVisibility(newVisibility);
-                        saveButtonsSettings(newVisibility);
-                      }}
-                    />
-                    <Label htmlFor="button-contact">Контакт</Label>
-                  </div>
-                  
+                   
                   <div className="flex items-center gap-2">
                     <Checkbox 
                       id="button-edit" 
@@ -512,21 +586,27 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
       </div>
       
       {/* Table */}
-      <div className="rounded-md border">
-        <table className="w-full">
-          <thead>
+      <div className="rounded-md border w-full overflow-x-auto">
+        <table className="w-full table-auto" style={{userSelect: 'text'}}>
+          <thead style={{userSelect: 'none'}}>
             <tr className="bg-muted/50">
+              <th className="py-2 px-4 text-center font-medium text-sm w-16">№</th>
               {columns.map(column => {
                 if (visibleColumns[column.key as string] === false) {
                   return null;
                 }
                 
+                // Determine alignment based on column type
+                const isTextColumn = ['full_name', 'brand', 'supplier', 'city', 'contact', 'phone', 'telegram', 'firmware'].includes(column.key as string);
+                const headerAlignment = 'text-center';
+                const justifyContent = 'justify-center';
+
                 return (
                   <th
                     key={column.key as string}
-                    className="py-2 px-4 text-left font-medium text-sm"
+                    className={`py-2 px-4 ${headerAlignment} font-medium text-sm`}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className={`flex items-center gap-1 ${justifyContent}`}>
                       <button
                         className="hover:bg-muted/50 flex items-center gap-2 px-2 py-1 rounded transition-colors"
                         onClick={() => handleSortClick(column.key as string, column.sortKey)}
@@ -540,38 +620,44 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   </th>
                 );
               })}
-              <th className="py-2 px-4 text-left font-medium text-sm">Дії</th>
+              <th className="py-2 px-4 text-center font-medium text-sm">Дії</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={columns.filter(c => visibleColumns[c.key as string] !== false).length + 1} className="text-center py-4">
+                <td colSpan={columns.filter(c => visibleColumns[c.key as string] !== false).length + 2} className="text-center py-4">
                   Завантаження...
                 </td>
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={columns.filter(c => visibleColumns[c.key as string] !== false).length + 1} className="text-center py-4">
+                <td colSpan={columns.filter(c => visibleColumns[c.key as string] !== false).length + 2} className="text-center py-4">
                   Немає даних
                 </td>
               </tr>
             ) : (
-              sortedRows.map((row: any) => (
+              sortedRows.map((row: any, index: number) => (
                 <tr key={row.id} className="border-t">
+                  <td className="py-2 px-4 text-center w-16">{(page - 1) * pageSize + index + 1}</td>
                   {columns.map(column => {
                     if (visibleColumns[column.key as string] === false) {
                       return null;
                     }
                     
                     const value = row[column.key as keyof typeof row];
+                    // Match data cell alignment with header alignment
+                    const isTextColumn = ['full_name', 'brand', 'supplier', 'city', 'contact', 'phone', 'telegram', 'firmware'].includes(column.key as string);
+                    const dataAlignment = isTextColumn ? 'text-left' : 'text-center';
+                    
                     return (
-                      <td key={column.key as string} className="py-2 px-4">
+                      <td key={column.key as string} className={`py-2 px-4 ${dataAlignment} whitespace-nowrap`}>
                         {column.render ? column.render(row) : String(value || '')}
                       </td>
                     );
                   })}
-                  <td className="py-2 px-4 flex items-center gap-2">
+                  <td className="py-2 px-4 text-center">
+                    <div className="flex items-center justify-center gap-2">
                     {buttonsVisibility.contact && row.phone && (
                       <Button size="sm" variant="outline" asChild>
                         <a href={`tel:${row.phone}`}>Контакт</a>
@@ -611,6 +697,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                         Графік
                       </Button>
                     )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -674,19 +761,41 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
 
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4">
-        <span>
-          {page} / {Math.max(1, Math.ceil(total / pageSize))}
-        </span>
-        <div className="space-x-2">
-          <Button disabled={page === 1} onClick={() => setPage(page - 1)}>
-            Prev
-          </Button>
-          <Button
-            disabled={page === Math.ceil(total / pageSize) || total === 0}
-            onClick={() => setPage(page + 1)}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Показати:</span>
+          <Select 
+            value={String(pageSize)} 
+            onValueChange={(value) => setPageSize && setPageSize(Number(value))}
           >
-            Next
-          </Button>
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[10, 20, 50, 100].map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-sm text-gray-600">записів</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-600">
+            {page} / {Math.max(1, Math.ceil(total / pageSize))}
+          </span>
+          <div className="space-x-2">
+            <Button disabled={page === 1} onClick={() => setPage(page - 1)} size="sm">
+              Попередня
+            </Button>
+            <Button
+              disabled={page === Math.ceil(total / pageSize) || total === 0}
+              onClick={() => setPage(page + 1)}
+              size="sm"
+            >
+              Наступна
+            </Button>
+          </div>
         </div>
       </div>
 

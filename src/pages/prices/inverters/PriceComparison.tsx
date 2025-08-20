@@ -91,7 +91,11 @@ export default function InverterPriceComparison() {
   useEffect(() => {
     // Виконуємо запит тільки якщо фільтри були застосовані
     if (filtersApplied) {
-      fetchComparisonData();
+      const timeoutId = setTimeout(() => {
+        fetchComparisonData();
+      }, 500); // Збільшуємо debounce до 500ms для зменшення мерехтіння
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [filters, filtersApplied]);
 
@@ -275,7 +279,7 @@ export default function InverterPriceComparison() {
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        <div className="h-[calc(100vh-300px)] max-h-[800px] overflow-auto">
+        <div className="overflow-auto">
           <div className="p-2 sm:p-4">
             {!filtersApplied ? (
               <div className="text-center py-10 text-gray-500">
@@ -289,7 +293,7 @@ export default function InverterPriceComparison() {
                 <Skeleton className="w-full h-10" />
               </div>
             ) : comparisonData && comparisonData.inverters.length > 0 ? (
-              <Table containerClassName="max-h-[70vh]">
+              <Table>
                 <TableHeader className="[&_th]:cursor-pointer [&_th:hover]:bg-muted/50">
                   <TableRow>
                     {/* Використовуємо onClick для сортування */}

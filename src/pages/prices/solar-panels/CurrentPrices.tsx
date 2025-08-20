@@ -1,6 +1,6 @@
 import { PriceHistoryPage } from '@/components/PriceHistoryPage';
 import { useSolarPanelCurrentPricesCrud } from '@/hooks/useSolarPanelCurrentPricesCrud';
-import { SolarPanelFilters } from '@/components/filters/SolarPanelFilters';
+import { SolarPanelFilters, SolarPanelTopSearch } from '@/components/filters/SolarPanelFilters';
 import { useState, useEffect } from 'react';
 import { CreateSolarPanelPriceForm } from '@/components/forms/CreateSolarPanelPriceForm';
 import { TableColumn } from '@/components/PriceHistoryPage';
@@ -10,7 +10,16 @@ import { ContactIconButton } from '@/components/ui/ContactIconButton';
 const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarPanelPriceSchema>[] => [
   { key: 'full_name', header: 'Назва', sortable: true },
   { key: 'brand', header: 'Бренд', sortable: true },
-  { key: 'power', header: 'Вт', sortable: true },
+  { 
+    key: 'power', 
+    header: 'Вт', 
+    sortable: true,
+    render: (row) => (
+      <span className="text-sm">
+        {row.power}
+      </span>
+    )
+  },
   { key: 'panel_type', header: 'Тип', sortable: true },
   { key: 'cell_type', header: 'Комірка', sortable: true },
   { key: 'panel_color', header: 'Колір панелі', sortable: true },
@@ -187,6 +196,16 @@ export default function SolarPanelCurrentPricesPage() {
     }
   }, [hook.filters.usd_rate, hook.filters.markup]);
 
+  const resetFilters = () => {
+    const resetFilters = {
+      page: 1,
+      page_size: 10,
+      markup: 15,
+    };
+    hook.setFilters(resetFilters);
+    setMarkup(15);
+  };
+
   return (
     <PriceHistoryPage
       title="Актуальні ціни – Сонячні панелі"
@@ -197,6 +216,21 @@ export default function SolarPanelCurrentPricesPage() {
         getChart: hook.getChart,
         suppliers: (hook as any).supplierOptions ?? [],
       }}
+      topSearchComponent={
+        <SolarPanelTopSearch
+          current={hook.filters}
+          setFilters={(filters) => {
+            hook.setFilters(filters);
+            if (filters.usd_rate) {
+              setUsdRate(filters.usd_rate);
+            }
+            if (filters.markup !== undefined) {
+              setMarkup(filters.markup);
+            }
+          }}
+          onReset={resetFilters}
+        />
+      }
       filterComponent={
         <SolarPanelFilters 
           current={hook.filters} 

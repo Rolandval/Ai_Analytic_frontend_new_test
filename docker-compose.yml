@@ -1,0 +1,16 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5174:5174"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - ai-analytics-network
+
+networks:
+  ai-analytics-network:
+    driver: bridge

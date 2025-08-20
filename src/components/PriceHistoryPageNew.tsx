@@ -294,14 +294,13 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 });
             }}
           >
-            {copying ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
-            {copying ? "Скопійовано!" : "Копіювати таблицю"}
+            {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
 
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-1" /> Налаштування
+                <Settings className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80">
@@ -332,18 +331,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 
                 <h4 className="font-medium">Налаштування кнопок</h4>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox 
-                      id="button-contact" 
-                      checked={buttonsVisibility.contact}
-                      onCheckedChange={(checked) => {
-                        const newVisibility = { ...buttonsVisibility, contact: !!checked };
-                        setButtonsVisibility(newVisibility);
-                        saveButtonsSettings(newVisibility);
-                      }}
-                    />
-                    <Label htmlFor="button-contact">Контакт</Label>
-                  </div>
+                   
                   
                   <div className="flex items-center gap-2">
                     <Checkbox 

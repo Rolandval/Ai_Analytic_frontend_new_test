@@ -15,6 +15,12 @@ export interface MultiSelectPopoverProps {
   values: Option[] | undefined;
   onChange: (vals: Option[] | undefined) => void;
   className?: string;
+  /** Show 'Select all' and 'Clear' quick actions. Default: false */
+  showSelectAll?: boolean;
+  /** Custom label for the select all button */
+  selectAllLabel?: string;
+  /** Custom label for the clear button */
+  clearLabel?: string;
 }
 
 /**
@@ -28,6 +34,9 @@ export function MultiSelectPopover({
   onChange,
   className,
   getLabel,
+  showSelectAll = false,
+  selectAllLabel = 'Вибрати всі',
+  clearLabel = 'Скинути',
 }: MultiSelectPopoverProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -88,6 +97,26 @@ export function MultiSelectPopover({
           placeholder="Пошук..."
           className="mb-2 w-full rounded-md border bg-background px-2 py-1 text-sm outline-none focus:ring-1 ring-primary"
         />
+
+        {/* Quick actions */}
+        {showSelectAll && (
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => onChange(options.length ? [...options] : undefined)}
+              className="text-xs px-2 py-1 rounded-md border border-border hover:bg-primary/5"
+            >
+              {selectAllLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className="text-xs px-2 py-1 rounded-md border border-border hover:bg-destructive/5"
+            >
+              {clearLabel}
+            </button>
+          </div>
+        )}
 
         {/* List */}
         <div className="max-h-56 overflow-y-auto space-y-1 scroll-hint" style={{ WebkitMaskImage: 'linear-gradient(to bottom, black 85%, transparent)' }}>

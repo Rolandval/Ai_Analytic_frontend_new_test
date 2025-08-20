@@ -2,8 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from "path"
 
-const BACKEND_ORIGIN = "http://localhost:8002";
-const MCP_ORIGIN = "http://localhost:8080";
+const BACKEND_ORIGIN = "http://185.233.44.234:8002";
+const MCP_ORIGIN = "http://185.233.44.234:8080";
 
 // https://vitejs.dev/config/
 export default defineConfig({

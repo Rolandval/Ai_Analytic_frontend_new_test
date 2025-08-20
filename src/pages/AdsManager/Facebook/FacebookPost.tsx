@@ -283,7 +283,7 @@ const FacebookPost = () => {
                       {copiedImage === index ? (
                         <><CheckCircle className="h-4 w-4 mr-1 text-green-500" /> Скопійовано</>
                       ) : (
-                        <><Copy className="h-4 w-4 mr-1" /> Копіювати</>
+                        <><Copy className="h-4 w-4" /></>
                       )}
                     </Button>
                     <Button 

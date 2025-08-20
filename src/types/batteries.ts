@@ -6,8 +6,8 @@ export interface BatteryPriceListRequestSchema {
   volume_max?: number;
   c_amps_min?: number;
   c_amps_max?: number;
-  region?: string;
-  polarity?: string;
+  region?: string | string[];
+  polarity?: string | string[];
   electrolyte?: string[];
   brands?: string[];
   suppliers?: string[];

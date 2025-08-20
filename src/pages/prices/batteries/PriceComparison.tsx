@@ -91,7 +91,11 @@ export default function BatteryPriceComparison() {
   useEffect(() => {
     // Виконуємо запит тільки якщо фільтри були застосовані
     if (filtersApplied) {
-      fetchComparisonData();
+      const timeoutId = setTimeout(() => {
+        fetchComparisonData();
+      }, 500); // Збільшуємо debounce до 500ms для зменшення мерехтіння
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [filters, filtersApplied]);
 
@@ -257,8 +261,7 @@ export default function BatteryPriceComparison() {
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        <div className="h-[calc(100vh-300px)] overflow-auto">
-          <div className="p-4">
+        <div className="p-4">
             {!filtersApplied ? (
               <div className="text-center py-10 text-gray-500">
                 <p className="font-medium">Застосуйте фільтри для відображення даних</p>
@@ -268,14 +271,14 @@ export default function BatteryPriceComparison() {
               <div className="space-y-2">
                 <Skeleton className="w-full h-10" />
                 <Skeleton className="w-full h-10" />
-                <Skeleton className="w-full h-10" />
               </div>
             ) : comparisonData && comparisonData.batteries.length > 0 ? (
-              <Table containerClassName="max-h-[70vh]">
-                <TableHeader className="[&_th]:cursor-pointer [&_th:hover]:bg-muted/50">
+              <Table style={{userSelect: 'text'}}>
+                <TableHeader className="[&_th]:cursor-pointer [&_th:hover]:bg-muted/50" style={{userSelect: 'none'}}>
                   <TableRow>
-                    <TableHead 
-                      className="w-[180px] sm:w-[300px]"
+                    <TableHead className="text-center w-16">№</TableHead>
+                    <TableHead
+                      className="text-left"
                       onClick={() => requestSort('full_name')}
                     >
                       <div className="flex items-center gap-1">
@@ -393,16 +396,16 @@ export default function BatteryPriceComparison() {
                       </div>
                     </TableHead>
                     {supplierColumns.map((supplier) => (
-                      <TableHead key={supplier} className="text-right">
+                      <TableHead key={supplier} className="text-center">
                         <span className="hidden md:inline">{supplier}</span>
                         <span className="md:hidden">{supplier.split(' ')[0]}</span>
                       </TableHead>
                     ))}
                     <TableHead
-                      className="text-right"
+                      className="text-center"
                       onClick={() => requestSort('totalAvailability')}
                     >
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-center gap-1">
                         <span>Наявність</span>
                         {sortConfig?.key === 'totalAvailability' && (
                           <span className="text-primary">
@@ -419,7 +422,7 @@ export default function BatteryPriceComparison() {
                 </TableHeader>
                 <TableBody>
                   {/* Використовуємо відсортований масив */}
-                  {sortedBatteries.map((battery) => (
+                  {sortedBatteries.map((battery, index) => (
                     <TableRow 
                       key={battery.id}
                       className={
@@ -428,13 +431,14 @@ export default function BatteryPriceComparison() {
                           : "hover:bg-muted/50 dark:hover:bg-muted/70 opacity-70"
                       }
                     >
-                      <TableCell className="font-medium" noWrap>{battery.full_name}</TableCell>
-                      <TableCell noWrap>{battery.brand}</TableCell>
-                      <TableCell className="hidden sm:table-cell">{battery.volume}</TableCell>
-                      <TableCell className="hidden sm:table-cell">{battery.c_amps}</TableCell>
-                      <TableCell className="hidden md:table-cell">{battery.region}</TableCell>
-                      <TableCell className="hidden md:table-cell">{battery.polarity}</TableCell>
-                      <TableCell className="hidden md:table-cell">{battery.electrolyte}</TableCell>
+                      <TableCell className="text-center w-16">{(page - 1) * pageSize + index + 1}</TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">{battery.full_name}</TableCell>
+                      <TableCell className="whitespace-nowrap">{battery.brand}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-center">{battery.volume}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-center">{battery.c_amps}</TableCell>
+                      <TableCell className="hidden md:table-cell text-center">{battery.region}</TableCell>
+                      <TableCell className="hidden md:table-cell text-center">{battery.polarity}</TableCell>
+                      <TableCell className="hidden md:table-cell text-center">{battery.electrolyte}</TableCell>
                       
                       {/* Supplier price columns */}
                       {supplierColumns.map((supplier) => {
@@ -443,9 +447,9 @@ export default function BatteryPriceComparison() {
                         return (
                           <TableCell 
                             key={supplier} 
-                            className="text-right font-medium"
+                            className="text-center font-medium"
                           >
-                            <div className="flex flex-col items-end space-y-2">
+                            <div className="flex flex-col items-center space-y-2">
                               {price !== null ? (
                                 <span className="text-primary dark:text-primary-foreground font-medium">
                                   {formatPrice(price)}&nbsp;₴
@@ -471,7 +475,7 @@ export default function BatteryPriceComparison() {
                       })}
                       
                       {/* Total availability column */}
-                      <TableCell className="text-right">
+                      <TableCell className="text-center">
                         {getTotalAvailability(battery) > 0 ? (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             {getTotalAvailability(battery)}
@@ -493,7 +497,6 @@ export default function BatteryPriceComparison() {
                   : "Немає даних для відображення"}
               </div>
             )}
-          </div>
         </div>
         
         {comparisonData && (

@@ -1,6 +1,6 @@
 import { PriceHistoryPage } from '@/components/PriceHistoryPage';
 import { useBatteryCurrentPricesCrud } from '@/hooks/useBatteryCurrentPricesCrud';
-import { BatteryFilters } from '@/components/filters/BatteryFilters';
+import { BatteryFilters, BatteryTopSearch } from '@/components/filters/BatteryFilters';
 import { CreateBatteryPriceForm } from '@/components/forms/CreateBatteryPriceForm';
 import { TableColumn } from '@/components/PriceHistoryPage';
 import { BatteryPriceSchema } from '@/types/batteries';
@@ -115,6 +115,15 @@ export default function BatteryCurrentPricesPage() {
     }
   }, [hook.filters.markup]);
 
+  const resetFilters = () => {
+    const resetFilters = {
+      page: 1,
+      markup: 15,
+    };
+    hook.setFilters(resetFilters);
+    setMarkup(15);
+  };
+
   return (
     <PriceHistoryPage
       title="Актуальні ціни – Акумулятори"
@@ -125,6 +134,18 @@ export default function BatteryCurrentPricesPage() {
         getChart: hook.getChart,
         suppliers: (hook as any).supplierOptions ?? [],
       }}
+      topSearchComponent={
+        <BatteryTopSearch
+          current={hook.filters}
+          setFilters={(filters) => {
+            hook.setFilters(filters);
+            if (filters.markup !== undefined) {
+              setMarkup(filters.markup);
+            }
+          }}
+          onReset={resetFilters}
+        />
+      }
       filterComponent={
         <BatteryFilters 
           current={hook.filters} 

@@ -1,6 +1,6 @@
 import { PriceHistoryPage } from '@/components/PriceHistoryPage';
 import { useInverterCurrentPricesCrud } from '@/hooks/useInverterCurrentPricesCrud';
-import { InverterFilters } from '@/components/filters/InverterFilters';
+import { InverterFilters, InverterTopSearch } from '@/components/filters/InverterFilters';
 import { CreateInverterPriceForm } from '@/components/forms/CreateInverterPriceForm';
 import { TableColumn } from '@/components/PriceHistoryPage';
 import { InverterPriceSchema } from '@/types/inverters';
@@ -14,7 +14,11 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<Invert
     key: 'power', 
     header: 'кВт', 
     sortable: true,
-    render: (row) => (row.power != null ? (row.power / 1000).toFixed(1) : '-') // Конвертація з Вт в кВт
+    render: (row) => (
+      <span className="text-sm">
+        {row.power != null ? (row.power / 1000).toFixed(1) : '-'}
+      </span>
+    )
   },
   { key: 'inverter_type', header: 'Тип', sortable: true },
   { key: 'generation', header: 'Покоління', sortable: true },
@@ -140,33 +144,98 @@ export default function InverterCurrentPricesPage() {
     }
   }, [hook.filters.usd_rate, hook.filters.markup]);
 
+  const resetFilters = () => {
+    const resetFilters = {
+      page: 1,
+      page_size: 10,
+      usd_rate: 40,
+      markup: 15,
+    };
+    hook.setFilters(resetFilters);
+    setUsdRate(40);
+    setMarkup(15);
+  };
+
   return (
-    <PriceHistoryPage
-      title="Актуальні ціни – Інвертори"
-      currencySymbol="₴"
-      columns={createColumns(hook.filters.usd_rate || usdRate, hook.filters.markup || markup)}
-      hook={hook as any}
-      chartConfig={{
-        getChart: hook.getChart,
-        suppliers: (hook as any).supplierOptions ?? [],
-      }}
-      filterComponent={
-        <InverterFilters 
-          current={hook.filters} 
-          setFilters={(filters) => {
-            hook.setFilters(filters);
-            if (filters.usd_rate) {
-              setUsdRate(filters.usd_rate);
-            }
-            if (filters.markup !== undefined) {
-              setMarkup(filters.markup);
-            }
-          }} 
-          brands={hook.brands} 
-          suppliers={hook.suppliers} 
-        />
-      }
-      createFormComponent={<CreateInverterPriceForm currencySymbol="$" brands={hook.brands} suppliers={hook.suppliers} onSubmit={hook.createPrice} />}
-    />
+    <div className="relative">
+      <PriceHistoryPage
+        title="Актуальні ціни – Інвертори"
+        currencySymbol="₴"
+        columns={createColumns(hook.filters.usd_rate || usdRate, hook.filters.markup || markup)}
+        hook={hook as any}
+        chartConfig={{
+          getChart: hook.getChart,
+          suppliers: (hook as any).supplierOptions ?? [],
+        }}
+        topSearchComponent={
+          <InverterTopSearch 
+            current={hook.filters}
+            setFilters={(filters) => {
+              hook.setFilters(filters);
+              if (filters.usd_rate) {
+                setUsdRate(filters.usd_rate);
+              }
+              if (filters.markup !== undefined) {
+                setMarkup(filters.markup);
+              }
+            }}
+            onReset={resetFilters}
+          />
+        }
+        filterComponent={
+          <InverterFilters 
+            current={hook.filters} 
+            setFilters={(filters) => {
+              hook.setFilters(filters);
+              if (filters.usd_rate) {
+                setUsdRate(filters.usd_rate);
+              }
+              if (filters.markup !== undefined) {
+                setMarkup(filters.markup);
+              }
+            }} 
+            brands={hook.brands} 
+            suppliers={hook.suppliers} 
+          />
+        }
+        createFormComponent={<CreateInverterPriceForm currencySymbol="$" brands={hook.brands} suppliers={hook.suppliers} onSubmit={hook.createPrice} />}
+      />
+      
+      {/* Курс долара і націнка внизу справа */}
+      <div className="fixed bottom-4 right-4 bg-white border border-gray-300 rounded-lg shadow-lg p-3 z-50">
+        <div className="flex gap-3 items-center">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-slate-600 font-medium">Курс $</span>
+            <input
+              type="number"
+              value={usdRate}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 40;
+                setUsdRate(value);
+                hook.setFilters({ ...hook.filters, usd_rate: value });
+              }}
+              className="w-16 h-7 text-sm border border-gray-300 rounded px-2 text-center"
+              min="1"
+              step="0.1"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-slate-600 font-medium">Націнка %</span>
+            <input
+              type="number"
+              value={markup}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 15;
+                setMarkup(value);
+                hook.setFilters({ ...hook.filters, markup: value });
+              }}
+              className="w-16 h-7 text-sm border border-gray-300 rounded px-2 text-center"
+              min="0"
+              step="0.1"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

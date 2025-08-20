@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Slider } from "@/components/ui/Slider";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/Input";
@@ -11,7 +11,6 @@ interface Props {
   onChange: (vals: [number | undefined, number | undefined]) => void;
   format?: (v: number) => string;
   formatInput?: (v: number) => string;
-  suffix?: string;
   className?: string;
 }
 
@@ -23,7 +22,6 @@ export function RangeSliderWithInput({
   onChange,
   format = (v) => String(v),
   formatInput = (v) => String(v),
-  suffix = "",
   className,
 }: Props) {
   const [internal, setInternal] = useState<[number, number]>([
@@ -39,7 +37,6 @@ export function RangeSliderWithInput({
     vmax !== undefined ? formatInput(vmax) : ""
   );
 
-  const trackRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<[number, number]>([
     ((vmin ?? min) - min) / (max - min),
     ((vmax ?? max) - min) / (max - min),
@@ -121,13 +118,13 @@ export function RangeSliderWithInput({
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex justify-between">
         <Input 
-          className="w-20 h-8 text-xs"
+          className="w-20 h-8 text-xs bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
           value={minInputValue}
           onChange={handleMinInputChange}
           onBlur={handleMinInputBlur}
         />
         <Input 
-          className="w-20 h-8 text-xs"
+          className="w-20 h-8 text-xs bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
           value={maxInputValue}
           onChange={handleMaxInputChange}
           onBlur={handleMaxInputBlur}

@@ -167,13 +167,60 @@ export function DirectoryPage<T extends { id?: number }, P extends Record<string
               );
             }
             if (f.type === 'select') {
+              // Skip pagination dropdown - it will be moved to bottom
+              if (f.name === 'page_size') {
+                return null;
+              }
+              
+              // Use radio buttons for small option sets (3 or fewer)
+              if (f.options.length <= 3) {
+                return (
+                  <div key={f.name} className="flex flex-col gap-1 p-1">
+                    <span className="text-[14px] font-semibold text-slate-700">{f.label}</span>
+                    <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+                      {f.options.map((o) => (
+                        <label key={o.value} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+                          <input
+                            type="radio"
+                            name={f.name}
+                            checked={(params as any)[f.name] === o.value}
+                            onChange={() => setParams((prev: any) => ({
+                              ...prev,
+                              [f.name]: o.value,
+                              page: 1,
+                            }))}
+                            className="peer accent-primary"
+                          />
+                          <span className="truncate max-w-[80px]" title={o.label}>{o.label}</span>
+                        </label>
+                      ))}
+                      <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+                        <input
+                          type="radio"
+                          name={f.name}
+                          checked={!(params as any)[f.name]}
+                          onChange={() => setParams((prev: any) => ({
+                            ...prev,
+                            [f.name]: undefined,
+                            page: 1,
+                          }))}
+                          className="peer accent-primary"
+                        />
+                        <span>всі</span>
+                      </label>
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Use dropdown for larger option sets
               return (
                 <Select
                   key={f.name}
                   value={String((params as any)[f.name] ?? '__all__')}
                   onValueChange={(val) => setParams((prev: any) => ({
                     ...prev,
-                    [f.name]: val === '__all__' ? undefined : (f.name === 'page_size' ? Number(val) : val),
+                    [f.name]: val === '__all__' ? undefined : val,
                     page: 1,
                   }))} 
                 >
@@ -284,9 +331,36 @@ export function DirectoryPage<T extends { id?: number }, P extends Record<string
         </div>
       </Card>
 
-      {/* Pagination */}
+      {/* Pagination with page size selector */}
       {!!totalPages && (
-        <Pagination className="mt-4" currentPage={(params as any).page || 1} totalPages={totalPages} onPageChange={(p) => setParams((prev: any) => ({ ...prev, page: p }))} />
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Показати:</span>
+            <Select
+              value={String((params as any).page_size ?? PAGE_SIZE)}
+              onValueChange={(val) => setParams((prev: any) => ({
+                ...prev,
+                page_size: Number(val),
+                page: 1,
+              }))}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50, 100].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">записів</span>
+          </div>
+          <Pagination 
+            currentPage={(params as any).page || 1} 
+            totalPages={totalPages} 
+            onPageChange={(p) => setParams((prev: any) => ({ ...prev, page: p }))} 
+          />
+        </div>
       )}
 
       {/* Buttons */}

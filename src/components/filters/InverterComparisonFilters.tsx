@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
+import { MultiSelectPopover } from './ui/MultiSelectPopover';
+import { getInverterCities } from '@/services/cities.api';
+import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
 import {
   Select,
@@ -9,8 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/Select';
-import { MultiSelectPopover } from './ui/MultiSelectPopover';
-import { RangeSliderWithInput } from './ui/RangeSliderWithInput';
 import { Badge } from '@/components/ui/Badge';
 import { Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,17 +33,22 @@ interface Props {
 }
 
 export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
-  const [shimmer, setShimmer] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout>();
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const apply = () => {
-    setShimmer(true);
-    setFilters({ ...local, page: 1 });
-    setTimeout(() => setShimmer(false), 400);
-  };
+  // Auto-apply filters with debounce
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      setFilters({ ...local, page: 1 });
+    }, 300);
+  }, [local, setFilters]);
+
   const reset = () => {
     const base = { page: 1, page_size: current.page_size ?? 10 } as InverterPriceListRequestSchema;
     setLocal(base);
@@ -51,11 +57,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
 
   return (
     <>
-      {shimmer && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 pointer-events-none">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      )}
 
     <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-2 sm:gap-4">
       {/* Фільтр тогл для мобільних */}
@@ -129,90 +130,138 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         isExpanded ? "grid-cols-1 sm:grid-cols-2" : "hidden md:grid",
         "md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
       )}>
-        {/* name */}
+        {/* === TEXT INPUTS === */}
         <Input
-          placeholder="Назва"
+          placeholder="Пошук по назві..."
           value={local.full_name ?? ''}
-          onChange={(e) => setLocal((p) => ({ ...p, full_name: e.target.value || undefined }))}
+          onChange={(e) => setLocal(prev => ({ ...prev, full_name: e.target.value || undefined }))}
+          className="w-full"
         />
 
-        {/* brand / supplier multiselect */}
+        {/* === DROPDOWNS/SELECTS === */}
         <MultiSelectPopover
-          placeholder="Виробник"
+          placeholder="+ Виробник"
           options={brands}
-          values={local.brands}
-          onChange={(vals) => setLocal((p) => ({ ...p, brands: vals }))}
+          values={local.brands ?? []}
+          onChange={(brands: string[] | undefined) => setLocal(prev => ({ ...prev, brands }))} 
+          showSelectAll
+          selectAllLabel="Вибрати всі бренди"
+          clearLabel="Скинути"
         />
         <MultiSelectPopover
-          placeholder="Постачальник"
+          placeholder="+ Постачальник"
           options={suppliers}
           values={local.suppliers}
           onChange={(vals) => setLocal((p) => ({ ...p, suppliers: vals }))}
+          showSelectAll
+          selectAllLabel="Вибрати всіх постачальників"
+          clearLabel="Скинути"
         />
 
-        {/* power */}
+        {/* === RANGE INPUTS === */}
+
+        {/* power - manual inputs */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-slate-400">Потужність, кВт</span>
-          <RangeSliderWithInput
-            min={0}
-            max={100}
-            step={1}
-            values={[local.power_min, local.power_max]}
-            onChange={([min, max]) => setLocal((p) => ({ ...p, power_min: min, power_max: max }))}
-            format={(v) => `${v}кВт`}
-            formatInput={(v) => `${v}`}
-            suffix="кВт"
-          />
+          <span className="text-[12px] font-medium text-slate-600">Потужність, кВт</span>
+          <div className="flex gap-1 items-center">
+            <Input
+              type="number"
+              placeholder="від"
+              value={local.power_min ?? ''}
+              onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
+              className="h-8 text-sm border-gray-300"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <Input
+              type="number"
+              placeholder="до"
+              value={local.power_max ?? ''}
+              onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
+              className="h-8 text-sm border-gray-300"
+            />
+          </div>
         </div>
         
-        {/* type */}
-        <Select
-          value={local.inverter_type ?? ''}
-          onValueChange={(v) => setLocal((p) => ({ ...p, inverter_type: v || undefined }))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Тип інвертора" />
-          </SelectTrigger>
-          <SelectContent>
+        {/* === RADIO BUTTONS === */}
+        {/* inverter type (radio) */}
+        <div className="flex flex-col gap-1 p-1">
+          <span className="text-[14px] font-semibold text-slate-700">Тип</span>
+          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
             {inverterTypes.map((t) => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
+              <label key={t} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+                <input
+                  type="radio"
+                  name="inverter-type"
+                  checked={local.inverter_type === t}
+                  onChange={() => setLocal((p) => ({ ...p, inverter_type: t }))}
+                  className="peer accent-primary"
+                />
+                <span className="truncate max-w-[80px]" title={t}>{t === 'on_grid' ? 'on-grid' : t === 'off_grid' ? 'off-grid' : t}</span>
+              </label>
             ))}
-          </SelectContent>
-        </Select>
+            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="inverter-type"
+                checked={local.inverter_type === undefined}
+                onChange={() => setLocal((p) => ({ ...p, inverter_type: undefined }))}
+                className="peer accent-primary"
+              />
+              <span>всі</span>
+            </label>
+          </div>
+        </div>
         
-        {/* string count min/max */}
+        {/* string count - manual inputs */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-slate-400">Кількість стрінгів</span>
-          <RangeSliderWithInput
-            min={0}
-            max={20}
-            step={1}
-            values={[local.string_count_min, local.string_count_max]}
-            onChange={([min, max]) => setLocal((p) => ({ ...p, string_count_min: min, string_count_max: max }))}
-            format={(v) => `${v}`}
-            formatInput={(v) => `${v}`}
-            suffix=""
-          />
+          <span className="text-[12px] font-medium text-slate-600">Кількість стрінгів</span>
+          <div className="flex gap-1 items-center">
+            <Input
+              type="number"
+              placeholder="від"
+              value={local.string_count_min ?? ''}
+              onChange={(e) => setLocal(p => ({ ...p, string_count_min: e.target.value ? Number(e.target.value) : undefined }))}
+              className="h-8 text-sm border-gray-300"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <Input
+              type="number"
+              placeholder="до"
+              value={local.string_count_max ?? ''}
+              onChange={(e) => setLocal(p => ({ ...p, string_count_max: e.target.value ? Number(e.target.value) : undefined }))}
+              className="h-8 text-sm border-gray-300"
+            />
+          </div>
         </div>
 
-        {/* generation */}
-        <Select
-          value={local.generation ?? ''}
-          onValueChange={(v) => setLocal((p) => ({ ...p, generation: v || undefined }))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Покоління" />
-          </SelectTrigger>
-          <SelectContent>
+        {/* generation (radio) */}
+        <div className="flex flex-col gap-1 p-1">
+          <span className="text-[14px] font-semibold text-slate-700">Покоління</span>
+          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
             {generations.map((g) => (
-              <SelectItem key={g} value={g}>
-                {g}
-              </SelectItem>
+              <label key={g} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+                <input
+                  type="radio"
+                  name="generation"
+                  checked={local.generation === g}
+                  onChange={() => setLocal((p) => ({ ...p, generation: g }))}
+                  className="peer accent-primary"
+                />
+                <span className="truncate max-w-[80px]" title={g}>{g}</span>
+              </label>
             ))}
-          </SelectContent>
-        </Select>
+            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="generation"
+                checked={local.generation === undefined}
+                onChange={() => setLocal((p) => ({ ...p, generation: undefined }))}
+                className="peer accent-primary"
+              />
+              <span>всі</span>
+            </label>
+          </div>
+        </div>
         
         {/* firmware */}
         <Input
@@ -230,32 +279,37 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           getLabel={(v)=>statusLabels[v] ?? v}
         />
 
-        {/* price range */}
+        {/* price - manual inputs */}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-slate-400">Ціна, $</span>
-          <RangeSliderWithInput
-            min={0}
-            max={4000}
-            step={50}
-            values={[local.price_min, local.price_max]}
-            onChange={([min, max]: [number | undefined, number | undefined]) => 
-              setLocal((p) => ({ ...p, price_min: min, price_max: max }))}
-            format={(v: number) => `$${v}`}
-            formatInput={(v: number) => `${v}`}
-            suffix="$"
-          />
+          <span className="text-[12px] font-medium text-slate-600">Ціна, $</span>
+          <div className="flex gap-1 items-center">
+            <Input
+              type="number"
+              placeholder="від"
+              value={local.price_min ?? ''}
+              onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
+              className="h-8 text-sm border-gray-300"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <Input
+              type="number"
+              placeholder="до"
+              value={local.price_max ?? ''}
+              onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
+              className="h-8 text-sm border-gray-300"
+            />
+          </div>
         </div>
 
         {/* date range */}
-        <Input
-          type="date"
-          value={local.date_min ?? ''}
-          onChange={(e) => setLocal((p) => ({ ...p, date_min: e.target.value || undefined }))}
-        />
-        <Input
-          type="date"
-          value={local.date_max ?? ''}
-          onChange={(e) => setLocal((p) => ({ ...p, date_max: e.target.value || undefined }))}
+        <DateRangePicker
+          startDate={local.date_min}
+          endDate={local.date_max}
+          onChange={(startDate: string | undefined, endDate: string | undefined) => {
+            setLocal((p) => ({ ...p, date_min: startDate, date_max: endDate }));
+          }}
+          placeholder="Оберіть період"
+          className="w-full"
         />
 
         {/* sorting & page size */}
@@ -271,21 +325,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             <SelectItem value="desc">↓ ціна</SelectItem>
           </SelectContent>
         </Select>
-        <Select
-          value={String(local.page_size ?? 10)}
-          onValueChange={(v) => setLocal((p) => ({ ...p, page_size: Number(v) }))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="page size" />
-          </SelectTrigger>
-          <SelectContent>
-            {[10, 20, 50, 100].map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* actions */}
@@ -293,9 +332,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         "sticky bottom-0 flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border z-10",
         isExpanded ? "flex" : "hidden md:flex"
       )}>
-        <Button size="sm" onClick={apply} className="text-xs sm:text-sm h-8 sm:h-10">
-          Застосувати
-        </Button>
         <Button size="sm" variant="ghost" onClick={reset} className="text-xs sm:text-sm h-8 sm:h-10">
           Скинути
         </Button>
