@@ -169,6 +169,262 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
     setFilters(base);
   };
 
+  // Filter components mapping
+  const filterComponents: Record<string, React.ReactNode> = {
+    full_name: (
+      <Input
+        placeholder="Назва"
+        value={local.full_name ?? ''}
+        onChange={(e) => setLocal((p) => ({ ...p, full_name: e.target.value || undefined }))}
+      />
+    ),
+    firmware: (
+      <Input
+        placeholder="Firmware"
+        value={local.firmware ?? ''}
+        onChange={(e) => setLocal((p) => ({ ...p, firmware: e.target.value || undefined }))}
+      />
+    ),
+    brands: (
+      <MultiSelectPopover
+        placeholder="Бренди"
+        options={brands}
+        values={local.brands}
+        onChange={(vals) => setLocal((p) => ({ ...p, brands: vals }))}
+        showSelectAll
+        selectAllLabel="Вибрати всі бренди"
+        clearLabel="Скинути"
+      />
+    ),
+    suppliers: (
+      <MultiSelectPopover
+        placeholder="Постачальники"
+        options={suppliers}
+        values={local.suppliers}
+        onChange={(vals) => setLocal((p) => ({ ...p, suppliers: vals }))}
+        showSelectAll
+        selectAllLabel="Вибрати всіх постачальників"
+        clearLabel="Скинути"
+      />
+    ),
+    cities: (
+      <MultiSelectPopover
+        placeholder="Міста"
+        options={cities}
+        values={local.cities}
+        onChange={(vals) => setLocal((p) => ({ ...p, cities: vals }))}
+      />
+    ),
+    supplier_status: (
+      <div className="flex flex-col gap-1 p-1">
+        <span className="text-[13px] font-semibold text-slate-700">Статус постач.</span>
+        <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
+          {supplierStatuses.map((s) => (
+            <label key={s} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+              <input
+                type="radio"
+                name="supplier-status-new"
+                checked={local.supplier_status?.[0] === s}
+                onChange={() => setLocal((p) => ({ ...p, supplier_status: [s] }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={s}>
+                {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
+              </span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+            <input
+              type="radio"
+              name="supplier-status-new"
+              checked={!local.supplier_status || local.supplier_status.length === 0}
+              onChange={() => setLocal((p) => ({ ...p, supplier_status: undefined }))}
+              className="peer accent-primary"
+            />
+            <span>всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    power: (
+      <div className="flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Потужність, Вт</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.power_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.power_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    string_count: (
+      <div className="flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Кількість стрингів</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.string_count_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, string_count_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.string_count_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, string_count_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    price: (
+      <div className="flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Ціна, $</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.price_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.price_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    inverter_type: (
+      <div className="flex flex-col gap-1 p-1">
+        <span className="text-[13px] font-semibold text-slate-700">Тип</span>
+        <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
+          {inverterTypes.map((t) => (
+            <label key={t} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+              <input
+                type="radio"
+                name="inverter-type-new"
+                checked={local.inverter_type === t}
+                onChange={() => setLocal((p) => ({ ...p, inverter_type: t }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={t}>
+                {t === 'ON_GRID' ? 'on-grid' : t === 'OFF_GRID' ? 'off-grid' : t}
+              </span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+            <input
+              type="radio"
+              name="inverter-type-new"
+              checked={local.inverter_type === undefined}
+              onChange={() => setLocal((p) => ({ ...p, inverter_type: undefined }))}
+              className="peer accent-primary"
+            />
+            <span>всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    generation: (
+      <div className="flex flex-col gap-1 p-1">
+        <span className="text-[13px] font-semibold text-slate-700">Покоління</span>
+        <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
+          {generations.map((g) => (
+            <label key={g} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+              <input
+                type="radio"
+                name="generation-new"
+                checked={local.generation === g}
+                onChange={() => setLocal((p) => ({ ...p, generation: g }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={g}>{g}</span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+            <input
+              type="radio"
+              name="generation-new"
+              checked={local.generation === undefined}
+              onChange={() => setLocal((p) => ({ ...p, generation: undefined }))}
+              className="peer accent-primary"
+            />
+            <span>всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    date_range: (
+      <div className="flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Період</span>
+        <DateRangePicker
+          startDate={local.date_min}
+          endDate={local.date_max}
+          onChange={(startDate: string | undefined, endDate: string | undefined) => {
+            setLocal((p) => ({ ...p, date_min: startDate, date_max: endDate }));
+          }}
+          placeholder="Оберіть період"
+          className="w-full"
+        />
+      </div>
+    ),
+    price_sort: (
+      <div className="flex flex-col gap-1 p-1">
+        <span className="text-[13px] font-semibold text-slate-700">Сортувати ціну</span>
+        <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+            <input
+              type="radio"
+              name="price-sort-new"
+              checked={local.price_sort === 'asc'}
+              onChange={() => setLocal((p) => ({ ...p, price_sort: 'asc' }))}
+              className="peer accent-primary"
+            />
+            <span className="truncate max-w-[80px]">↑ ціна</span>
+          </label>
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+            <input
+              type="radio"
+              name="price-sort-new"
+              checked={local.price_sort === 'desc'}
+              onChange={() => setLocal((p) => ({ ...p, price_sort: 'desc' }))}
+              className="peer accent-primary"
+            />
+            <span className="truncate max-w-[80px]">↓ ціна</span>
+          </label>
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
+            <input
+              type="radio"
+              name="price-sort-new"
+              checked={local.price_sort === undefined}
+              onChange={() => setLocal((p) => ({ ...p, price_sort: undefined }))}
+              className="peer accent-primary"
+            />
+            <span>без сорт.</span>
+          </label>
+        </div>
+      </div>
+    ),
+  };
+
   return (
     <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
       {/* Active filters chips */}

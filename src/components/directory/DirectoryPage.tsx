@@ -23,6 +23,62 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { MultiSelect } from '@/components/ui/MultiSelect';
+import { GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// DraggableFilterItem component
+interface DraggableFilterItemProps {
+  id: string;
+  children: React.ReactNode;
+}
+
+const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group">
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
+      >
+        <GripVertical className="w-4 h-4 text-gray-400" />
+      </div>
+      {children}
+    </div>
+  );
+};
 
 export type FilterField =
   | { type: 'text'; name: string; label: string }
@@ -66,6 +122,41 @@ export function DirectoryPage<T extends { id?: number }, P extends Record<string
   const PAGE_SIZE = initialParams.page_size ?? 15;
   const [params, setParams] = useState<P>(initialParams);
   const debouncedSetParams = useDebouncedCallback(setParams, 300);
+
+  // Drag and drop setup
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Filter order state
+  const defaultFilterOrder = filterFields.map((field, index) => {
+    if (field.type === 'range-number') {
+      return `${field.nameMin}_${field.nameMax}`;
+    }
+    return field.name || `field_${index}`;
+  });
+
+  const [filterOrder, setFilterOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem(`directoryFiltersOrder_${title.replace(/\s+/g, '_')}`);
+    return saved ? JSON.parse(saved) : defaultFilterOrder;
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setFilterOrder((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem(`directoryFiltersOrder_${title.replace(/\s+/g, '_')}`, JSON.stringify(newOrder));
+        return newOrder;
+      });
+    }
+  };
 
   const { data, isLoading, isError, error } = useList(params);
   const [info, setInfo] = useState<string | null>(null);
@@ -112,173 +203,195 @@ export function DirectoryPage<T extends { id?: number }, P extends Record<string
       <h1 className="text-3xl font-bold mb-2">{title}</h1>
       {info && <div className="mb-4 text-green-500 dark:text-green-400 text-sm">{info}</div>}
 
-      {/* Filters */}
+      {/* Filters with drag and drop */}
       <Card className="mb-6">
-        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {filterFields.map((f) => {
-            if (f.type === 'text' || f.type === 'number') {
-              const value = (params as any)[f.name] ?? '';
-              return (
-                <Input
-                  key={f.name}
-                  type={f.type === 'number' ? 'number' : 'text'}
-                  placeholder={f.label}
-                  value={value}
-                  onChange={(e) =>
-                    debouncedSetParams((prev: any) => ({
-                      ...prev,
-                      [f.name]: e.target.value || undefined,
-                      page: 1,
-                    }))
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 pl-10">
+              {filterOrder.map((fieldId) => {
+                const f = filterFields.find(field => {
+                  if (field.type === 'range-number') {
+                    return `${field.nameMin}_${field.nameMax}` === fieldId;
                   }
-                />
-              );
-            }
-            if (f.type === 'range-number') {
-              const minVal = (params as any)[f.nameMin] ?? '';
-              const maxVal = (params as any)[f.nameMax] ?? '';
-              return (
-                <div key={f.label} className="flex gap-2 items-center">
-                  <Input
-                    type="number"
-                    placeholder={`${f.label} від`}
-                    value={minVal}
-                    onChange={(e) =>
-                      debouncedSetParams((prev: any) => ({
-                        ...prev,
-                        [f.nameMin]: e.target.value || undefined,
-                        page: 1,
-                      }))
-                    }
-                  />
-                  <Input
-                    type="number"
-                    placeholder={`до`}
-                    value={maxVal}
-                    onChange={(e) =>
-                      debouncedSetParams((prev: any) => ({
-                        ...prev,
-                        [f.nameMax]: e.target.value || undefined,
-                        page: 1,
-                      }))
-                    }
-                  />
-                </div>
-              );
-            }
-            if (f.type === 'select') {
-              // Skip pagination dropdown - it will be moved to bottom
-              if (f.name === 'page_size') {
-                return null;
-              }
-              
-              // Use radio buttons for small option sets (3 or fewer)
-              if (f.options.length <= 3) {
-                return (
-                  <div key={f.name} className="flex flex-col gap-1 p-1">
-                    <span className="text-[14px] font-semibold text-slate-700">{f.label}</span>
-                    <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
-                      {f.options.map((o) => (
-                        <label key={o.value} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                          <input
-                            type="radio"
-                            name={f.name}
-                            checked={(params as any)[f.name] === o.value}
-                            onChange={() => setParams((prev: any) => ({
+                  return field.name === fieldId;
+                });
+                
+                if (!f) return null;
+
+                const renderFilter = () => {
+                      if (f.type === 'text' || f.type === 'number') {
+                        const value = (params as any)[f.name] ?? '';
+                        return (
+                          <Input
+                            type={f.type === 'number' ? 'number' : 'text'}
+                            placeholder={f.label}
+                            value={value}
+                            onChange={(e) =>
+                              debouncedSetParams((prev: any) => ({
+                                ...prev,
+                                [f.name]: e.target.value || undefined,
+                                page: 1,
+                              }))
+                            }
+                          />
+                        );
+                      }
+                      if (f.type === 'range-number') {
+                        const minVal = (params as any)[f.nameMin] ?? '';
+                        const maxVal = (params as any)[f.nameMax] ?? '';
+                        return (
+                          <div className="flex gap-2 items-center">
+                            <Input
+                              type="number"
+                              placeholder={`${f.label} від`}
+                              value={minVal}
+                              onChange={(e) =>
+                                debouncedSetParams((prev: any) => ({
+                                  ...prev,
+                                  [f.nameMin]: e.target.value || undefined,
+                                  page: 1,
+                                }))
+                              }
+                            />
+                            <Input
+                              type="number"
+                              placeholder={`до`}
+                              value={maxVal}
+                              onChange={(e) =>
+                                debouncedSetParams((prev: any) => ({
+                                  ...prev,
+                                  [f.nameMax]: e.target.value || undefined,
+                                  page: 1,
+                                }))
+                              }
+                            />
+                          </div>
+                        );
+                      }
+                      if (f.type === 'select') {
+                        // Skip pagination dropdown - it will be moved to bottom
+                        if (f.name === 'page_size') {
+                          return null;
+                        }
+                        
+                        // Use radio buttons for small option sets (3 or fewer)
+                        if (f.options.length <= 3) {
+                          return (
+                            <div className="flex flex-col gap-1 p-1">
+                              <span className="text-[14px] font-semibold text-slate-700">{f.label}</span>
+                              <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+                                {f.options.map((o) => (
+                                  <label key={o.value} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+                                    <input
+                                      type="radio"
+                                      name={f.name}
+                                      checked={(params as any)[f.name] === o.value}
+                                      onChange={() => setParams((prev: any) => ({
+                                        ...prev,
+                                        [f.name]: o.value,
+                                        page: 1,
+                                      }))}
+                                      className="peer accent-primary"
+                                    />
+                                    <span className="truncate max-w-[80px]" title={o.label}>{o.label}</span>
+                                  </label>
+                                ))}
+                                <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+                                  <input
+                                    type="radio"
+                                    name={f.name}
+                                    checked={!(params as any)[f.name]}
+                                    onChange={() => setParams((prev: any) => ({
+                                      ...prev,
+                                      [f.name]: undefined,
+                                      page: 1,
+                                    }))}
+                                    className="peer accent-primary"
+                                  />
+                                  <span>всі</span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        // Use dropdown for larger option sets
+                        return (
+                          <Select
+                            value={String((params as any)[f.name] ?? '__all__')}
+                            onValueChange={(val) => setParams((prev: any) => ({
                               ...prev,
-                              [f.name]: o.value,
+                              [f.name]: val === '__all__' ? undefined : val,
+                              page: 1,
+                            }))} 
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={f.label} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__all__">Всі</SelectItem>
+                              {f.options.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        );
+                      }
+                      if (f.type === 'multiselect') {
+                        return (
+                          <MultiSelect
+                            options={f.options}
+                            placeholder={f.label}
+                            onValueChange={(vals) => debouncedSetParams((prev: any) => ({
+                              ...prev,
+                              [f.name]: vals.length ? vals : undefined,
                               page: 1,
                             }))}
-                            className="peer accent-primary"
                           />
-                          <span className="truncate max-w-[80px]" title={o.label}>{o.label}</span>
-                        </label>
-                      ))}
-                      <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                        <input
-                          type="radio"
-                          name={f.name}
-                          checked={!(params as any)[f.name]}
-                          onChange={() => setParams((prev: any) => ({
-                            ...prev,
-                            [f.name]: undefined,
-                            page: 1,
-                          }))}
-                          className="peer accent-primary"
-                        />
-                        <span>всі</span>
-                      </label>
-                    </div>
-                  </div>
+                        );
+                      }
+                      if (f.type === 'list-multiselect') {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs text-slate-400">{f.label}</span>
+                            <select
+                              multiple
+                              value={(params as any)[f.name] ?? []}
+                              onChange={(e) => {
+                                const opts = Array.from(e.target.selectedOptions).map((o) => o.value);
+                                debouncedSetParams((prev: any) => ({
+                                  ...prev,
+                                  [f.name]: opts.length ? opts : undefined,
+                                  page: 1,
+                                }));
+                              }}
+                              className="border border-slate-700 bg-slate-800 rounded-md px-2 py-1 h-28 w-48 text-sm focus:ring-2 focus:ring-slate-600 scrollbar-thin scrollbar-thumb-slate-600"
+                            >
+                              {f.options.map((o) => (
+                                <option key={o.value} value={o.value} className="py-1">
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      }
+                      return null;
+                };
+
+                return (
+                  <DraggableFilterItem key={fieldId} id={fieldId}>
+                    {renderFilter()}
+                  </DraggableFilterItem>
                 );
-              }
-              
-              // Use dropdown for larger option sets
-              return (
-                <Select
-                  key={f.name}
-                  value={String((params as any)[f.name] ?? '__all__')}
-                  onValueChange={(val) => setParams((prev: any) => ({
-                    ...prev,
-                    [f.name]: val === '__all__' ? undefined : val,
-                    page: 1,
-                  }))} 
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={f.label} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">Всі</SelectItem>
-                    {f.options.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              );
-            }
-            if (f.type === 'multiselect') {
-              return (
-                <MultiSelect
-                  key={f.name}
-                  options={f.options}
-                  placeholder={f.label}
-                  onValueChange={(vals) => debouncedSetParams((prev: any) => ({
-                    ...prev,
-                    [f.name]: vals.length ? vals : undefined,
-                    page: 1,
-                  }))}
-                />
-              );
-            }
-            if (f.type === 'list-multiselect') {
-              return (
-                <div key={f.name} className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-400">{f.label}</span>
-                  <select
-                    multiple
-                    value={(params as any)[f.name] ?? []}
-                    onChange={(e) => {
-                      const opts = Array.from(e.target.selectedOptions).map((o) => o.value);
-                      debouncedSetParams((prev: any) => ({
-                        ...prev,
-                        [f.name]: opts.length ? opts : undefined,
-                        page: 1,
-                      }));
-                    }}
-                    className="border border-slate-700 bg-slate-800 rounded-md px-2 py-1 h-28 w-48 text-sm focus:ring-2 focus:ring-slate-600 scrollbar-thin scrollbar-thumb-slate-600"
-                  >
-                    {f.options.map((o) => (
-                      <option key={o.value} value={o.value} className="py-1">
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            }
-            return null;
-          })}
-        </div>
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       </Card>
 
       {/* Table */}

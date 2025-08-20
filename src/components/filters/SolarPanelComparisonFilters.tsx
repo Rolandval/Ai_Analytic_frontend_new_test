@@ -6,8 +6,27 @@ import { getSolarPanelCities } from '@/services/cities.api';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Filter, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const panelTypes = ['одностороння', 'двостороння'];
 const cellTypes = ['p-type', 'n-type'];
@@ -18,6 +37,42 @@ const statusLabels: Record<string, string> = {
   ME: 'ми',
   SUPPLIER: 'постачальник',
   COMPETITOR: 'конкурент',
+};
+
+// DraggableFilterItem component
+interface DraggableFilterItemProps {
+  id: string;
+  children: React.ReactNode;
+}
+
+const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group">
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
+      >
+        <GripVertical className="w-4 h-4 text-gray-400" />
+      </div>
+      {children}
+    </div>
+  );
 };
 
 interface Props {
@@ -33,6 +88,39 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Drag and drop setup
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Filter order state
+  const defaultFilterOrder = [
+    'brands', 'suppliers', 'cities', 'power', 'price', 'price_per_w', 'thickness',
+    'panel_type', 'cell_type', 'panel_color', 'frame_color', 'supplier_status', 'date_range'
+  ];
+
+  const [filterOrder, setFilterOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('solarPanelComparisonFiltersOrder');
+    return saved ? JSON.parse(saved) : defaultFilterOrder;
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setFilterOrder((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem('solarPanelComparisonFiltersOrder', JSON.stringify(newOrder));
+        return newOrder;
+      });
+    }
+  };
   
   // Отримуємо список міст при першому рендері компоненту
   useEffect(() => {
@@ -87,13 +175,301 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     setFilters(base);
   };
 
-  // Active filters count
-  const activeFiltersCount = Object.keys(local).filter(key => {
-    const value = local[key as keyof SolarPanelPriceListRequestSchema];
-    return value !== undefined && value !== null && value !== '' && 
-           !(Array.isArray(value) && value.length === 0) &&
-           key !== 'page' && key !== 'page_size';
-  }).length;
+  // Filter components mapping
+  const filterComponents: Record<string, React.ReactNode> = {
+    brands: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Бренди</label>
+        <MultiSelectPopover
+          options={brands}
+          values={local.brands || []}
+          onChange={(values) => setLocal(p => ({ ...p, brands: values }))}
+          placeholder="Вибрати бренди"
+          className="h-8 text-sm"
+          showSelectAll={true}
+          selectAllLabel="Вибрати всі бренди"
+          clearLabel="Скинути"
+        />
+      </div>
+    ),
+    suppliers: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Постачальники</label>
+        <MultiSelectPopover
+          options={suppliers}
+          values={local.suppliers || []}
+          onChange={(values) => setLocal(p => ({ ...p, suppliers: values }))}
+          placeholder="Вибрати постачальників"
+          className="h-8 text-sm"
+          showSelectAll={true}
+          selectAllLabel="Вибрати всіх постачальників"
+          clearLabel="Скинути"
+        />
+      </div>
+    ),
+    cities: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Міста</label>
+        <MultiSelectPopover
+          options={cities}
+          values={local.cities || []}
+          onChange={(values) => setLocal(p => ({ ...p, cities: values }))}
+          placeholder="Вибрати міста"
+          className="h-8 text-sm"
+        />
+      </div>
+    ),
+    power: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Потужність, Вт</label>
+        <div className="flex items-center gap-1">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.power_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.power_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    price: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Ціна, $</label>
+        <div className="flex items-center gap-1">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.price_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.price_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    price_per_w: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Ціна за Вт, $</label>
+        <div className="flex items-center gap-1">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.price_per_w_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, price_per_w_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.price_per_w_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, price_per_w_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    thickness: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Товщина, мм</label>
+        <div className="flex items-center gap-1">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.thickness_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, thickness_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.thickness_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, thickness_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-8 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    panel_type: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Тип панелі</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+          {panelTypes.map((type) => (
+            <label key={type} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="panel_type"
+                checked={local.panel_type === type}
+                onChange={() => setLocal(p => ({ ...p, panel_type: type }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={type}>{type}</span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+            <input
+              type="radio"
+              name="panel_type"
+              checked={!local.panel_type}
+              onChange={() => setLocal(p => ({ ...p, panel_type: undefined }))}
+              className="peer accent-primary"
+            />
+            <span className="max-w-[80px] truncate">всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    cell_type: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Тип комірки</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+          {cellTypes.map((type) => (
+            <label key={type} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="cell_type"
+                checked={local.cell_type === type}
+                onChange={() => setLocal(p => ({ ...p, cell_type: type }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={type}>{type}</span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+            <input
+              type="radio"
+              name="cell_type"
+              checked={!local.cell_type}
+              onChange={() => setLocal(p => ({ ...p, cell_type: undefined }))}
+              className="peer accent-primary"
+            />
+            <span className="max-w-[80px] truncate">всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    panel_color: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Колір панелі</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+          {panelColors.map((color) => (
+            <label key={color} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="panel_color"
+                checked={local.panel_color === color}
+                onChange={() => setLocal(p => ({ ...p, panel_color: color }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={color}>{color}</span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+            <input
+              type="radio"
+              name="panel_color"
+              checked={!local.panel_color}
+              onChange={() => setLocal(p => ({ ...p, panel_color: undefined }))}
+              className="peer accent-primary"
+            />
+            <span className="max-w-[80px] truncate">всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    frame_color: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Колір рами</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+          {frameColors.map((color) => (
+            <label key={color} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="frame_color"
+                checked={local.frame_color === color}
+                onChange={() => setLocal(p => ({ ...p, frame_color: color }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={color}>{color}</span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+            <input
+              type="radio"
+              name="frame_color"
+              checked={!local.frame_color}
+              onChange={() => setLocal(p => ({ ...p, frame_color: undefined }))}
+              className="peer accent-primary"
+            />
+            <span className="max-w-[80px] truncate">всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    supplier_status: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Статус постач.</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+          {supplierStatuses.map((status) => (
+            <label key={status} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+              <input
+                type="radio"
+                name="supplier_status"
+                checked={local.supplier_status?.includes(status)}
+                onChange={() => setLocal(p => ({ ...p, supplier_status: [status] }))}
+                className="peer accent-primary"
+              />
+              <span className="truncate max-w-[80px]" title={statusLabels[status]}>{statusLabels[status]}</span>
+            </label>
+          ))}
+          <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
+            <input
+              type="radio"
+              name="supplier_status"
+              checked={!local.supplier_status || local.supplier_status.length === 0}
+              onChange={() => setLocal(p => ({ ...p, supplier_status: undefined }))}
+              className="peer accent-primary"
+            />
+            <span className="max-w-[80px] truncate">всі</span>
+          </label>
+        </div>
+      </div>
+    ),
+    date_range: (
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-slate-600">Період</label>
+        <DateRangePicker
+          startDate={local.date_min}
+          endDate={local.date_max}
+          onChange={(start, end) => {
+            setLocal(p => ({
+              ...p,
+              date_min: start,
+              date_max: end
+            }));
+          }}
+          className="h-8 text-sm"
+        />
+      </div>
+    ),
+  };
 
   return (
     <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
@@ -224,304 +600,25 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
         </Button>
       </div>
 
-      {/* Filter inputs */}
-      <div className={cn(
-        "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3",
-        isExpanded ? "grid" : "hidden md:grid"
-      )}>
-
-        {/* Brands */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Бренди</label>
-          <MultiSelectPopover
-            options={brands}
-            values={local.brands || []}
-            onChange={(values) => setLocal(p => ({ ...p, brands: values }))}
-            placeholder="Вибрати бренди"
-            className="h-8 text-sm"
-            showSelectAll={true}
-            selectAllLabel="Вибрати всі бренди"
-            clearLabel="Скинути"
-          />
-        </div>
-
-        {/* Suppliers */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Постачальники</label>
-          <MultiSelectPopover
-            options={suppliers}
-            values={local.suppliers || []}
-            onChange={(values) => setLocal(p => ({ ...p, suppliers: values }))}
-            placeholder="Вибрати постачальників"
-            className="h-8 text-sm"
-            showSelectAll={true}
-            selectAllLabel="Вибрати всіх постачальників"
-            clearLabel="Скинути"
-          />
-        </div>
-
-        {/* Cities */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Міста</label>
-          <MultiSelectPopover
-            options={cities}
-            values={local.cities || []}
-            onChange={(values) => setLocal(p => ({ ...p, cities: values }))}
-            placeholder="Вибрати міста"
-            className="h-8 text-sm"
-          />
-        </div>
-
-        {/* Power range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Потужність, Вт</label>
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              placeholder="від"
-              value={local.power_min || ''}
-              onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-            <span className="text-muted-foreground">-</span>
-            <Input
-              type="number"
-              placeholder="до"
-              value={local.power_max || ''}
-              onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-          </div>
-        </div>
-
-        {/* Price range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Ціна, $</label>
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              placeholder="від"
-              value={local.price_min || ''}
-              onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-            <span className="text-muted-foreground">-</span>
-            <Input
-              type="number"
-              placeholder="до"
-              value={local.price_max || ''}
-              onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-          </div>
-        </div>
-
-        {/* Price per watt range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Ціна за Вт, $</label>
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              placeholder="від"
-              value={local.price_per_w_min || ''}
-              onChange={(e) => setLocal(p => ({ ...p, price_per_w_min: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-            <span className="text-muted-foreground">-</span>
-            <Input
-              type="number"
-              placeholder="до"
-              value={local.price_per_w_max || ''}
-              onChange={(e) => setLocal(p => ({ ...p, price_per_w_max: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-          </div>
-        </div>
-
-        {/* Thickness range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Товщина, мм</label>
-          <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              placeholder="від"
-              value={local.thickness_min || ''}
-              onChange={(e) => setLocal(p => ({ ...p, thickness_min: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-            <span className="text-muted-foreground">-</span>
-            <Input
-              type="number"
-              placeholder="до"
-              value={local.thickness_max || ''}
-              onChange={(e) => setLocal(p => ({ ...p, thickness_max: e.target.value ? Number(e.target.value) : undefined }))}
-              className="h-8 text-sm border-gray-300"
-            />
-          </div>
-        </div>
-
-        {/* Panel type */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Тип панелі</label>
-          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
-            {panelTypes.map((type) => (
-              <label key={type} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                <input
-                  type="radio"
-                  name="panel_type"
-                  checked={local.panel_type === type}
-                  onChange={() => setLocal(p => ({ ...p, panel_type: type }))}
-                  className="peer accent-primary"
-                />
-                <span className="truncate max-w-[80px]" title={type}>{type}</span>
-              </label>
+      {/* Filter inputs with drag and drop */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
+          <div className={cn(
+            "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pl-6",
+            isExpanded ? "grid" : "hidden md:grid"
+          )}>
+            {filterOrder.map((filterId) => (
+              <DraggableFilterItem key={filterId} id={filterId}>
+                {filterComponents[filterId]}
+              </DraggableFilterItem>
             ))}
-            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-              <input
-                type="radio"
-                name="panel_type"
-                checked={!local.panel_type}
-                onChange={() => setLocal(p => ({ ...p, panel_type: undefined }))}
-                className="peer accent-primary"
-              />
-              <span className="max-w-[80px] truncate">всі</span>
-            </label>
           </div>
-        </div>
-
-        {/* Cell type */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Тип комірки</label>
-          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
-            {cellTypes.map((type) => (
-              <label key={type} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                <input
-                  type="radio"
-                  name="cell_type"
-                  checked={local.cell_type === type}
-                  onChange={() => setLocal(p => ({ ...p, cell_type: type }))}
-                  className="peer accent-primary"
-                />
-                <span className="truncate max-w-[80px]" title={type}>{type}</span>
-              </label>
-            ))}
-            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-              <input
-                type="radio"
-                name="cell_type"
-                checked={!local.cell_type}
-                onChange={() => setLocal(p => ({ ...p, cell_type: undefined }))}
-                className="peer accent-primary"
-              />
-              <span className="max-w-[80px] truncate">всі</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Panel color */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Колір панелі</label>
-          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
-            {panelColors.map((color) => (
-              <label key={color} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                <input
-                  type="radio"
-                  name="panel_color"
-                  checked={local.panel_color === color}
-                  onChange={() => setLocal(p => ({ ...p, panel_color: color }))}
-                  className="peer accent-primary"
-                />
-                <span className="truncate max-w-[80px]" title={color}>{color}</span>
-              </label>
-            ))}
-            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-              <input
-                type="radio"
-                name="panel_color"
-                checked={!local.panel_color}
-                onChange={() => setLocal(p => ({ ...p, panel_color: undefined }))}
-                className="peer accent-primary"
-              />
-              <span className="max-w-[80px] truncate">всі</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Frame color */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Колір рами</label>
-          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
-            {frameColors.map((color) => (
-              <label key={color} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                <input
-                  type="radio"
-                  name="frame_color"
-                  checked={local.frame_color === color}
-                  onChange={() => setLocal(p => ({ ...p, frame_color: color }))}
-                  className="peer accent-primary"
-                />
-                <span className="truncate max-w-[80px]" title={color}>{color}</span>
-              </label>
-            ))}
-            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-              <input
-                type="radio"
-                name="frame_color"
-                checked={!local.frame_color}
-                onChange={() => setLocal(p => ({ ...p, frame_color: undefined }))}
-                className="peer accent-primary"
-              />
-              <span className="max-w-[80px] truncate">всі</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Supplier status */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Статус постач.</label>
-          <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
-            {supplierStatuses.map((status) => (
-              <label key={status} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-                <input
-                  type="radio"
-                  name="supplier_status"
-                  checked={local.supplier_status === status}
-                  onChange={() => setLocal(p => ({ ...p, supplier_status: status }))}
-                  className="peer accent-primary"
-                />
-                <span className="truncate max-w-[80px]" title={statusLabels[status]}>{statusLabels[status]}</span>
-              </label>
-            ))}
-            <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
-              <input
-                type="radio"
-                name="supplier_status"
-                checked={!local.supplier_status}
-                onChange={() => setLocal(p => ({ ...p, supplier_status: undefined }))}
-                className="peer accent-primary"
-              />
-              <span className="max-w-[80px] truncate">всі</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Date range */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-slate-600">Період</label>
-          <DateRangePicker
-            startDate={local.date_min}
-            endDate={local.date_max}
-            onDateChange={(start, end) => {
-              setLocal(p => ({
-                ...p,
-                date_min: start,
-                date_max: end
-              }));
-            }}
-            className="h-8 text-sm"
-          />
-        </div>
-      </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Actions */}
       <div className={cn(
