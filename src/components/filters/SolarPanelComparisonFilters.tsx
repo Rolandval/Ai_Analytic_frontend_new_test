@@ -178,57 +178,63 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     brands: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Бренди</label>
-        <MultiSelectPopover
-          options={brands}
-          values={local.brands || []}
-          onChange={(values) => setLocal(p => ({ ...p, brands: values }))}
-          placeholder="Вибрати бренди"
-          className="h-8 text-sm"
-          showSelectAll={true}
-          selectAllLabel="Вибрати всі бренди"
-          clearLabel="Скинути"
-        />
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Бренди</label>
+        <div className="h-[60px] flex items-end justify-center">
+          <MultiSelectPopover
+            options={brands}
+            values={local.brands || []}
+            onChange={(values) => setLocal(p => ({ ...p, brands: values }))}
+            placeholder="Вибрати бренди"
+            className="w-full h-10 text-sm"
+            showSelectAll={true}
+            selectAllLabel="Вибрати всі бренди"
+            clearLabel="Скинути"
+          />
+        </div>
       </div>
     ),
     suppliers: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Постачальники</label>
-        <MultiSelectPopover
-          options={suppliers}
-          values={local.suppliers || []}
-          onChange={(values) => setLocal(p => ({ ...p, suppliers: values }))}
-          placeholder="Вибрати постачальників"
-          className="h-8 text-sm"
-          showSelectAll={true}
-          selectAllLabel="Вибрати всіх постачальників"
-          clearLabel="Скинути"
-        />
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Постачальники</label>
+        <div className="h-[60px] flex items-end justify-center">
+          <MultiSelectPopover
+            options={suppliers}
+            values={local.suppliers || []}
+            onChange={(values) => setLocal(p => ({ ...p, suppliers: values }))}
+            placeholder="Вибрати постачальників"
+            className="w-full h-10 text-sm"
+            showSelectAll={true}
+            selectAllLabel="Вибрати всіх постачальників"
+            clearLabel="Скинути"
+          />
+        </div>
       </div>
     ),
     cities: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Міста</label>
-        <MultiSelectPopover
-          options={cities}
-          values={local.cities || []}
-          onChange={(values) => setLocal(p => ({ ...p, cities: values }))}
-          placeholder="Вибрати міста"
-          className="h-8 text-sm"
-        />
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Міста</label>
+        <div className="h-[60px] flex items-end justify-center">
+          <MultiSelectPopover
+            options={cities}
+            values={local.cities || []}
+            onChange={(values) => setLocal(p => ({ ...p, cities: values }))}
+            placeholder="Вибрати міста"
+            className="w-full h-10 text-sm"
+          />
+        </div>
       </div>
     ),
     power: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Потужність, Вт</label>
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Потужність, Вт</label>
+        <div className="flex items-end gap-1 h-[60px]">
           <Input
             type="number"
             placeholder="від"
             value={local.power_min || ''}
             onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-muted-foreground">-</span>
           <Input
@@ -236,21 +242,21 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             placeholder="до"
             value={local.power_max || ''}
             onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     price: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Ціна, $</label>
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Ціна, $</label>
+        <div className="flex items-end gap-1 h-[60px]">
           <Input
             type="number"
             placeholder="від"
             value={local.price_min || ''}
             onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-muted-foreground">-</span>
           <Input
@@ -258,21 +264,21 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             placeholder="до"
             value={local.price_max || ''}
             onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     price_per_w: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Ціна за Вт, $</label>
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Ціна за Вт, $</label>
+        <div className="flex items-end gap-1 h-[60px]">
           <Input
             type="number"
             placeholder="від"
             value={local.price_per_w_min || ''}
             onChange={(e) => setLocal(p => ({ ...p, price_per_w_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-muted-foreground">-</span>
           <Input
@@ -280,21 +286,21 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             placeholder="до"
             value={local.price_per_w_max || ''}
             onChange={(e) => setLocal(p => ({ ...p, price_per_w_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     thickness: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Товщина, мм</label>
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Товщина, мм</label>
+        <div className="flex items-end gap-1 h-[60px]">
           <Input
             type="number"
             placeholder="від"
             value={local.thickness_min || ''}
             onChange={(e) => setLocal(p => ({ ...p, thickness_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-muted-foreground">-</span>
           <Input
@@ -302,15 +308,15 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             placeholder="до"
             value={local.thickness_max || ''}
             onChange={(e) => setLocal(p => ({ ...p, thickness_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     panel_type: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Тип панелі</label>
-        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Тип панелі</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {panelTypes.map((type) => (
             <label key={type} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
               <input
@@ -337,9 +343,9 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       </div>
     ),
     cell_type: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Тип комірки</label>
-        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Тип комірки</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {cellTypes.map((type) => (
             <label key={type} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
               <input
@@ -366,9 +372,9 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       </div>
     ),
     panel_color: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Колір панелі</label>
-        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Колір панелі</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {panelColors.map((color) => (
             <label key={color} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
               <input
@@ -395,9 +401,9 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       </div>
     ),
     frame_color: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Колір рами</label>
-        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Колір рами</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {frameColors.map((color) => (
             <label key={color} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
               <input
@@ -424,9 +430,9 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       </div>
     ),
     supplier_status: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Статус постач.</label>
-        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden">
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Статус постач.</label>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {supplierStatuses.map((status) => (
             <label key={status} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
               <input
@@ -453,20 +459,22 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       </div>
     ),
     date_range: (
-      <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-slate-600">Період</label>
-        <DateRangePicker
-          startDate={local.date_min}
-          endDate={local.date_max}
-          onChange={(start, end) => {
-            setLocal(p => ({
-              ...p,
-              date_min: start,
-              date_max: end
-            }));
-          }}
-          className="h-8 text-sm"
-        />
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Період</label>
+        <div className="h-[60px] flex items-end justify-center">
+          <DateRangePicker
+            startDate={local.date_min}
+            endDate={local.date_max}
+            onChange={(start, end) => {
+              setLocal(p => ({
+                ...p,
+                date_min: start,
+                date_max: end
+              }));
+            }}
+            className="w-full h-10 text-sm"
+          />
+        </div>
       </div>
     ),
   };

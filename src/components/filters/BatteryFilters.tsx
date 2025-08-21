@@ -195,7 +195,7 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
         </div>
         
         {/* Active filters */}
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex  flex-wrap gap-2 items-center">
           {/* Бренди */}
           {local.brands && local.brands.length > 0 && (
             local.brands.map(brand => (
@@ -447,37 +447,46 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     brands: (
-      <MultiSelectPopover
-        placeholder="Бренди"
-        options={brands}
-        values={local.brands}
-        onChange={(vals) => setLocal(p => ({ ...p, brands: vals }))}
-        showSelectAll
-        selectAllLabel="Вибрати всі бренди"
-        clearLabel="Скинути"
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <MultiSelectPopover
+          placeholder="Бренди"
+          options={brands}
+          values={local.brands}
+          onChange={(vals) => setLocal(p => ({ ...p, brands: vals }))}
+          showSelectAll
+          selectAllLabel="Вибрати всі бренди"
+          clearLabel="Скинути"
+          className="h-10"
+        />
+      </div>
     ),
     suppliers: (
-      <MultiSelectPopover
-        placeholder="Постачальники"
-        options={suppliers}
-        values={local.suppliers}
-        onChange={(vals) => setLocal(p => ({ ...p, suppliers: vals }))}
-        showSelectAll
-        selectAllLabel="Вибрати всіх постачальників"
-        clearLabel="Скинути"
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <MultiSelectPopover
+          placeholder="Постачальники"
+          options={suppliers}
+          values={local.suppliers}
+          onChange={(vals) => setLocal(p => ({ ...p, suppliers: vals }))}
+          showSelectAll
+          selectAllLabel="Вибрати всіх постачальників"
+          clearLabel="Скинути"
+          className="h-10"
+        />
+      </div>
     ),
     cities: (
-      <MultiSelectPopover
-        placeholder="Міста"
-        options={cities}
-        values={local.cities}
-        onChange={(vals) => setLocal(p => ({ ...p, cities: vals }))}
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <MultiSelectPopover
+          placeholder="Міста"
+          options={cities}
+          values={local.cities}
+          onChange={(vals) => setLocal(p => ({ ...p, cities: vals }))}
+          className="h-10"
+        />
+      </div>
     ),
     volume: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Обʼєм, Ah</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -485,7 +494,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="від"
             value={local.volume_min ?? ''}
             onChange={e => setLocal(p => ({ ...p, volume_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
           <Input
@@ -493,13 +502,13 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="до"
             value={local.volume_max ?? ''}
             onChange={e => setLocal(p => ({ ...p, volume_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     c_amps: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Пуск А, A</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -507,7 +516,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="від"
             value={local.c_amps_min ?? ''}
             onChange={e => setLocal(p => ({ ...p, c_amps_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
           <Input
@@ -515,13 +524,13 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="до"
             value={local.c_amps_max ?? ''}
             onChange={e => setLocal(p => ({ ...p, c_amps_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     price: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Ціна, грн</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -529,7 +538,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="від"
             value={local.price_min ?? ''}
             onChange={e => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
           <Input
@@ -537,14 +546,14 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="до"
             value={local.price_max ?? ''}
             onChange={e => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     region: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Регіон</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Регіон</span>
         <div className="flex flex-wrap gap-1 text-[13px] leading-tight">
           {regions.map((r) => (
             <label key={r} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
@@ -572,8 +581,8 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
       </div>
     ),
     polarity: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Полярність</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Полярність</span>
         <div className="flex flex-wrap gap-1 text-[13px] leading-tight">
           {polarities.map((pola) => (
             <label key={pola} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
@@ -601,8 +610,8 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
       </div>
     ),
     electrolyte: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Електроліт</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Електроліт</span>
         <div className="flex flex-wrap gap-1 text-[13px] leading-tight">
           {electrolytes.map((e) => (
             <label key={e} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
@@ -630,8 +639,8 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
       </div>
     ),
     supplier_status: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Статус постач.</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Статус постач.</span>
         <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
           {supplierStatuses.map((s) => (
             <label key={s} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
@@ -661,7 +670,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
       </div>
     ),
     date_range: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1 justify-end">
         <span className="text-[12px] font-medium text-slate-600">Період</span>
         <DateRangePicker
           startDate={local.date_min}
@@ -670,12 +679,12 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             setLocal((p) => ({ ...p, date_min: startDate, date_max: endDate }));
           }}
           placeholder="Оберіть період"
-          className="w-full"
+          className="w-full h-10"
         />
       </div>
     ),
     markup: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Курс $ / Націнка %</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -686,7 +695,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
               const value = e.target.value ? parseFloat(e.target.value) : undefined;
               setLocal((p) => ({ ...p, usd_rate: value }));
             }}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
             min="1"
             step="0.1"
           />
@@ -696,7 +705,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             placeholder="15"
             value={local.markup ?? ''}
             onChange={e => setLocal(p => ({ ...p, markup: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>

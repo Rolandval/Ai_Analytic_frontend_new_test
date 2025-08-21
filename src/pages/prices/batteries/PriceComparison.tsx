@@ -31,9 +31,11 @@ interface SupplierPrice {
   supplier_status: string;
   price: number | null;
   promo_price: number | null; // Додаємо акційну ціну
+  recommended_price: number | null; // Додаємо рекомендовану ціну
   availability: number | null;
   site_id: number | null;
   date: string | null;
+  updated_at: string | null;
 }
 
 // Інтерфейс для акумулятора з цінами постачальників
@@ -60,7 +62,7 @@ interface BatteryComparisonResponse {
 }
 
 export default function BatteryPriceComparison() {
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<BatteryPriceListRequestSchema>({
     page: page,
@@ -73,7 +75,9 @@ export default function BatteryPriceComparison() {
   const [brands, setBrands] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
   
-  // Стани для модального вікна оновлення ціни
+  // Стан для актуальних цін
+  const markup = 15; // Фіксована націнка 15%
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [updatePriceModalOpen, setUpdatePriceModalOpen] = useState(false);
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
     id: number | null;
@@ -183,7 +187,83 @@ export default function BatteryPriceComparison() {
   // Format price with comma as a thousands separator
   const formatPrice = (price: number | null) => {
     if (price === null) return '-';
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return price.toLocaleString('uk-UA', { minimumFractionDigits: 2 });
+  };
+
+  // Format date without year
+  const formatDateWithTime = (dateString: string | null) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('uk-UA', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Handle row selection for bulk update
+  const handleRowSelection = (batteryId: number, checked: boolean) => {
+    setSelectedRowIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(batteryId);
+      } else {
+        newSet.delete(batteryId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all rows currently in the dataset
+  const handleSelectAll = () => {
+    if (!comparisonData?.batteries) return;
+    const allIds = new Set(comparisonData.batteries.map(b => b.id));
+    setSelectedRowIds(allIds);
+  };
+
+  // Clear selection
+  const handleDeselectAll = () => {
+    setSelectedRowIds(new Set());
+  };
+
+  // Bulk apply: update site prices for selected rows with calculated recommended price
+  const handleBulkPriceUpdate = async () => {
+    if (!comparisonData?.batteries || selectedRowIds.size === 0) return;
+
+    const selectedBatteries = comparisonData.batteries.filter(b => selectedRowIds.has(b.id));
+    const updates = selectedBatteries.map(async (battery) => {
+      const priceToApply = calculateRecommendedPrice(battery);
+      if (!priceToApply) return Promise.resolve('skip');
+      // Find any supplier entry that has a site_id to target update
+      const siteEntry = battery.supplier_prices.find(sp => sp.site_id);
+      if (!siteEntry?.site_id) return Promise.resolve('skip');
+      const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
+      try {
+        await updateBatterySitePrice(payload);
+        return 'ok';
+      } catch (e) {
+        console.error('Bulk update error (battery)', battery.id, e);
+        return 'error';
+      }
+    });
+
+    const results = await Promise.allSettled(updates);
+    const okCount = results.filter(r => r.status === 'fulfilled').length;
+    // Provide lightweight feedback
+    // eslint-disable-next-line no-alert
+    alert(`Оновлено цін: ${okCount} / ${selectedBatteries.length}`);
+    setSelectedRowIds(new Set());
+    fetchComparisonData();
+  };
+
+  // Calculate recommended price with markup
+  const calculateRecommendedPrice = (battery: BatteryWithSupplierPrices) => {
+    const recommendedPrice = battery.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price;
+    if (recommendedPrice) {
+      return Math.round(recommendedPrice * (1 + markup / 100));
+    }
+    return null;
   };
 
   // Determine if any supplier has this battery available
@@ -256,8 +336,36 @@ export default function BatteryPriceComparison() {
         />
       </div>
       
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <RefreshDataButton onRefresh={refreshBatteriesData} />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleSelectAll}
+          className="text-xs px-2 py-1 h-7"
+        >
+          Обрати всі
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleDeselectAll}
+          className="text-xs px-2 py-1 h-7"
+        >
+          Зняти всі
+        </Button>
+        {selectedRowIds.size > 0 && (
+          <>
+            <span className="text-xs text-blue-700 ml-2">Вибрано: {selectedRowIds.size}</span>
+            <Button 
+              onClick={handleBulkPriceUpdate}
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-xs px-2 py-1 h-7"
+            >
+              Застосувати всі обрані
+            </Button>
+          </>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -267,152 +375,102 @@ export default function BatteryPriceComparison() {
                 <p className="font-medium">Застосуйте фільтри для відображення даних</p>
                 <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
               </div>
-            ) : isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="w-full h-10" />
-                <Skeleton className="w-full h-10" />
-              </div>
             ) : comparisonData && comparisonData.batteries.length > 0 ? (
               <Table style={{userSelect: 'text'}}>
-                <TableHeader className="[&_th]:cursor-pointer [&_th:hover]:bg-muted/50" style={{userSelect: 'none'}}>
+                <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
-                    <TableHead className="text-center w-16">№</TableHead>
-                    <TableHead
-                      className="text-left"
-                      onClick={() => requestSort('full_name')}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Назва</span>
-                        {sortConfig?.key === 'full_name' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
+                    <TableHead className="text-center w-8 text-xs">№</TableHead>
+                    <TableHead 
+                      className="min-w-[120px] text-center"
                       onClick={() => requestSort('brand')}
                     >
-                      <div className="flex items-center gap-1">
-                        <span>Бренд</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Назва</span>
                         {sortConfig?.key === 'brand' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
                       </div>
                     </TableHead>
-                    <TableHead
-                      className="hidden sm:table-cell"
+                    <TableHead 
+                      className="hidden sm:table-cell w-8 text-center"
                       onClick={() => requestSort('volume')}
                     >
-                      <div className="flex items-center gap-1">
-                        <span>Ah</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Ah</span>
                         {sortConfig?.key === 'volume' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
                       </div>
                     </TableHead>
-                    <TableHead
-                      className="hidden sm:table-cell"
+                    <TableHead 
+                      className="hidden sm:table-cell w-8 text-center"
                       onClick={() => requestSort('c_amps')}
                     >
-                      <div className="flex items-center gap-1">
-                        <span>Пуск A</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">A</span>
                         {sortConfig?.key === 'c_amps' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="hidden md:table-cell"
-                      onClick={() => requestSort('region')}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Тип корпусу</span>
-                        {sortConfig?.key === 'region' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="hidden md:table-cell"
-                      onClick={() => requestSort('polarity')}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Полярність</span>
-                        {sortConfig?.key === 'polarity' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="hidden md:table-cell"
-                      onClick={() => requestSort('electrolyte')}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Електроліт</span>
-                        {sortConfig?.key === 'electrolyte' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
                       </div>
                     </TableHead>
                     {supplierColumns.map((supplier) => (
-                      <TableHead key={supplier} className="text-center">
-                        <span className="hidden md:inline">{supplier}</span>
-                        <span className="md:hidden">{supplier.split(' ')[0]}</span>
+                      <TableHead key={supplier} className="text-center w-16">
+                        <span className="text-xs truncate">{supplier.length > 4 ? supplier.substring(0, 4) + '...' : supplier}</span>
                       </TableHead>
                     ))}
+                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Рег</TableHead>
+                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Пол</TableHead>
+                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Ел</TableHead>
                     <TableHead
-                      className="text-center"
+                      className="text-center w-12"
+                      onClick={() => requestSort('recommendedPrice')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Рек</span>
+                        {sortConfig?.key === 'recommendedPrice' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-center w-12">
+                      <span className="text-xs">Акт</span>
+                    </TableHead>
+                    <TableHead
+                      className="text-center w-8"
                       onClick={() => requestSort('totalAvailability')}
                     >
                       <div className="flex items-center justify-center gap-1">
-                        <span>Наявність</span>
+                        <span className="text-xs">Нав</span>
                         {sortConfig?.key === 'totalAvailability' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
@@ -421,24 +479,23 @@ export default function BatteryPriceComparison() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Використовуємо відсортований масив */}
                   {sortedBatteries.map((battery, index) => (
                     <TableRow 
-                      key={battery.id}
+                      key={`battery-${battery.id}-${index}`}
                       className={
                         isAvailable(battery)
                           ? "hover:bg-muted/50 dark:hover:bg-muted/70"
                           : "hover:bg-muted/50 dark:hover:bg-muted/70 opacity-70"
                       }
                     >
-                      <TableCell className="text-center w-16">{(page - 1) * pageSize + index + 1}</TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">{battery.full_name}</TableCell>
-                      <TableCell className="whitespace-nowrap">{battery.brand}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-center">{battery.volume}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-center">{battery.c_amps}</TableCell>
-                      <TableCell className="hidden md:table-cell text-center">{battery.region}</TableCell>
-                      <TableCell className="hidden md:table-cell text-center">{battery.polarity}</TableCell>
-                      <TableCell className="hidden md:table-cell text-center">{battery.electrolyte}</TableCell>
+                      <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                      <TableCell className="font-medium text-xs min-w-[120px] text-center">{battery.full_name}</TableCell>
+                      <TableCell className="text-xs w-16 truncate text-center">{battery.brand}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-center text-xs w-8">{battery.volume}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-center text-xs w-8">{battery.c_amps}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{battery.region}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{battery.polarity}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{battery.electrolyte}</TableCell>
                       
                       {/* Supplier price columns */}
                       {supplierColumns.map((supplier) => {
@@ -447,32 +504,68 @@ export default function BatteryPriceComparison() {
                         return (
                           <TableCell 
                             key={supplier} 
-                            className="text-center font-medium"
+                            className="text-center font-medium w-16"
                           >
-                            <div className="flex flex-col items-center space-y-2">
+                            <div className="flex flex-col items-center space-y-1">
                               {price !== null ? (
-                                <span className="text-primary dark:text-primary-foreground font-medium">
-                                  {formatPrice(price)}&nbsp;₴
-                                </span>
+                                <div className="flex flex-col items-center">
+                                  <span className="text-primary dark:text-primary-foreground font-medium text-xs">
+                                    {formatPrice(price)}₴
+                                  </span>
+                                  {getSupplierPriceObject(battery, supplier)?.updated_at && (
+                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                      {formatDateWithTime(getSupplierPriceObject(battery, supplier)?.updated_at as string)}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
-                                '-'
+                                <span className="text-xs">-</span>
                               )}
                               
                               {canUpdate && (
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-xs px-2 py-1 h-auto bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
+                                  className="text-xs px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
                                   onClick={() => handleOpenPriceUpdateModal(battery, supplier)}
                                 >
-                                  <span className="hidden sm:inline">Оновити ціну на сайті</span>
-                                  <span className="sm:hidden">Оновити</span>
+                                  <span className="text-xs">Онов</span>
                                 </Button>
                               )}
                             </div>
                           </TableCell>
                         );
                       })}
+                      
+                      {/* Recommended price column */}
+                      <TableCell className="text-center font-medium">
+                        {battery.supplier_prices.some(sp => sp.recommended_price !== null) ? (
+                          <div className="flex flex-col items-center">
+                            <span className="text-purple-700 dark:text-purple-400 font-medium">
+                              {formatPrice(battery.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;₴
+                            </span>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                      
+                      {/* Actual price display column */}
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedRowIds.has(battery.id)}
+                            onChange={(e) => handleRowSelection(battery.id, e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                          {selectedRowIds.has(battery.id) && calculateRecommendedPrice && calculateRecommendedPrice(battery) && (
+                            <span className="text-blue-700 font-medium text-sm">
+                              {formatPrice(calculateRecommendedPrice(battery))}&nbsp;₴
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       
                       {/* Total availability column */}
                       <TableCell className="text-center">

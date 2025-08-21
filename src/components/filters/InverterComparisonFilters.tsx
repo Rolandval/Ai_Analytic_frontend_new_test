@@ -157,37 +157,45 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     full_name: (
-      <Input
-        placeholder="Пошук по назві..."
-        value={local.full_name ?? ''}
-        onChange={(e) => setLocal(prev => ({ ...prev, full_name: e.target.value || undefined }))}
-        className="w-full"
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <Input
+          placeholder="Пошук по назві..."
+          value={local.full_name ?? ''}
+          onChange={(e) => setLocal(prev => ({ ...prev, full_name: e.target.value || undefined }))}
+          className="h-10 w-full"
+        />
+      </div>
     ),
     brands: (
-      <MultiSelectPopover
-        placeholder="+ Виробник"
-        options={brands}
-        values={local.brands ?? []}
-        onChange={(brands: string[] | undefined) => setLocal(prev => ({ ...prev, brands }))} 
-        showSelectAll
-        selectAllLabel="Вибрати всі бренди"
-        clearLabel="Скинути"
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <MultiSelectPopover
+          placeholder="+ Виробник"
+          options={brands}
+          values={local.brands ?? []}
+          onChange={(brands: string[] | undefined) => setLocal(prev => ({ ...prev, brands }))} 
+          showSelectAll
+          selectAllLabel="Вибрати всі бренди"
+          clearLabel="Скинути"
+          className="h-10"
+        />
+      </div>
     ),
     suppliers: (
-      <MultiSelectPopover
-        placeholder="+ Постачальник"
-        options={suppliers}
-        values={local.suppliers}
-        onChange={(vals) => setLocal((p) => ({ ...p, suppliers: vals }))}
-        showSelectAll
-        selectAllLabel="Вибрати всіх постачальників"
-        clearLabel="Скинути"
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <MultiSelectPopover
+          placeholder="+ Постачальник"
+          options={suppliers}
+          values={local.suppliers}
+          onChange={(vals) => setLocal((p) => ({ ...p, suppliers: vals }))}
+          showSelectAll
+          selectAllLabel="Вибрати всіх постачальників"
+          clearLabel="Скинути"
+          className="h-10"
+        />
+      </div>
     ),
     power: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Потужність, кВт</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -195,7 +203,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="від"
             value={local.power_min ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
           <Input
@@ -203,15 +211,15 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="до"
             value={local.power_max ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     inverter_type: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Тип</span>
-        <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Тип</span>
+        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {inverterTypes.map((t) => (
             <label key={t} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
               <input
@@ -240,7 +248,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
       </div>
     ),
     string_count: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Кількість стрінгів</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -248,7 +256,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="від"
             value={local.string_count_min ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, string_count_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
           <Input
@@ -256,14 +264,14 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="до"
             value={local.string_count_max ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, string_count_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     generation: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Покоління</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Покоління</span>
         <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
           {generations.map((g) => (
             <label key={g} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
@@ -291,15 +299,18 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
       </div>
     ),
     firmware: (
-      <Input
-        placeholder="Firmware"
-        value={local.firmware ?? ''}
-        onChange={(e) => setLocal((p) => ({ ...p, firmware: e.target.value || undefined }))}
-      />
+      <div className="h-[60px] flex flex-col justify-end">
+        <Input
+          placeholder="Firmware"
+          value={local.firmware ?? ''}
+          onChange={(e) => setLocal((p) => ({ ...p, firmware: e.target.value || undefined }))}
+          className="h-10"
+        />
+      </div>
     ),
     supplier_status: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Статус постач.</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Статус постач.</span>
         <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
           {supplierStatuses.map((s) => (
             <label key={s} className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
@@ -329,7 +340,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
       </div>
     ),
     price: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Ціна, $</span>
         <div className="flex gap-1 items-center">
           <Input
@@ -337,7 +348,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="від"
             value={local.price_min ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
           <Input
@@ -345,13 +356,13 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="до"
             value={local.price_max ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-8 text-sm border-gray-300"
+            className="h-10 text-sm border-gray-300"
           />
         </div>
       </div>
     ),
     date_range: (
-      <div className="flex flex-col gap-1">
+      <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Період</span>
         <DateRangePicker
           startDate={local.date_min}
@@ -365,8 +376,8 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
       </div>
     ),
     price_sort: (
-      <div className="flex flex-col gap-1 p-1">
-        <span className="text-[13px] font-semibold text-slate-700">Сортувати ціну</span>
+      <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
+        <span className="text-[12px] font-medium text-slate-600">Сортувати ціну</span>
         <div className="flex flex-nowrap gap-1 text-[14px] overflow-hidden">
           <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700">
             <input
@@ -409,7 +420,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
     <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-2 sm:gap-4">
       {/* Фільтр тогл для мобільних */}
       <div className="flex items-center justify-between md:hidden p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <div className="flex items-center gap-2">
+        <div className="flex items-end gap-1 h-[60px]">
           <Filter size={18} className="text-gray-500" />
           <span className="text-sm font-medium">Параметри фільтрації</span>
         </div>

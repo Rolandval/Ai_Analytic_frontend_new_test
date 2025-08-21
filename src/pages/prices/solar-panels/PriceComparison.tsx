@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useGetSupplierSolarPanelComparisonMutation } from '@/services/solarPanelComparison.api';
-import { useUpdateAllSitePricesMutation } from '@/services/solarPanelSitePrice.api';
 import { getSolarPanelBrands, getSolarPanelSuppliers } from '@/services/solarPanelPrices.api';
 import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
 import { SolarPanelComparisonFilters } from '@/components/filters/SolarPanelComparisonFilters';
@@ -14,13 +13,7 @@ import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { updateSolarPanelSitePrice, UpdateSitePriceRequest } from '@/services/sitePrice.api';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown, AlertCircle } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/Tooltip";
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -32,6 +25,7 @@ interface SupplierPrice {
   availability: number | null;
   site_id: number | null;
   date: string | null;
+  updated_at: string | null;
   recommended_price: number | null;
   promo_price: number | null;
 }
@@ -87,7 +81,7 @@ export default function SolarPanelPriceComparison() {
   }>({ id: null, price: null, promo_price: null, availability: null, productName: '' });
 
   const [getSolarPanelComparison, { isLoading }] = useGetSupplierSolarPanelComparisonMutation();
-  const [updateAllSitePrices, { isLoading: isUpdatingPrices }] = useUpdateAllSitePricesMutation();
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   // Прапор для відстеження, чи були застосовані фільтри користувачем
   const [filtersApplied, setFiltersApplied] = useState(false);
@@ -188,14 +182,13 @@ export default function SolarPanelPriceComparison() {
     return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
 
-  // Format date with hours and minutes
+  // Format date without year
   const formatDateWithTime = (dateString: string | null) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleString('uk-UA', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
@@ -214,14 +207,6 @@ export default function SolarPanelPriceComparison() {
     return 'text-red-600 font-medium';
   };
 
-  // Check if panel needs warning icon (has site_id but no recommended price)
-  const needsWarningIcon = (panel: SolarPanelWithSupplierPrices) => {
-    return panel.supplier_prices.some(sp => 
-      sp.site_id !== null && 
-      sp.site_id !== undefined && 
-      sp.recommended_price === null
-    );
-  };
 
   // Determine if any supplier has this panel available
   const isAvailable = (panel: SolarPanelWithSupplierPrices) => {
@@ -284,19 +269,33 @@ export default function SolarPanelPriceComparison() {
     setSelectedRowIds(new Set());
   };
 
-  // Handle bulk price update
+  // Handle bulk price update (per selected rows)
   const handleBulkPriceUpdate = async () => {
-    if (selectedRowIds.size === 0) return;
-    
-    try {
-      await updateAllSitePrices(markup).unwrap();
-      alert(`Ціни успішно оновлено для ${selectedRowIds.size} панелей з націнкою ${markup}%!`);
-      setSelectedRowIds(new Set()); // Очищуємо вибір
-      fetchComparisonData(); // Оновлюємо дані
-    } catch (error) {
-      alert('Помилка при оновленні цін');
-      console.error(error);
-    }
+    if (!comparisonData?.panels || selectedRowIds.size === 0) return;
+    setIsBulkUpdating(true);
+    const selectedPanels = comparisonData.panels.filter(p => selectedRowIds.has(p.id));
+    const updates = selectedPanels.map(async (panel) => {
+      const priceToApply = calculateRecommendedPrice(panel);
+      if (!priceToApply) return Promise.resolve('skip');
+      // find any supplier entry with site_id to update
+      const siteEntry = panel.supplier_prices.find(sp => sp.site_id);
+      if (!siteEntry?.site_id) return Promise.resolve('skip');
+      const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
+      try {
+        await updateSolarPanelSitePrice(payload);
+        return 'ok';
+      } catch (e) {
+        console.error('Bulk update error (panel)', panel.id, e);
+        return 'error';
+      }
+    });
+    const results = await Promise.allSettled(updates);
+    const okCount = results.filter(r => r.status === 'fulfilled').length;
+    // eslint-disable-next-line no-alert
+    alert(`Оновлено цін: ${okCount} / ${selectedPanels.length}`);
+    setSelectedRowIds(new Set());
+    await fetchComparisonData();
+    setIsBulkUpdating(false);
   };
   
   // Handle opening the price update modal
@@ -375,11 +374,11 @@ export default function SolarPanelPriceComparison() {
             </span>
             <Button 
               onClick={handleBulkPriceUpdate}
-              disabled={isUpdatingPrices}
+              disabled={isBulkUpdating}
               size="sm"
               className="bg-blue-600 hover:bg-blue-700 text-xs px-2 py-1 h-7"
             >
-              {isUpdatingPrices ? 'Оновлення...' : 'Застосувати всі обрані'}
+              {isBulkUpdating ? 'Оновлення...' : 'Застосувати всі обрані'}
             </Button>
           </>
         )}
@@ -405,111 +404,86 @@ export default function SolarPanelPriceComparison() {
                 <p className="font-medium">Застосуйте фільтри для відображення даних</p>
                 <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
               </div>
-            ) : isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="w-full h-10" />
-                <Skeleton className="w-full h-10" />
-                <Skeleton className="w-full h-10" />
-              </div>
             ) : comparisonData && comparisonData.panels.length > 0 ? (
-              <Table>
-                <TableHeader className="[&_th]:cursor-pointer [&_th:hover]:bg-muted/50">
+              <Table style={{userSelect: 'text'}}>
+                <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
-                    {/* Використовуємо onClick для сортування */}
+                    <TableHead className="text-center w-8 text-xs">№</TableHead>
                     <TableHead 
-                      className="w-[180px] sm:w-[300px]"
+                      className="min-w-[120px] text-center"
                       onClick={() => requestSort('full_name')}
                     >
-                      <div className="flex items-center gap-1">
-                        <span>Назва</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Назва</span>
                         {sortConfig?.key === 'full_name' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
                       </div>
                     </TableHead>
-                    <TableHead
-                      onClick={() => requestSort('brand')}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>Бренд</span>
-                        {sortConfig?.key === 'brand' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead
-                      className="hidden sm:table-cell"
+                    <TableHead className="text-xs w-16 truncate text-center">Бренд</TableHead>
+                    <TableHead 
+                      className="hidden sm:table-cell w-8 text-center"
                       onClick={() => requestSort('power')}
                     >
-                      <div className="flex items-center gap-1">
-                        <span>Потужність</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Вт</span>
                         {sortConfig?.key === 'power' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
                       </div>
                     </TableHead>
-                    <TableHead className="hidden md:table-cell">Товщина</TableHead>
-                    <TableHead className="hidden md:table-cell">Тип панелі</TableHead>
-                    <TableHead className="hidden md:table-cell">Тип комірки</TableHead>
+                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Товщ</TableHead>
+                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Тип</TableHead>
+                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Ком</TableHead>
                     {supplierColumns.map((supplier) => (
-                      <TableHead key={supplier} className="text-right">
-                        <span className="hidden md:inline">{supplier}</span>
-                        <span className="md:hidden">{supplier.split(' ')[0]}</span>
+                      <TableHead key={supplier} className="text-center w-16">
+                        <span className="text-xs truncate">{supplier.length > 4 ? supplier.substring(0, 4) + '...' : supplier}</span>
                       </TableHead>
                     ))}
                     <TableHead
-                      className="text-right"
+                      className="text-center w-12"
                       onClick={() => requestSort('recommendedPrice')}
                     >
-                      <div className="flex items-center justify-end gap-1">
-                        <span>Рекомендована ціна</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Рек</span>
                         {sortConfig?.key === 'recommendedPrice' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
                       </div>
                     </TableHead>
-                    <TableHead className="text-center">
-                      Застосувати рекомендовану ціну
-                    </TableHead>
-                    <TableHead className="text-center">
-                      <span>Актуальна ціна</span>
+                    <TableHead className="text-center w-12">
+                      <span className="text-xs">Акт</span>
                     </TableHead>
                     <TableHead
-                      className="text-right"
+                      className="text-center w-8"
                       onClick={() => requestSort('totalAvailability')}
                     >
-                      <div className="flex items-center justify-end gap-1">
-                        <span>Наявність</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Нав</span>
                         {sortConfig?.key === 'totalAvailability' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-3 w-3" />
                             ) : (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-3 w-3" />
                             )}
                           </span>
                         )}
@@ -519,7 +493,7 @@ export default function SolarPanelPriceComparison() {
                 </TableHeader>
                 <TableBody>
                   {/* Використовуємо відсортований масив */}
-                  {sortedPanels.map((panel) => (
+                  {sortedPanels.map((panel, index) => (
                     <TableRow 
                       key={panel.id}
                       className={
@@ -528,30 +502,15 @@ export default function SolarPanelPriceComparison() {
                           : "hover:bg-muted/50 dark:hover:bg-muted/70 opacity-70"
                       }
                     >
-                      <TableCell className="font-medium" noWrap>
-                        <div className="flex items-center gap-1">
-                          {needsWarningIcon(panel) && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>
-                                    <AlertCircle className="h-4 w-4 text-red-500" />
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-red-500 text-white">
-                                  <p>Немає в наявності у постачальників</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {panel.full_name}
-                        </div>
+                      <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                      <TableCell className="font-medium text-xs min-w-[120px] text-center">{panel.full_name}</TableCell>
+                      <TableCell className="text-xs w-16 truncate text-center">{panel.brand}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-center text-xs w-8">{panel.power}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{panel.thickness}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{panel.panel_type}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">
+                        <span className="whitespace-nowrap">{panel.cell_type}</span>
                       </TableCell>
-                      <TableCell noWrap>{panel.brand}</TableCell>
-                      <TableCell className="hidden sm:table-cell">{panel.power ? `${panel.power} Вт` : '-'}</TableCell>
-                      <TableCell className="hidden md:table-cell">{panel.thickness}</TableCell>
-                      <TableCell className="hidden md:table-cell">{panel.panel_type}</TableCell>
-                      <TableCell className="hidden md:table-cell">{panel.cell_type}</TableCell>
                       
                       {/* Supplier price columns */}
                       {supplierColumns.map((supplier) => {
@@ -560,33 +519,34 @@ export default function SolarPanelPriceComparison() {
                         return (
                           <TableCell 
                             key={supplier} 
-                            className="text-right font-medium"
+                            className="text-center font-medium w-16"
                           >
                             <div className="flex flex-col items-end space-y-2">
                               {price !== null ? (
                                 <>
-                                  <span className={`${panel.supplier_prices.some(sp => sp.recommended_price !== null) ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null) : 'text-primary dark:text-primary-foreground font-medium'}`}>
-                                    {formatPrice(price)}&nbsp;₴
-                                  </span>
-                                  {getSupplierPriceObject(panel, supplier)?.date && (
-                                    <span className="text-xs text-gray-500">
-                                      {formatDateWithTime(getSupplierPriceObject(panel, supplier)?.date as string)}
+                                  <div className="flex flex-col items-center whitespace-nowrap">
+                                    <span className={`${panel.supplier_prices.some(sp => sp.recommended_price !== null) ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null) : 'text-primary dark:text-primary-foreground font-medium'} text-xs`}>
+                                      {formatPrice(price)}₴
                                     </span>
-                                  )}
+                                    {getSupplierPriceObject(panel, supplier)?.updated_at && (
+                                      <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                        {formatDateWithTime(getSupplierPriceObject(panel, supplier)?.updated_at as string)}
+                                      </span>
+                                    )}
+                                  </div>
                                 </>
                               ) : (
-                                '-'
+                                <span className="text-xs">-</span>
                               )}
                               
                               {canUpdate && (
                                 <Button 
                                   variant="outline" 
                                   size="sm"
-                                  className="text-xs px-2 py-1 h-auto bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
+                                  className="text-xs px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
                                   onClick={() => handleOpenPriceUpdateModal(panel, supplier)}
                                 >
-                                  <span className="hidden sm:inline">Оновити ціну на сайті</span>
-                                  <span className="sm:hidden">Оновити</span>
+                                  <span className="text-xs">Онов</span>
                                 </Button>
                               )}
                             </div>
@@ -595,9 +555,9 @@ export default function SolarPanelPriceComparison() {
                       })}
                       
                       {/* Recommended price column */}
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="text-center font-medium">
                         {panel.supplier_prices.some(sp => sp.recommended_price !== null) ? (
-                          <div className="flex flex-col items-end">
+                          <div className="flex flex-col items-center">
                             <span className="text-purple-700 dark:text-purple-400 font-medium">
                               {formatPrice(panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;₴
                             </span>
@@ -607,7 +567,7 @@ export default function SolarPanelPriceComparison() {
                         )}
                       </TableCell>
                       
-                      {/* Apply recommended price column */}
+                      {/* Actual price display column */}
                       <TableCell className="text-center">
                         <div className="flex flex-col items-center gap-2">
                           <input
@@ -617,26 +577,15 @@ export default function SolarPanelPriceComparison() {
                             className="w-4 h-4"
                           />
                           {selectedRowIds.has(panel.id) && calculateRecommendedPrice(panel) && (
-                            <span className="text-green-700 font-medium text-sm">
+                            <span className="text-blue-700 font-medium text-sm">
                               {formatPrice(calculateRecommendedPrice(panel))}&nbsp;₴
                             </span>
                           )}
                         </div>
                       </TableCell>
                       
-                      {/* Actual price display column */}
-                      <TableCell className="text-center">
-                        {calculateRecommendedPrice(panel) ? (
-                          <span className="text-blue-700 font-medium">
-                            {formatPrice(calculateRecommendedPrice(panel))}&nbsp;₴
-                          </span>
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      
                       {/* Total availability column */}
-                      <TableCell className="text-right">
+                      <TableCell className="text-center">
                         {getTotalAvailability(panel) > 0 ? (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                             {getTotalAvailability(panel)}

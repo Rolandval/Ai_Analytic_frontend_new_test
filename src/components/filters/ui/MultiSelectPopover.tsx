@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
-import { Badge } from '@/components/ui/Badge';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -65,24 +64,11 @@ export function MultiSelectPopover({
             className
           )}
         >
-          {/* Selected values / placeholder */}
+          {/* Always show placeholder */}
           <div className="flex flex-wrap gap-1 items-center max-w-[85%]">
-            {selected.length === 0 ? (
-              <span className="text-muted-foreground flex items-center gap-1">
-                <Plus className="w-4 h-4" /> {placeholder}
-              </span>
-            ) : (
-              <>
-                {selected.slice(0, 2).map(v => (
-                  <Badge key={v} variant="secondary" className="truncate max-w-[90px]">
-                    {v}
-                  </Badge>
-                ))}
-                {selected.length > 2 && (
-                  <Badge variant="secondary">+{selected.length - 2}</Badge>
-                )}
-              </>
-            )}
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Plus className="w-4 h-4" /> {placeholder}
+            </span>
           </div>
           <ChevronDown className="w-4 h-4 shrink-0 opacity-70" />
         </button>
