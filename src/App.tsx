@@ -104,7 +104,7 @@ function App() {
           <Route path="/prices/solar-panels" element={<SolarPanelCurrentPricesPage />} />
           <Route path="/prices/solar-panels/comparison" element={<SolarPanelPriceComparisonPage />} />
           <Route path="/prices/inverters" element={<InverterCurrentPricesPage />} />
-          <Route path="/prices/inverters/comparison" element={<InverterPriceComparisonPage />} />
+          {/* <Route path="/prices/inverters/comparison" element={<InverterPriceComparisonPage />} /> */}
 
           {/* Batteries */}
           {/* <Route path="/batteries/directory" element={<BatteriesDirectory />} /> */}
