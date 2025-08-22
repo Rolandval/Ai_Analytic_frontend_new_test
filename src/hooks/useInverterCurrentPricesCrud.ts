@@ -44,6 +44,7 @@ export const useInverterCurrentPricesCrud = () => {
   const supplierNames = supplierOptions.map((o)=>o.name);
 
   const setPage = (p: number) => setFilters((f) => ({ ...f, page: p }));
+  const setPageSize = (size: number) => setFilters((f) => ({ ...f, page_size: size, page: 1 }));
 
   return {
     rows: data?.prices ?? [],
@@ -52,6 +53,7 @@ export const useInverterCurrentPricesCrud = () => {
     pageSize: filters.page_size ?? 10,
     loading: isFetching,
     setPage,
+    setPageSize,
     filters,
     setFilters: setFilters as any,
     createPrice: async (payload: any) => createInverterPrice(payload),

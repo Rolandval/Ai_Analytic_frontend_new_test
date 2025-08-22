@@ -44,6 +44,7 @@ export const useSolarPanelCurrentPricesCrud = () => {
   const supplierNames = supplierOptions.map(o=>o.name);
 
   const setPage = (p: number) => setFilters((f) => ({ ...f, page: p }));
+  const setPageSize = (size: number) => setFilters((f) => ({ ...f, page_size: size, page: 1 }));
 
   // Wrap setFilters to also invalidate the relevant query so that POST re-executes immediately
   const applyFilters = (f: SolarPanelPriceListRequestSchema) => {
@@ -72,6 +73,7 @@ export const useSolarPanelCurrentPricesCrud = () => {
     pageSize: filters.page_size ?? 10,
     loading: isFetching,
     setPage,
+    setPageSize,
     filters,
     setFilters: applyFilters as any,
     createPrice: async (payload: any) => createSolarPanelPrice(payload),

@@ -516,11 +516,18 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         </Button>
       </div>
 
-      {/* Active filter badges with clamp + popover */}
-      {Object.values(local).some((v) => v !== undefined && v !== '' && v !== null) && (
-        <div className="w-full flex flex-col gap-2">
-          <div className="flex items-start gap-2">
-            <span className="text-xs sm:text-sm font-medium flex-shrink-0 pt-1">Фільтри:</span>
+      {/* Search + Active filter badges in one row */}
+      <div className="w-full flex flex-col gap-2">
+        <div className="flex items-start gap-2 flex-wrap">
+          {/* Left: external name search, controlled via local.full_name */}
+          <Input
+            placeholder="Пошук по назві..."
+            value={local.full_name ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, full_name: e.target.value ? e.target.value : undefined }))}
+            className="h-8 w-[220px] sm:w-[280px]"
+          />
+          {/* Right: badges take remaining space */}
+          <div className="flex-1 min-w-[200px]">
             {(() => {
               const badges: React.ReactNode[] = [];
               (local.brands || []).forEach((b) => {
@@ -647,7 +654,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             })()}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Filter Grid */}
       <DndContext

@@ -292,10 +292,10 @@ export default function SolarPanelPriceComparison() {
   
   // Ця функція не використовується в поточній реалізації, але залишена для майбутнього використання
 
-  // Format price with comma as a thousands separator
+  // Format price in UAH without kopecks (no fractional digits)
   const formatPrice = (price: number | null) => {
     if (price === null) return '-';
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return Math.round(price).toLocaleString('uk-UA', { maximumFractionDigits: 0 });
   };
 
   // Format date without year
@@ -590,19 +590,22 @@ export default function SolarPanelPriceComparison() {
                 <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
               </div>
             ) : comparisonData && comparisonData.panels.length > 0 ? (
-              <Table style={{userSelect: 'text'}}>
+              <Table
+                className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5"
+                style={{ userSelect: 'text' }}
+              >
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
                     {visibleColumns['index'] !== false && (
-                      <TableHead className="text-center w-8 text-xs">№</TableHead>
+                      <TableHead className="text-center w-8 text-xs" title="Номер">№</TableHead>
                     )}
                     {visibleColumns['full_name'] !== false && (
                       <TableHead 
-                        className="min-w-[120px] text-center"
+                        className="min-w-[180px] text-center"
                         onClick={() => requestSort('full_name')}
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs">Назва</span>
+                          <span className="text-[11px]">Назва</span>
                           {sortConfig?.key === 'full_name' && (
                             <span className="text-primary">
                               {sortConfig.direction === 'asc' ? (
@@ -616,7 +619,9 @@ export default function SolarPanelPriceComparison() {
                       </TableHead>
                     )}
                     {visibleColumns['brand'] !== false && (
-                      <TableHead className="text-xs w-16 truncate text-center">Бренд</TableHead>
+                      <TableHead className="text-xs w-16 truncate text-center" title="Бренд">
+                        <span className="whitespace-nowrap">Бренд</span>
+                      </TableHead>
                     )}
                     {visibleColumns['power'] !== false && (
                       <TableHead 
@@ -624,7 +629,7 @@ export default function SolarPanelPriceComparison() {
                         onClick={() => requestSort('power')}
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs" title="Вати">Вт</span>
+                          <span className="text-[11px]" title="Вати">Вт</span>
                           {sortConfig?.key === 'power' && (
                             <span className="text-primary">
                               {sortConfig.direction === 'asc' ? (
@@ -653,7 +658,9 @@ export default function SolarPanelPriceComparison() {
                           className="text-center"
                           title={supplier}
                         >
-                          <span className="text-xs">{supplier}</span>
+                          <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
+                            {supplier}
+                          </span>
                         </TableHead>
                       )
                     ))}
@@ -663,7 +670,7 @@ export default function SolarPanelPriceComparison() {
                         onClick={() => requestSort('recommendedPrice')}
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs" title="Рекомендована">Рек</span>
+                          <span className="text-[11px]" title="Рекомендована">Рек</span>
                           {sortConfig?.key === 'recommendedPrice' && (
                             <span className="text-primary">
                               {sortConfig.direction === 'asc' ? (
@@ -679,7 +686,7 @@ export default function SolarPanelPriceComparison() {
                     {visibleColumns['actual'] !== false && (
                       <TableHead className="text-center w-12">
                         <div className="flex flex-col items-center gap-1">
-                          <span className="text-xs" title="Актуальна">Акт</span>
+                          <span className="text-[11px]" title="Актуальна">Акт</span>
                           <div className="flex items-center gap-2">
                             {(() => {
                               const totalCount = comparisonData?.panels?.length ?? 0;
@@ -716,7 +723,7 @@ export default function SolarPanelPriceComparison() {
                         onClick={() => requestSort('totalAvailability')}
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs" title="Наявність">Наяв</span>
+                          <span className="text-[11px]" title="Наявність">Наяв</span>
                           {sortConfig?.key === 'totalAvailability' && (
                             <span className="text-primary">
                               {sortConfig.direction === 'asc' ? (
@@ -747,10 +754,12 @@ export default function SolarPanelPriceComparison() {
                       )}
                       {visibleColumns['full_name'] !== false && (
                         <TableCell
-                          className="font-medium text-xs min-w-[120px] text-center"
+                          className="font-medium text-xs min-w-[180px] text-center"
                           title={panel.full_name}
                         >
-                          {panel.full_name}
+                          <div className="truncate">
+                            {panel.full_name}
+                          </div>
                         </TableCell>
                       )}
                       {visibleColumns['brand'] !== false && (
@@ -776,29 +785,23 @@ export default function SolarPanelPriceComparison() {
                         if (visibleColumns[`supplier:${supplier}`] === false) return null;
                         const price = getPriceForSupplier(panel, supplier);
                         const canUpdate = canUpdatePriceOnSite(panel, supplier);
+                        const updatedAt = getSupplierPriceObject(panel, supplier)?.updated_at as string | undefined;
+                        const priceClass = panel.supplier_prices.some(sp => sp.recommended_price !== null)
+                          ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)
+                          : 'text-primary dark:text-primary-foreground font-medium';
                         return (
                           <TableCell 
                             key={`sup-cell-${panel.id}-${sIdx}-${supplier}`} 
-                            className="text-center font-medium w-16"
+                            className="text-center font-medium w-24"
                           >
-                            <div className="flex flex-col items-end space-y-2">
+                            <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                               {price !== null ? (
-                                <>
-                                  <div className="flex flex-col items-center whitespace-nowrap">
-                                    <span className={`${panel.supplier_prices.some(sp => sp.recommended_price !== null) ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null) : 'text-primary dark:text-primary-foreground font-medium'} text-xs`}>
-                                      {formatPrice(price)}₴
-                                    </span>
-                                    {getSupplierPriceObject(panel, supplier)?.updated_at && (
-                                      <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                                        {formatDateWithTime(getSupplierPriceObject(panel, supplier)?.updated_at as string)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </>
+                                <span className={`${priceClass} text-xs`}>
+                                  {formatPrice(price)}₴
+                                </span>
                               ) : (
                                 <span className="text-xs">-</span>
                               )}
-                              
                               {canUpdate && (
                                 <Button 
                                   variant="outline" 
@@ -810,6 +813,11 @@ export default function SolarPanelPriceComparison() {
                                 </Button>
                               )}
                             </div>
+                            {updatedAt && (
+                              <div className="mt-1 text-[10px] text-gray-500 whitespace-nowrap text-center">
+                                {formatDateWithTime(updatedAt)}
+                              </div>
+                            )}
                           </TableCell>
                         );
                       })}

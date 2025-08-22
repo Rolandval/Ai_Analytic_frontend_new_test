@@ -40,6 +40,7 @@ export const useBatteryCurrentPricesCrud = () => {
   const supplierNames = supplierOptions.map((o) => o.name);
 
   const setPage = (p: number) => setFilters((f) => ({ ...f, page: p }));
+  const setPageSize = (size: number) => setFilters((f) => ({ ...f, page_size: size, page: 1 }));
 
   return {
     rows: data?.battery_prices ?? [],
@@ -48,6 +49,7 @@ export const useBatteryCurrentPricesCrud = () => {
     pageSize: filters.page_size ?? 10,
     loading: isFetching,
     setPage,
+    setPageSize,
     filters,
     setFilters: setFilters as any,
     // no create for current prices

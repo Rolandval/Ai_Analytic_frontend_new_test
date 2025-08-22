@@ -14,7 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 
-import { Pagination } from '@/components/ui/Pagination';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
@@ -27,6 +26,7 @@ import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Settings, Copy, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 // removed radio-group imports; using a single native radio input for unified toggle
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -67,7 +67,7 @@ interface BatteryComparisonResponse {
 }
 
 export default function BatteryPriceComparison() {
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<BatteryPriceListRequestSchema>({
     page: page,
@@ -254,13 +254,12 @@ export default function BatteryPriceComparison() {
     setFilters(prev => ({ ...prev, page: newPage }));
   };
 
-  // Function is defined but currently not used in the UI
-  // Kept for future implementation of page size selector
-  // const handlePageSizeChange = (newSize: number) => {
-  //   setPageSize(newSize);
-  //   setPage(1);
-  //   setFilters(prev => ({ ...prev, page: 1, page_size: newSize }));
-  // };
+  // Page size change handler for footer pagination
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+    setFilters(prev => ({ ...prev, page: 1, page_size: newSize }));
+  };
 
   const handleFiltersChange = (newFilters: Partial<BatteryPriceListRequestSchema>) => {
     setFilters(prev => ({ ...prev, ...newFilters, page: 1 }));
@@ -272,7 +271,9 @@ export default function BatteryPriceComparison() {
   // Format price with comma as a thousands separator
   const formatPrice = (price: number | null) => {
     if (price === null) return '-';
-    return price.toLocaleString('uk-UA', { minimumFractionDigits: 2 });
+    // Round to whole hryvnias and format without kopecks
+    const rounded = Math.round(price);
+    return rounded.toLocaleString('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   // Format date without year
@@ -533,7 +534,7 @@ export default function BatteryPriceComparison() {
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="p-[0.2rem]">
           {filtersApplied ? (
-            <Table>
+            <Table className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5">
               <TableHeader>
                 <TableRow>
                   {visibleColumns['index'] !== false && (
@@ -541,12 +542,12 @@ export default function BatteryPriceComparison() {
                   )}
                   {visibleColumns['full_name'] !== false && (
                     <TableHead 
-                      className="min-w-[120px] text-center"
+                      className="min-w-[140px] text-center"
                       onClick={() => requestSort('brand')}
                       title="Назва"
                     >
                       <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Назва</span>
+                        <span className="text-[11px]">Назва</span>
                         {sortConfig?.key === 'brand' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
@@ -619,10 +620,16 @@ export default function BatteryPriceComparison() {
                       </div>
                     </TableHead>
                   )}
-                  {supplierColumns.map((supplier) => (
+                  {supplierColumns.map((supplier, idx) => (
                     visibleColumns[`supplier:${supplier}`] !== false && (
-                      <TableHead key={supplier} className="text-center w-16" title={supplier}>
-                        <span className="text-xs truncate">{supplier.length > 4 ? supplier.substring(0, 4) + '...' : supplier}</span>
+                      <TableHead
+                        key={`sup-head-${idx}-${supplier}`}
+                        className="text-center"
+                        title={supplier}
+                      >
+                        <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
+                          {supplier}
+                        </span>
                       </TableHead>
                     )
                   ))}
@@ -726,7 +733,12 @@ export default function BatteryPriceComparison() {
                         <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
                       )}
                       {visibleColumns['full_name'] !== false && (
-                        <TableCell className="font-medium text-xs min-w-[120px] text-center">{battery.full_name}</TableCell>
+                        <TableCell
+                          className="font-medium min-w-[140px] text-center truncate"
+                          title={battery.full_name}
+                        >
+                          {battery.full_name}
+                        </TableCell>
                       )}
                       {visibleColumns['brand'] !== false && (
                         <TableCell className="text-xs w-16 truncate text-center">{battery.brand}</TableCell>
@@ -755,33 +767,32 @@ export default function BatteryPriceComparison() {
                         return (
                           <TableCell 
                             key={supplier} 
-                            className="text-center font-medium w-16"
+                            className="text-center font-medium w-24"
                           >
-                            <div className="flex flex-col items-center space-y-1">
+                            <div className="flex flex-col items-center gap-0.5">
                               {price !== null ? (
-                                <div className="flex flex-col items-center">
-                                  <span className="text-primary dark:text-primary-foreground font-medium text-xs">
+                                <div className="flex items-center gap-1 whitespace-nowrap">
+                                  <span className="text-primary dark:text-primary-foreground font-medium text-[11px]">
                                     {formatPrice(price)}₴
                                   </span>
-                                  {getSupplierPriceObject(battery, supplier)?.updated_at && (
-                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                                      {formatDateWithTime(getSupplierPriceObject(battery, supplier)?.updated_at as string)}
-                                    </span>
+                                  {canUpdate && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="text-[10px] px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
+                                      onClick={() => handleOpenPriceUpdateModal(battery, supplier)}
+                                    >
+                                      Онов
+                                    </Button>
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-xs">-</span>
+                                <span className="text-[11px]">-</span>
                               )}
-                              
-                              {canUpdate && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="text-xs px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
-                                  onClick={() => handleOpenPriceUpdateModal(battery, supplier)}
-                                >
-                                  <span className="text-xs">Онов</span>
-                                </Button>
+                              {getSupplierPriceObject(battery, supplier)?.updated_at && (
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  {formatDateWithTime(getSupplierPriceObject(battery, supplier)?.updated_at as string)}
+                                </span>
                               )}
                             </div>
                           </TableCell>
@@ -793,7 +804,7 @@ export default function BatteryPriceComparison() {
                         <TableCell className="text-center font-medium">
                           {battery.supplier_prices.some(sp => sp.recommended_price !== null) ? (
                             <div className="flex flex-col items-center">
-                              <span className="text-purple-700 dark:text-purple-400 font-medium">
+                              <span className="text-purple-700 dark:text-purple-400 font-medium text-[11px]">
                                 {formatPrice(battery.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;₴
                               </span>
                             </div>
@@ -866,15 +877,31 @@ export default function BatteryPriceComparison() {
         
         {comparisonData && (
           <div className="p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="text-xs sm:text-sm text-muted-foreground">
-                Показано {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}
+            <div className="flex items-center justify-between flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Показати:</span>
+                <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+                  <SelectTrigger className="w-[90px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-gray-600">записів</span>
               </div>
-              <Pagination
-                currentPage={page}
-                totalPages={Math.ceil(comparisonData.total / pageSize)}
-                onPageChange={handlePageChange}
-              />
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600">
+                  {page} / {Math.max(1, Math.ceil(comparisonData.total / pageSize))}
+                </span>
+                <div className="space-x-2">
+                  <Button disabled={page === 1} onClick={() => handlePageChange(page - 1)} size="sm">Попередня</Button>
+                  <Button disabled={page === Math.ceil(comparisonData.total / pageSize) || comparisonData.total === 0} onClick={() => handlePageChange(page + 1)} size="sm">Наступна</Button>
+                </div>
+              </div>
             </div>
           </div>
         )}

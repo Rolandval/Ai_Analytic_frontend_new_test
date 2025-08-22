@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 
-import { Pagination } from '@/components/ui/Pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
@@ -26,7 +26,7 @@ import { useSortableTable } from '@/hooks/useSortableTable';
 import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 // removed radio-group imports; using a single native radio input for unified toggle
-import { Input } from '@/components/ui/Input';
+// removed page-level name search input; now handled inside InverterComparisonFilters
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -67,7 +67,7 @@ interface InverterComparisonResponse {
 }
 
 export default function InverterPriceComparison() {
-  const pageSize = 10; // Фіксований розмір сторінки
+  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<InverterPriceListRequestSchema>({
     page: page,
@@ -103,8 +103,7 @@ export default function InverterPriceComparison() {
 
   // Прапор для відстеження, чи були застосовані фільтри користувачем
   const [filtersApplied, setFiltersApplied] = useState(false);
-  // External search state for full_name
-  const [search, setSearch] = useState<string>('');
+  // Name search is handled inside InverterComparisonFilters now
 
   useEffect(() => {
     // Виконуємо запит тільки якщо фільтри були застосовані
@@ -117,19 +116,7 @@ export default function InverterPriceComparison() {
     }
   }, [filters, filtersApplied]);
 
-  // Sync external search with filters whenever filters.full_name changes (e.g., cleared via badges)
-  useEffect(() => {
-    setSearch(filters.full_name ?? '');
-  }, [filters.full_name]);
-
-  // Debounce search input and apply to filters
-  useEffect(() => {
-    const t = setTimeout(() => {
-      handleFiltersChange({ full_name: search ? search : undefined });
-    }, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  // removed sync/debounce: full_name is controlled by InverterComparisonFilters
 
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
@@ -311,8 +298,11 @@ export default function InverterPriceComparison() {
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page: newPage }));
   };
 
-  // Функція зміни розміру сторінки не використовується в поточній реалізації
-  // з фіксованим розміром сторінки
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+    setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page_size: size, page: 1 }));
+  };
 
   const handleFiltersChange = (newFilters: Partial<InverterPriceListRequestSchema>) => {
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
@@ -321,10 +311,11 @@ export default function InverterPriceComparison() {
     setFiltersApplied(true);
   };
 
-  // Format price with comma as a thousands separator
+  // Format price as whole dollars without decimals, with thousands separators (Ukrainian locale)
   const formatPrice = (price: number | null) => {
     if (price === null) return '-';
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const rounded = Math.round(price);
+    return rounded.toLocaleString('uk-UA', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   // Format date without year
@@ -459,22 +450,13 @@ export default function InverterPriceComparison() {
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на інвертори</h1>
       
       <div className="space-y-4 mb-4">
-        {/* External search input placed separately above filters */}
-         <div className="flex flex-wrap items-center gap-2">
-          <Input
-            placeholder="Пошук по назві..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-8 w-[220px] sm:w-[280px]"
-          />
-        </div>
         <InverterComparisonFilters 
           current={filters}
           setFilters={handleFiltersChange}
           brands={brands}
           suppliers={suppliers}
         />
-         {!isLoading && comparisonData && comparisonData.inverters.length === 0 && (
+        {!isLoading && comparisonData && comparisonData.inverters.length === 0 && (
           <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200">
               Нічого не знайдено
@@ -606,7 +588,7 @@ export default function InverterPriceComparison() {
                 <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
               </div>
             ) : comparisonData && comparisonData.inverters.length > 0 ? (
-              <Table style={{userSelect: 'text'}}>
+              <Table className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5" style={{userSelect: 'text'}}>
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
                     {visibleColumns['index'] !== false && (
@@ -614,11 +596,11 @@ export default function InverterPriceComparison() {
                     )}
                     {visibleColumns['full_name'] !== false && (
                       <TableHead 
-                        className="min-w-[120px] text-center"
+                        className="min-w-[140px] text-center"
                         onClick={() => requestSort('full_name')}
                       >
                         <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs">Назва</span>
+                          <span className="text-[11px]" title="Назва">Назва</span>
                           {sortConfig?.key === 'full_name' && (
                             <span className="text-primary">
                               {sortConfig.direction === 'asc' ? (
@@ -672,10 +654,16 @@ export default function InverterPriceComparison() {
                         </div>
                       </TableHead>
                     )}
-                    {supplierColumns.map((supplier) => (
+                    {supplierColumns.map((supplier, idx) => (
                       visibleColumns[`supplier:${supplier}`] !== false && (
-                        <TableHead key={supplier} className="text-center">
-                          <span className="text-xs">{supplier}</span>
+                        <TableHead
+                          key={`sup-head-${idx}-${supplier}`}
+                          className="text-center"
+                          title={supplier}
+                        >
+                          <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
+                            {supplier}
+                          </span>
                         </TableHead>
                       )
                     ))}
@@ -768,7 +756,12 @@ export default function InverterPriceComparison() {
                         <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
                       )}
                       {visibleColumns['full_name'] !== false && (
-                        <TableCell className="font-medium text-xs min-w-[120px] text-center">{inverter.full_name}</TableCell>
+                        <TableCell
+                          className="font-medium min-w-[140px] text-center truncate"
+                          title={inverter.full_name}
+                        >
+                          {inverter.full_name}
+                        </TableCell>
                       )}
                       {visibleColumns['brand'] !== false && (
                         <TableCell className="text-xs text-center">{inverter.brand}</TableCell>
@@ -787,33 +780,32 @@ export default function InverterPriceComparison() {
                         return (
                           <TableCell 
                             key={supplier} 
-                            className="text-center font-medium w-16"
+                            className="text-center font-medium w-24"
                           >
-                            <div className="flex flex-col items-center space-y-1">
+                            <div className="flex flex-col items-center gap-0.5">
                               {price !== null ? (
-                                <div className="flex flex-col items-center whitespace-nowrap">
-                                  <span className="text-primary dark:text-primary-foreground font-medium text-xs">
+                                <div className="flex items-center gap-1 whitespace-nowrap">
+                                  <span className="text-primary dark:text-primary-foreground font-medium text-[11px]">
                                     {formatPrice(price)}$
                                   </span>
-                                  {getSupplierPriceObject(inverter, supplier)?.updated_at && (
-                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                                      {formatDateWithTime(getSupplierPriceObject(inverter, supplier)?.updated_at as string)}
-                                    </span>
+                                  {canUpdate && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      className="text-[10px] px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
+                                      onClick={() => handleOpenPriceUpdateModal(inverter, supplier)}
+                                    >
+                                      Онов
+                                    </Button>
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-xs">-</span>
+                                <span className="text-[11px]">-</span>
                               )}
-                              
-                              {canUpdate && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="text-xs px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
-                                  onClick={() => handleOpenPriceUpdateModal(inverter, supplier)}
-                                >
-                                  <span className="text-xs">Онов</span>
-                                </Button>
+                              {getSupplierPriceObject(inverter, supplier)?.updated_at && (
+                                <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                  {formatDateWithTime(getSupplierPriceObject(inverter, supplier)?.updated_at as string)}
+                                </span>
                               )}
                             </div>
                           </TableCell>
@@ -825,7 +817,7 @@ export default function InverterPriceComparison() {
                         <TableCell className="text-center font-medium">
                           {inverter.supplier_prices.some(sp => sp.recommended_price !== null) ? (
                             <div className="flex flex-col items-center">
-                              <span className="text-purple-700 dark:text-purple-400 font-medium">
+                              <span className="text-purple-700 dark:text-purple-400 font-medium text-[11px]">
                                 {formatPrice(inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;$
                               </span>
                             </div>
@@ -899,15 +891,35 @@ export default function InverterPriceComparison() {
         
         {comparisonData && (
           <div className="p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              <div className="text-xs sm:text-sm text-muted-foreground">
-                Показано {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm text-gray-600">Показати:</span>
+                <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
+                  <SelectTrigger className="h-8 w-[80px]">
+                    <SelectValue placeholder="10" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="30">30</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs sm:text-sm text-gray-600">записів</span>
               </div>
-              <Pagination
-                currentPage={page}
-                totalPages={Math.ceil(comparisonData.total / pageSize)}
-                onPageChange={handlePageChange}
-              />
+
+              <div className="flex items-center gap-4 ml-auto">
+                <span className="text-xs sm:text-sm text-gray-600">
+                  {page} / {Math.max(1, Math.ceil((comparisonData.total || 0) / pageSize))}
+                </span>
+                <div className="space-x-2">
+                  <Button disabled={page === 1} onClick={() => handlePageChange(page - 1)} size="sm">Попередня</Button>
+                  <Button disabled={page === Math.ceil((comparisonData.total || 0) / pageSize) || (comparisonData.total || 0) === 0} onClick={() => handlePageChange(page + 1)} size="sm">Наступна</Button>
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 text-xs sm:text-sm text-muted-foreground">
+              Показано {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}
             </div>
           </div>
         )}
