@@ -600,7 +600,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
           
             </div>
             {totalActiveBadges > 14 && (
-              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0" />
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0 dark:hidden" />
             )}
           </div>
 

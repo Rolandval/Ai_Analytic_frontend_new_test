@@ -118,9 +118,17 @@ export default function BatteryPriceComparison() {
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
     if (comparisonData?.batteries) {
-      const data = comparisonData.batteries.map(battery => ({
+      const data = comparisonData.batteries.map((battery, idx) => ({
         ...battery,
-        totalAvailability: getTotalAvailability(battery)
+        totalAvailability: getTotalAvailability(battery),
+        // Для сортування за рекомендованою ціною
+        recommendedPrice: calculateRecommendedPrice(battery),
+        // Для сортування за цінами постачальників: supplierPrices.[supplierName]
+        supplierPrices: Object.fromEntries(
+          battery.supplier_prices.map(sp => [sp.supplier_name, sp.price])
+        ),
+        // Для сортування за початковим порядком (№)
+        originalIndex: idx,
       }));
       setProcessedData(data);
     }
@@ -242,7 +250,14 @@ export default function BatteryPriceComparison() {
             battery.supplier_prices.map((sp: SupplierPrice) => sp.supplier_name)
           )
         )] as string[];
-        setSupplierColumns(uniqueSuppliers);
+        // Move any 'АКУМУЛЯТОР-Центр' / 'АКБ-ЦЕНТР' variants to the end, keep relative order
+        const isTarget = (s: string) => {
+          const lower = s.toLowerCase();
+          return lower.includes('акумулятор') || lower.includes('акб-центр');
+        };
+        const others = uniqueSuppliers.filter(s => !isTarget(s));
+        const targets = uniqueSuppliers.filter(s => isTarget(s));
+        setSupplierColumns([...others, ...targets]);
       }
     } catch (error) {
       console.error('Error fetching comparison data:', error);
@@ -538,17 +553,34 @@ export default function BatteryPriceComparison() {
               <TableHeader>
                 <TableRow>
                   {visibleColumns['index'] !== false && (
-                    <TableHead className="text-center w-8 text-xs" title="№">№</TableHead>
+                    <TableHead 
+                      className="text-center w-8 text-xs cursor-pointer select-none" 
+                      title="№"
+                      onClick={() => requestSort('originalIndex')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">№</span>
+                        {sortConfig?.key === 'originalIndex' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
                   )}
                   {visibleColumns['full_name'] !== false && (
                     <TableHead 
-                      className="min-w-[140px] text-center"
-                      onClick={() => requestSort('brand')}
+                      className="min-w-[140px] text-center cursor-pointer select-none"
+                      onClick={() => requestSort('full_name')}
                       title="Назва"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-[11px]">Назва</span>
-                        {sortConfig?.key === 'brand' && (
+                        {sortConfig?.key === 'full_name' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
                               <ChevronUp className="h-3 w-3" />
@@ -620,28 +652,90 @@ export default function BatteryPriceComparison() {
                       </div>
                     </TableHead>
                   )}
-                  {supplierColumns.map((supplier, idx) => (
-                    visibleColumns[`supplier:${supplier}`] !== false && (
+                  {visibleColumns['region'] !== false && (
+                    <TableHead 
+                      className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
+                      title="Тип Корпусу"
+                      onClick={() => requestSort('region')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Рег</span>
+                        {sortConfig?.key === 'region' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                  )}
+                  {visibleColumns['polarity'] !== false && (
+                    <TableHead 
+                      className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
+                      title="Полярність"
+                      onClick={() => requestSort('polarity')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Пол</span>
+                        {sortConfig?.key === 'polarity' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                  )}
+                  {visibleColumns['electrolyte'] !== false && (
+                    <TableHead 
+                      className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
+                      title="Електроліт"
+                      onClick={() => requestSort('electrolyte')}
+                    > 
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Ел</span>
+                        {sortConfig?.key === 'electrolyte' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                  )}
+                  {/* Dynamic supplier headers */}
+                  {supplierColumns.map((supplier) => (
+                    visibleColumns[`supplier:${supplier}`] === false ? null : (
                       <TableHead
-                        key={`sup-head-${idx}-${supplier}`}
-                        className="text-center"
+                        key={`supplier-head-${supplier}`}
+                        className="text-center w-24 cursor-pointer select-none"
+                        onClick={() => requestSort(`supplierPrices.${supplier}`)}
                         title={supplier}
                       >
-                        <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
-                          {supplier}
-                        </span>
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs truncate max-w-[88px]">{supplier}</span>
+                          {sortConfig?.key === `supplierPrices.${supplier}` && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </TableHead>
                     )
                   ))}
-                  {visibleColumns['region'] !== false && (
-                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Тип Корпусу">Рег</TableHead>
-                  )}
-                  {visibleColumns['polarity'] !== false && (
-                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Полярність">Пол</TableHead>
-                  )}
-                  {visibleColumns['electrolyte'] !== false && (
-                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Електроліт">Ел</TableHead>
-                  )}
                   {visibleColumns['recommended'] !== false && (
                     <TableHead
                       className="text-center w-12"

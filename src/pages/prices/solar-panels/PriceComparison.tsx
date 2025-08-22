@@ -271,6 +271,14 @@ export default function SolarPanelPriceComparison() {
         );
         const cleaned = rawNames.filter((n) => n.length > 0);
         const uniqueSuppliers = Array.from(new Set(cleaned));
+        // Move "АКУМУЛЯТОР-Центр" column to the end (right before Recommended column)
+        const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+        const targetNorm = normalize('АКУМУЛЯТОР-Центр');
+        const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
+        if (idx !== -1) {
+          const [target] = uniqueSuppliers.splice(idx, 1);
+          uniqueSuppliers.push(target);
+        }
         setSupplierColumns(uniqueSuppliers);
       }
     } catch (error) {

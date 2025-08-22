@@ -283,9 +283,17 @@ export default function InverterPriceComparison() {
       if (result.inverters.length > 0) {
         const uniqueSuppliers = [...new Set(
           result.inverters.flatMap((inverter: InverterWithSupplierPrices) => 
-            inverter.supplier_prices.map((sp: SupplierPrice) => sp.supplier_name)
+            inverter.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
           )
-        )] as string[];
+        )].filter((n) => n.length > 0) as string[];
+        // Move "АКУМУЛЯТОР-Центр" to the end (so it appears just before the recommended column)
+        const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+        const targetNorm = normalize('АКУМУЛЯТОР-Центр');
+        const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
+        if (idx !== -1) {
+          const [target] = uniqueSuppliers.splice(idx, 1);
+          uniqueSuppliers.push(target);
+        }
         setSupplierColumns(uniqueSuppliers);
       }
     } catch (error) {

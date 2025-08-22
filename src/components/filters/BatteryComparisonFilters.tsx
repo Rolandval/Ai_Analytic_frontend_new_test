@@ -85,7 +85,7 @@ const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }
           {overflow > 0 && (
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900 z-0"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:hidden z-0"
             />
           )}
         </div>

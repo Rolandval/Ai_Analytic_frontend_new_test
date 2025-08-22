@@ -82,12 +82,87 @@
 /*  Custom Utilities                                  */
 /* -------------------------------------------------- */
 @layer utilities {
+  /* Light mode: enforce readable input text regardless of parent text color */
+  :root input,
+  :root select,
+  :root textarea {
+    color: hsl(var(--foreground)) !important;
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+  /* If some inputs force text-white in light theme, override to foreground */
+  :root input.text-white,
+  :root select.text-white,
+  :root textarea.text-white {
+    color: hsl(var(--foreground)) !important;
+  }
+  :root input::placeholder,
+  :root textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
+
   /* Dark mode form elements */
   .dark input,
   .dark select,
   .dark textarea {
     @apply bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-500;
   }
+
+  /* Dark mode: override hardcoded light backgrounds */
+  .dark .bg-white,
+  .dark .bg-slate-50,
+  .dark .bg-gray-50,
+  .dark .bg-neutral-50,
+  .dark .bg-zinc-50,
+  .dark .bg-stone-50 {
+    @apply bg-neutral-900 !important;
+  }
+
+  /* Dark mode: cards/popovers typical surfaces */
+  .dark .card,
+  .dark .popover,
+  .dark .dropdown-menu,
+  .dark .context-menu,
+  .dark .modal,
+  .dark .dialog-content {
+    @apply bg-neutral-900 text-neutral-200 border-neutral-700;
+  }
+
+  /* Dark mode: fix text colors when components use hardcoded dark text */
+  .dark .text-black { color: hsl(var(--foreground)) !important; }
+  .dark .text-slate-700 { color: hsl(var(--foreground)) !important; }
+  .dark .text-gray-700 { color: hsl(var(--foreground)) !important; }
+
+  /* Tables: ensure readable contrast in dark mode */
+  .dark table thead th {
+    @apply bg-neutral-900 text-neutral-300 border-neutral-700;
+  }
+  .dark table tbody td {
+    @apply text-neutral-200 border-neutral-800;
+  }
+  .dark .table,
+  .dark .data-table {
+    @apply bg-transparent;
+  }
+
+  /* Buttons/Badges with light backgrounds in dark mode */
+  .dark .bg-slate-100,
+  .dark .bg-gray-100,
+  .dark .bg-zinc-100,
+  .dark .bg-neutral-100 {
+    @apply bg-neutral-800 text-neutral-100 border-neutral-700;
+  }
+
+  /* Scroll hint (fade bottom) – enabled in light, disabled in dark */
+  .scroll-hint {
+    -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent);
+            mask-image: linear-gradient(to bottom, black 85%, transparent);
+  }
+  .dark .scroll-hint {
+    -webkit-mask-image: none !important;
+            mask-image: none !important;
+  }
+
   /* Hero gradient backgrounds */
   .bg-hero-light {
     @apply bg-gradient-to-br from-white via-sky-50 to-sky-100;

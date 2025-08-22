@@ -105,7 +105,7 @@ export function MultiSelectPopover({
         )}
 
         {/* List */}
-        <div className="max-h-56 overflow-y-auto space-y-1 scroll-hint" style={{ WebkitMaskImage: 'linear-gradient(to bottom, black 85%, transparent)' }}>
+        <div className="max-h-56 overflow-y-auto space-y-1 scroll-hint">
           {filtered.length === 0 && (
             <div className="py-2 px-3 text-sm text-muted-foreground">Не знайдено</div>
           )}
