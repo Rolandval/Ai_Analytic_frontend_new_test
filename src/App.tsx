@@ -111,9 +111,9 @@ function App() {
           {/* <Route path="/batteries/directory/lost" element={<BatteriesLostDirectory />} /> */}
           {/* <Route path="/batteries/google-tables" element={<BatteryGoogleTablesPage />} /> */}
           {/* <Route path="/batteries/price-history" element={<BatteriesPriceHistory />} /> */}
-          {/* <Route path="/batteries/analytics" element={<BatteryAnalyticsPage />} /> */}
+          <Route path="/batteries/analytics" element={<BatteryAnalyticsPage />} />
 
-          {/* <Route path="/batteries/suppliers" element={<BatterySuppliersPage />} /> */}
+          <Route path="/batteries/suppliers" element={<BatterySuppliersPage />} />
           <Route path="/batteries/tasks" element={<BatteryTasksPage />} />
 
           {/* Solar Panels */}
