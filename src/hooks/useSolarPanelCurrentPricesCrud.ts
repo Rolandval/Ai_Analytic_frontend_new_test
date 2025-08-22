@@ -47,7 +47,21 @@ export const useSolarPanelCurrentPricesCrud = () => {
 
   // Wrap setFilters to also invalidate the relevant query so that POST re-executes immediately
   const applyFilters = (f: SolarPanelPriceListRequestSchema) => {
-    setFilters(f);
+    // Normalize payload to avoid 422 from backend: drop empty strings, null/undefined, and empty arrays
+    const normalize = (o: Record<string, any>) => {
+      const n: Record<string, any> = {};
+      Object.entries(o).forEach(([k, v]) => {
+        if (v === '' || v === null || v === undefined) return;
+        if (Array.isArray(v)) {
+          if (v.length > 0) n[k] = v.slice();
+          return;
+        }
+        n[k] = v;
+      });
+      return n as SolarPanelPriceListRequestSchema;
+    };
+    const normalized = normalize(f as any);
+    setFilters(normalized);
     qc.invalidateQueries({ queryKey: ['solar-current-prices'] });
   };
 

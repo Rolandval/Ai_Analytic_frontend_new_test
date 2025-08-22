@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { runBatteryGoogleTableImport } from '@/services/batteryGoogleTables.api';
 import { Button } from '@/components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Pagination } from '@/components/ui/Pagination';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,8 @@ const BatteryGoogleTablesPage = () => {
   const [loadingImport, setLoadingImport] = useState<number | null>(null);
   const [importResult, setImportResult] = useState<any>(null);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
 
   const openDialog = (row: Partial<GoogleTable> | null = null) => {
     setCurrent(row ? { ...row } : { name: '', doc_url: '', prompt: '' });
@@ -74,6 +77,9 @@ const BatteryGoogleTablesPage = () => {
     setDialogOpen(false);
   };
 
+  const totalPages = Math.max(1, Math.ceil(data.length / pageSize) || 1);
+  const paginated = data.slice((page - 1) * pageSize, page * pageSize);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -84,67 +90,72 @@ const BatteryGoogleTablesPage = () => {
       {isLoading ? (
         <p>Завантаження...</p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Назва</TableHead>
-              <TableHead>Посилання</TableHead>
-              <TableHead>Prompt</TableHead>
-              <TableHead>Дата оновлення</TableHead>
-              <TableHead>Дії</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{row.name}</TableCell>
-                <TableCell>
-                  <a href={row.doc_url} className="text-primary underline break-all" target="_blank" rel="noreferrer">
-                    {row.doc_url}
-                  </a>
-                </TableCell>
-                <TableCell className="max-w-[300px] truncate">{row.prompt || '—'}</TableCell>
-                <TableCell>
-                  {row.last_update 
-                    ? new Date(row.last_update).toLocaleDateString('uk-UA', { 
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      }) 
-                    : '—'}
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(row)}>
-                      Редагувати
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => delMut.mutate(row.id)}>
-                      Видалити
-                    </Button>
-                    <Button 
-                      variant="default" 
-                      size="sm" 
-                      className="bg-emerald-600 hover:bg-emerald-700 min-w-[100px]"
-                      onClick={() => handleRunImport(row.id)}
-                      disabled={loadingImport === row.id}
-                    >
-                      {loadingImport === row.id ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Завантаження...
-                        </>
-                      ) : (
-                        'Загрузити'
-                      )}
-                    </Button>
-                  </div>
-                </TableCell>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Назва</TableHead>
+                <TableHead>Посилання</TableHead>
+                <TableHead>Prompt</TableHead>
+                <TableHead>Дата оновлення</TableHead>
+                <TableHead>Дії</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paginated.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.name}</TableCell>
+                  <TableCell>
+                    <a href={row.doc_url} className="text-primary underline break-all" target="_blank" rel="noreferrer">
+                      {row.doc_url}
+                    </a>
+                  </TableCell>
+                  <TableCell className="max-w-[300px] truncate">{row.prompt || '—'}</TableCell>
+                  <TableCell>
+                    {row.last_update 
+                      ? new Date(row.last_update).toLocaleDateString('uk-UA', { 
+                          day: '2-digit', 
+                          month: '2-digit', 
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) 
+                      : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openDialog(row)}>
+                        Редагувати
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => delMut.mutate(row.id)}>
+                        Видалити
+                      </Button>
+                      <Button 
+                        variant="default" 
+                        size="sm" 
+                        className="bg-emerald-600 hover:bg-emerald-700 min-w-[100px]"
+                        onClick={() => handleRunImport(row.id)}
+                        disabled={loadingImport === row.id}
+                      >
+                        {loadingImport === row.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Завантаження...
+                          </>
+                        ) : (
+                          'Загрузити'
+                        )}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="flex items-center justify-end p-2">
+            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

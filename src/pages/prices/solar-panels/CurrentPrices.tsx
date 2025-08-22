@@ -8,11 +8,21 @@ import { SolarPanelPriceSchema } from '@/types/solarPanels';
 import { ContactIconButton } from '@/components/ui/ContactIconButton';
 
 const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarPanelPriceSchema>[] => [
-  { key: 'full_name', header: 'Назва', sortable: true },
+  { 
+    key: 'full_name', 
+    header: 'Назва', 
+    sortable: true,
+    render: (row) => (
+      <span title={row.full_name}>
+        {row.full_name}
+      </span>
+    )
+  },
   { key: 'brand', header: 'Бренд', sortable: true },
   { 
     key: 'power', 
     header: 'Вт', 
+    headerTitle: 'Вати',
     sortable: true,
     render: (row) => (
       <span className="text-sm">
@@ -36,12 +46,13 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
             target="_blank" 
             rel="noopener noreferrer"
             className="text-blue-500 hover:underline"
+            title={row.supplier}
           >
             {row.supplier}
           </a>
         );
       }
-      return row.supplier;
+      return <span title={row.supplier}>{row.supplier}</span>;
     } 
   },
   {
@@ -67,6 +78,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   { 
     key: 'price', 
     header: '$',
+    headerTitle: 'Долари США',
     sortable: true,
     sortKey: 'price_sort',
     render: (row) => (
@@ -78,6 +90,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   { 
     key: 'price_markup_usd',
     header: '$ з нац.',
+    headerTitle: 'Долари США з націнкою',
     render: (row) => (
       <span className="font-medium text-green-800">
         {(row.price * (1 + markup/100)).toFixed(2)}
@@ -87,6 +100,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   {
     key: 'price_uah',
     header: '₴',
+    headerTitle: 'Гривні',
     sortable: true,
     render: (row) => {
       const uahPrice = row.price * usdRate;
@@ -100,6 +114,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   {
     key: 'price_markup_uah',
     header: '₴ з нац.',
+    headerTitle: 'Гривні з націнкою',
     sortable: true,
     render: (row) => {
       const uahPriceWithMarkup = row.price * usdRate * (1 + markup/100);
@@ -113,6 +128,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   { 
     key: 'price_per_w', 
     header: '$/Вт',
+    headerTitle: 'Долари США за Ват',
     sortable: true,
     sortKey: 'price_per_watt_sort',
     render: (row) => {
@@ -127,11 +143,12 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   {
     key: 'price_per_w_markup',
     header: '$/Вт з нац.',
+    headerTitle: 'Долари США за Ват з націнкою',
     sortable: true,
     render: (row) => {
       const pricePerWWithMarkup = row.power ? (row.price * (1 + markup/100)) / row.power : 0;
       return (
-        <span className="font-medium text-green-800">
+        <span className="font-medium w-[80px] line-clamp-2 break-words  text-green-800">
           {pricePerWWithMarkup.toFixed(3)}
         </span>
       );
@@ -140,6 +157,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   {
     key: 'price_per_w_uah',
     header: '₴/Вт',
+    headerTitle: 'Гривні за Ват',
     sortable: true,
     render: (row) => {
       const uahPricePerW = row.power ? (row.price * usdRate) / row.power : 0;
@@ -153,11 +171,12 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   {
     key: 'price_per_w_markup_uah',
     header: '₴/Вт з нац.',
+    headerTitle: 'Гривні за Ват з націнкою',
     sortable: true,
     render: (row) => {
       const uahPricePerWWithMarkup = row.power ? (row.price * usdRate * (1 + markup/100)) / row.power : 0;
       return (
-        <span className="font-medium text-blue-800">
+        <span className="font-medium w-[80px] line-clamp-2 break-words  text-blue-800">
           {uahPricePerWWithMarkup.toLocaleString('uk-UA', { maximumFractionDigits: 3 })}
         </span>
       );

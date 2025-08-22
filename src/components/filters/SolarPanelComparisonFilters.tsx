@@ -5,6 +5,7 @@ import { MultiSelectPopover } from './ui/MultiSelectPopover';
 import { getSolarPanelCities } from '@/services/cities.api';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
 import { Badge } from '@/components/ui/Badge';
 import { Filter, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -88,6 +89,22 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  // total active badges counter for unified "Показати всі"
+  const totalActiveBadges = (
+    (local.brands?.length || 0) +
+    (local.suppliers?.length || 0) +
+    (local.cities?.length || 0) +
+    ((local.power_min !== undefined || local.power_max !== undefined) ? 1 : 0) +
+    ((local.price_min !== undefined || local.price_max !== undefined) ? 1 : 0) +
+    ((local.price_per_w_min !== undefined || local.price_per_w_max !== undefined) ? 1 : 0) +
+    ((local.thickness_min !== undefined || local.thickness_max !== undefined) ? 1 : 0) +
+    (local.panel_type ? 1 : 0) +
+    (local.cell_type ? 1 : 0) +
+    (local.panel_color ? 1 : 0) +
+    (local.frame_color ? 1 : 0) +
+    ((local.supplier_status && local.supplier_status.length > 0) ? local.supplier_status.length : 0) +
+    ((local.date_min !== undefined || local.date_max !== undefined) ? 1 : 0)
+  );
 
   // Drag and drop setup
   const sensors = useSensors(
@@ -495,6 +512,9 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
         
         {/* Active filters */}
         <div className="flex flex-wrap gap-2 items-center">
+          {/* Visible badges area (clamped to 2 rows with fade overlay) */}
+          <div className="relative overflow-hidden max-h-[56px]">
+            <div className="flex flex-wrap gap-2 items-center">
           {/* Бренди */}
           {local.brands && local.brands.length > 0 && (
             local.brands.map(brand => (
@@ -578,17 +598,116 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             </Badge>
           )}
           
-          {/* Reset button */}
+            </div>
+            {totalActiveBadges > 14 && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0" />
+            )}
+          </div>
+
+          {/* Unified compact controls: show-all and reset-all */}
           {Object.values(local).some(v => v !== undefined && v !== '' && v !== null && !(Array.isArray(v) && v.length === 0)) && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={reset}
-              className="text-slate-500 hover:text-slate-700"
-            >
-              <X className="w-4 h-4 mr-1" />
-              Скинути все
-            </Button>
+            <div className="flex items-center gap-2">
+              {totalActiveBadges > 14 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="xs" className="h-6 px-2 text-xs">
+                      {`Показати всі (+${totalActiveBadges})`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[28rem] max-h-96 overflow-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {(local.brands || []).map((brand) => (
+                        <Badge key={`brand-${brand}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                          {brand}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))} />
+                        </Badge>
+                      ))}
+                      {(local.suppliers || []).map((s) => (
+                        <Badge key={`supplier-${s}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                          {s}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(x => x !== s) }))} />
+                        </Badge>
+                      ))}
+                      {(local.cities || []).map((c) => (
+                        <Badge key={`city-${c}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                          {c}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, cities: p.cities?.filter(x => x !== c) }))} />
+                        </Badge>
+                      ))}
+                      {(local.power_min !== undefined || local.power_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                          Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.price_min !== undefined || local.price_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                          Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.price_per_w_min !== undefined || local.price_per_w_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
+                          Ціна/Вт: {local.price_per_w_min || '∞'}-{local.price_per_w_max || '∞'} $/Вт
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, price_per_w_min: undefined, price_per_w_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.thickness_min !== undefined || local.thickness_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                          Товщина: {local.thickness_min || '∞'}-{local.thickness_max || '∞'} мм
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, thickness_min: undefined, thickness_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.panel_type && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Тип панелі: {local.panel_type}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, panel_type: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.cell_type && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Тип комірки: {local.cell_type}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, cell_type: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.panel_color && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Колір панелі: {local.panel_color}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, panel_color: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.frame_color && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Колір рами: {local.frame_color}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, frame_color: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.supplier_status && local.supplier_status.length > 0 ? local.supplier_status : []).map((s) => (
+                        <Badge key={`status-${s}`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                          Статус постач.: {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, supplier_status: undefined }))} />
+                        </Badge>
+                      ))}
+                      {(local.date_min || local.date_max) && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Період: {local.date_min || '—'} — {local.date_max || '—'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))} />
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <Button className="h-6 px-2 text-xs" variant="ghost" size="xs" onClick={reset}>
+                        Скинути все
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <Button variant="outline" size="xs" onClick={reset} className="h-6 px-2 text-xs">
+                <X className="w-4 h-4 mr-1" />
+                Скинути
+              </Button>
+            </div>
           )}
         </div>
       </div>

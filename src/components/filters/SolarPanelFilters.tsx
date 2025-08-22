@@ -8,6 +8,7 @@ import { getSolarPanelCities } from '@/services/cities.api';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
 import { Badge } from '@/components/ui/Badge';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import {
   DndContext,
   closestCenter,
@@ -39,6 +40,7 @@ const statusLabels: Record<string, string> = {
 
 // Default filter order
 const DEFAULT_FILTER_ORDER = [
+  // 'full_name' moved to TopSearch area
   'brands',
   'suppliers', 
   'cities',
@@ -59,7 +61,9 @@ const DEFAULT_FILTER_ORDER = [
 const getSavedFilterOrder = (): string[] => {
   try {
     const saved = localStorage.getItem('solarPanelFilterOrder');
-    return saved ? JSON.parse(saved) : DEFAULT_FILTER_ORDER;
+    const base: string[] = saved ? JSON.parse(saved) : DEFAULT_FILTER_ORDER;
+    // Ensure legacy orders do not include full_name
+    return base.filter((id) => id !== 'full_name');
   } catch {
     return DEFAULT_FILTER_ORDER;
   }
@@ -198,202 +202,264 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
       {/* Top search and active filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {/* Name search input */}
-        <div className="flex-shrink-0">
+        <div className="w-full sm:w-auto">
           <Input
-            placeholder="Назва"
+            placeholder="Пошук по назві..."
             value={local.full_name ?? ''}
-            onChange={e => setLocal(p => ({ ...p, full_name: e.target.value || undefined }))}
-            className="w-64 bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
+            onChange={(e) => setLocal((p) => ({ ...p, full_name: e.target.value || undefined }))}
+            className="h-10 w-full sm:w-[280px]"
           />
         </div>
-        
         {/* Active filters */}
-        <div className="flex flex-wrap gap-2 items-center">
-          {/* Бренди */}
-          {local.brands && local.brands.length > 0 && (
-            local.brands.map(brand => (
-              <Badge key={brand} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
-                {brand}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))}
-                />
+        <div className="flex flex-col gap-2 w-full">
+          {(() => {
+            const nodes: JSX.Element[] = [];
+            // Name badge
+            if (local.full_name) {
+              nodes.push(
+                <Badge key={`full_name`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                  {local.full_name}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, full_name: undefined }))} />
+                </Badge>
+              );
+            }
+            // Arrays
+            (local.brands || []).forEach((brand) => {
+              nodes.push(
+                <Badge key={`brand-${brand}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                  {brand}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, brands: p.brands?.filter((b) => b !== brand) }))} />
+                </Badge>
+              );
+            });
+            (local.suppliers || []).forEach((supplier) => {
+              nodes.push(
+                <Badge key={`supplier-${supplier}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                  {supplier}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, suppliers: p.suppliers?.filter((s) => s !== supplier) }))} />
+                </Badge>
+              );
+            });
+            (local.cities || []).forEach((city) => {
+              nodes.push(
+                <Badge key={`city-${city}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                  {city}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, cities: p.cities?.filter((c) => c !== city) }))} />
+                </Badge>
+              );
+            });
+            (local.supplier_status || []).forEach((status) => {
+              nodes.push(
+                <Badge key={`status-${status}`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                  {statusLabels[status as keyof typeof statusLabels] || status}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, supplier_status: p.supplier_status?.filter((s) => s !== status) }))} />
+                </Badge>
+              );
+            });
+            // Singles
+            if (local.panel_type) nodes.push(
+              <Badge key={`panel_type`} variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+                Тип панелі: {local.panel_type}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, panel_type: undefined }))} />
               </Badge>
-            ))
-          )}
-          
-          {/* Постачальники */}
-          {local.suppliers && local.suppliers.length > 0 && (
-            local.suppliers.map(supplier => (
-              <Badge key={supplier} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-                {supplier}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(s => s !== supplier) }))}
-                />
+            );
+            if (local.cell_type) nodes.push(
+              <Badge key={`cell_type`} variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                Тип комірки: {local.cell_type}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, cell_type: undefined }))} />
               </Badge>
-            ))
-          )}
-          
-          {/* Міста */}
-          {local.cities && local.cities.length > 0 && (
-            local.cities.map(city => (
-              <Badge key={city} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
-                {city}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, cities: p.cities?.filter(c => c !== city) }))}
-                />
+            );
+            if (local.panel_color) nodes.push(
+              <Badge key={`panel_color`} variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                Колір панелі: {local.panel_color}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, panel_color: undefined }))} />
               </Badge>
-            ))
-          )}
-          
-          {/* Статус постачальника */}
-          {local.supplier_status && local.supplier_status.length > 0 && (
-            local.supplier_status.map(status => (
-              <Badge key={status} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
-                {statusLabels[status as keyof typeof statusLabels] || status}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, supplier_status: p.supplier_status?.filter(s => s !== status) }))}
-                />
+            );
+            if (local.frame_color) nodes.push(
+              <Badge key={`frame_color`} variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                Колір рами: {local.frame_color}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, frame_color: undefined }))} />
               </Badge>
-            ))
-          )}
-          
-          {/* Тип панелі */}
-          {local.panel_type && (
-            <Badge variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
-              Тип панелі: {local.panel_type}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, panel_type: undefined }))}
+            );
+            // Ranges
+            if (local.power_min || local.power_max) nodes.push(
+              <Badge key={`power`} variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
+                Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, power_min: undefined, power_max: undefined }))} />
+              </Badge>
+            );
+            if (local.thickness_min || local.thickness_max) nodes.push(
+              <Badge key={`thickness`} variant="secondary" className="bg-violet-100 text-violet-800 border-violet-200">
+                Товщина: {local.thickness_min || '∞'}-{local.thickness_max || '∞'} мм
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, thickness_min: undefined, thickness_max: undefined }))} />
+              </Badge>
+            );
+            if (local.price_min || local.price_max) nodes.push(
+              <Badge key={`price`} variant="secondary" className="bg-red-100 text-red-800 border-red-200">
+                Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, price_min: undefined, price_max: undefined }))} />
+              </Badge>
+            );
+            if (local.price_per_w_min || local.price_per_w_max) nodes.push(
+              <Badge key={`price_per_w`} variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                $/Вт: {local.price_per_w_min || '∞'}-{local.price_per_w_max || '∞'}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, price_per_w_min: undefined, price_per_w_max: undefined }))} />
+              </Badge>
+            );
+            // Others
+            if (local.usd_rate) nodes.push(
+              <Badge key={`usd_rate`} variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                Курс $: {local.usd_rate}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, usd_rate: undefined }))} />
+              </Badge>
+            );
+            if (local.markup && local.markup !== 15) nodes.push(
+              <Badge key={`markup`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                Націнка: {local.markup}%
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, markup: 15 }))} />
+              </Badge>
+            );
+            if (local.date_min || local.date_max) nodes.push(
+              <Badge key={`date_range`} variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
+                Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, date_min: undefined, date_max: undefined }))} />
+              </Badge>
+            );
+
+            return (
+              <ActiveBadges
+                badges={nodes}
+                onReset={() => {
+                  // mirror Battery ActiveBadges reset behavior
+                  setLocal((p) => ({
+                    ...p,
+                    brands: [],
+                    suppliers: [],
+                    cities: [],
+                    supplier_status: [],
+                    panel_type: undefined,
+                    cell_type: undefined,
+                    panel_color: undefined,
+                    frame_color: undefined,
+                    power_min: undefined,
+                    power_max: undefined,
+                    thickness_min: undefined,
+                    thickness_max: undefined,
+                    price_min: undefined,
+                    price_max: undefined,
+                    price_per_w_min: undefined,
+                    price_per_w_max: undefined,
+                    usd_rate: undefined,
+                    markup: 15,
+                    date_min: undefined,
+                    date_max: undefined,
+                  }));
+                  onReset();
+                }}
               />
-            </Badge>
-          )}
-          
-          {/* Тип комірки */}
-          {local.cell_type && (
-            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
-              Тип комірки: {local.cell_type}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, cell_type: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Колір панелі */}
-          {local.panel_color && (
-            <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
-              Колір панелі: {local.panel_color}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, panel_color: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Колір рами */}
-          {local.frame_color && (
-            <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
-              Колір рами: {local.frame_color}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, frame_color: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Потужність */}
-          {(local.power_min || local.power_max) && (
-            <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
-              Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Товщина */}
-          {(local.thickness_min || local.thickness_max) && (
-            <Badge variant="secondary" className="bg-violet-100 text-violet-800 border-violet-200">
-              Товщина: {local.thickness_min || '∞'}-{local.thickness_max || '∞'} мм
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, thickness_min: undefined, thickness_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Ціна */}
-          {(local.price_min || local.price_max) && (
-            <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
-              Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Ціна за Вт */}
-          {(local.price_per_w_min || local.price_per_w_max) && (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
-              $/Вт: {local.price_per_w_min || '∞'}-{local.price_per_w_max || '∞'}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, price_per_w_min: undefined, price_per_w_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Курс долара */}
-          {local.usd_rate && (
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
-              Курс $: {local.usd_rate}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, usd_rate: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Націнка */}
-          {local.markup && local.markup !== 15 && (
-            <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
-              Націнка: {local.markup}%
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, markup: 15 }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Дати */}
-          {(local.date_min || local.date_max) && (
-            <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
-              Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Reset button - показувати тільки якщо є активні фільтри */}
-          {(local.brands?.length || local.suppliers?.length || local.cities?.length || local.supplier_status?.length || 
-            local.panel_type || local.cell_type || local.panel_color || local.frame_color ||
-            local.power_min || local.power_max || local.thickness_min || local.thickness_max ||
-            local.price_min || local.price_max || local.price_per_w_min || local.price_per_w_max ||
-            local.usd_rate || (local.markup && local.markup !== 15) || local.date_min || local.date_max) && (
-            <Button variant="outline" onClick={onReset} size="sm">
-              <X className="w-4 h-4 mr-2" />
-              Скинути
-            </Button>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Helper component: identical 2-row clamp and popover logic as in Battery filters
+const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }> = ({ badges, onReset }) => {
+  const displayRef = useRef<HTMLDivElement | null>(null);
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(badges.length);
+
+  // Observe width changes
+  useEffect(() => {
+    if (!displayRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        setContainerWidth(Math.round(w));
+      }
+    });
+    ro.observe(displayRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Recompute visible count on size or badges change
+  useEffect(() => {
+    if (!measureRef.current || !displayRef.current) return;
+    const wrap = measureRef.current;
+    const children = Array.from(wrap.children) as HTMLElement[];
+    if (children.length === 0) { setVisibleCount(0); return; }
+    // Determine top offsets to identify rows
+    const tops: number[] = [];
+    children.forEach(el => tops.push(el.offsetTop));
+    const uniqueTops = Array.from(new Set(tops)).sort((a, b) => a - b);
+    const secondRowTop = uniqueTops[1];
+    if (secondRowTop === undefined) {
+      setVisibleCount(children.length);
+    } else {
+      // Count items whose top is <= second row top
+      let count = 0;
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].offsetTop <= secondRowTop) count++;
+      }
+      setVisibleCount(count);
+    }
+  }, [containerWidth, badges]);
+
+  const overflow = Math.max(0, badges.length - visibleCount);
+  const hasAny = badges.length > 0;
+
+  return (
+    <div className="flex flex-col gap-2 min-w-0">
+      <div ref={displayRef} className="flex flex-wrap gap-2 items-center">
+        {/* Badges area (2 rows) with gradient inside, full width to push controls to 3rd row */}
+        <div className="relative w-full">
+          <div className="flex flex-wrap gap-2 items-center">
+            {badges.slice(0, visibleCount)}
+          </div>
+          {/* Bottom fade to hint more content on overflow (only under the badges area) */}
+          {overflow > 0 && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900 z-0"
+            />
           )}
         </div>
+        {overflow > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="xs" variant="outline" className="h-6 px-2 text-xs">Показати всі (+{overflow})</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] max-w-[90vw]">
+              <div className="flex flex-wrap gap-2 items-center max-h-[240px] overflow-auto">
+                {badges}
+              </div>
+              {hasAny && (
+                <div className="mt-3">
+                  <Button variant="outline" size="xs" onClick={onReset}>
+                    <X className="w-4 h-4 mr-2" /> Скинути всі
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+        {/* Reset button always visible */}
+        {hasAny && (
+          <Button variant="outline" onClick={onReset} size="xs">
+            <X className="w-4 h-4 mr-2" /> Скинути
+          </Button>
+        )}
+      </div>
+      {/* Hidden measuring container with same width */}
+      <div
+        ref={measureRef}
+        style={{ position: 'absolute', left: -99999, top: 0, width: containerWidth }}
+        className="flex flex-wrap gap-2"
+      >
+        {badges}
       </div>
     </div>
   );
@@ -482,6 +548,7 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
+    // full_name moved to TopSearch
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover
@@ -814,7 +881,7 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
           {/* filters grid with drag and drop */}
-          <div className="grid gap-5 pl-6" style={{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>
+          <div className="grid gap-5" style={{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>
             {filterOrder.map((filterId) => {
               const component = filterComponents[filterId];
               if (!component) return null;

@@ -2,16 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
-import { getInverterCities } from '@/services/cities.api';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/Select';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
 import { Badge } from '@/components/ui/Badge';
 import { Filter, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -96,10 +89,100 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  // Active badges clamped to two rows with popover overflow
+  const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }> = ({ badges, onReset }) => {
+    const displayRef = useRef<HTMLDivElement | null>(null);
+    const measureRef = useRef<HTMLDivElement | null>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+    const [visibleCount, setVisibleCount] = useState(badges.length);
+
+    useEffect(() => {
+      if (!displayRef.current) return;
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContainerWidth(Math.round(entry.contentRect.width));
+        }
+      });
+      ro.observe(displayRef.current);
+      return () => ro.disconnect();
+    }, []);
+
+    useEffect(() => {
+      if (!measureRef.current) return;
+      const wrap = measureRef.current;
+      const children = Array.from(wrap.children) as HTMLElement[];
+      if (children.length === 0) { setVisibleCount(0); return; }
+      const tops: number[] = [];
+      children.forEach(el => tops.push(el.offsetTop));
+      const uniqueTops = Array.from(new Set(tops)).sort((a, b) => a - b);
+      const secondRowTop = uniqueTops[1];
+      if (secondRowTop === undefined) {
+        setVisibleCount(children.length);
+      } else {
+        let count = 0;
+        for (let i = 0; i < children.length; i++) {
+          if (children[i].offsetTop <= secondRowTop) count++;
+        }
+        setVisibleCount(count);
+      }
+    }, [containerWidth, badges]);
+
+    const overflow = Math.max(0, badges.length - visibleCount);
+    const hasAny = badges.length > 0;
+
+    return (
+      <div className="flex flex-col gap-2 min-w-0 w-full">
+        <div ref={displayRef} className="flex flex-wrap gap-2 items-center min-w-0">
+          <div className="relative w-full">
+            <div className="flex flex-wrap gap-2 items-center">
+              {badges.slice(0, visibleCount)}
+            </div>
+            {overflow > 0 && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900 z-0"
+              />
+            )}
+          </div>
+          {overflow > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="xs" variant="outline" className="h-6 px-2 text-xs">Показати всі (+{overflow})</Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] max-w-[90vw]">
+                <div className="flex flex-wrap gap-2 items-center max-h-[240px] overflow-auto">
+                  {badges}
+                </div>
+                {hasAny && (
+                  <div className="mt-3">
+                    <Button variant="outline" size="xs" onClick={onReset}>
+                      <X className="w-4 h-4 mr-2" /> Скинути всі
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+          {hasAny && (
+            <Button variant="outline" onClick={onReset} size="xs">
+              <X className="w-4 h-4 mr-2" /> Скинути
+            </Button>
+          )}
+        </div>
+        <div
+          ref={measureRef}
+          style={{ position: 'absolute', left: -99999, top: 0, width: containerWidth }}
+          className="flex flex-wrap gap-2"
+        >
+          {badges}
+        </div>
+      </div>
+    );
+  };
   
   // Drag and drop state
   const defaultFilterOrder = [
-    'full_name',
+    // 'full_name' moved outside of the filters panel
     'brands',
     'suppliers',
     'power',
@@ -115,7 +198,9 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   
   const [filterOrder, setFilterOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('inverter-comparison-filters-order');
-    return saved ? JSON.parse(saved) : defaultFilterOrder;
+    const base: string[] = saved ? JSON.parse(saved) : defaultFilterOrder;
+    // Ensure 'full_name' is not rendered in the grid even if present in old saved orders
+    return base.filter((id) => id !== 'full_name');
   });
   
   const sensors = useSensors(
@@ -148,6 +233,13 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
     }, 300);
   }, [local, setFilters]);
 
+  // Keep local.full_name in sync with external current.full_name (controlled outside)
+  useEffect(() => {
+    setLocal((prev) => ({ ...prev, full_name: current.full_name }));
+    // We only care about current.full_name changes here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.full_name]);
+
   const reset = () => {
     const base = { page: 1, page_size: current.page_size ?? 10 } as InverterPriceListRequestSchema;
     setLocal(base);
@@ -156,16 +248,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
-    full_name: (
-      <div className="h-[60px] flex flex-col justify-end">
-        <Input
-          placeholder="Пошук по назві..."
-          value={local.full_name ?? ''}
-          onChange={(e) => setLocal(prev => ({ ...prev, full_name: e.target.value || undefined }))}
-          className="h-10 w-full"
-        />
-      </div>
-    ),
+    // full_name input removed from filters; now rendered externally on the page
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover
@@ -433,53 +516,136 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         </Button>
       </div>
 
-      {/* active filters chips */}
+      {/* Active filter badges with clamp + popover */}
       {Object.values(local).some((v) => v !== undefined && v !== '' && v !== null) && (
-        <div className="flex flex-wrap gap-1 sm:gap-2 items-center">
-          <span className="text-xs sm:text-sm font-medium">Фільтри:</span>
-          {local.brands?.map((b) => (
-            <Badge key={b} variant="secondary" className="text-xs py-0 h-6">
-              {b}
-              <button 
-                onClick={() => setLocal(prev => ({ ...prev, brands: prev.brands?.filter(brand => brand !== b) }))}
-                className="ml-1 hover:text-red-500 transition-colors"
-              >
-                <X size={12} />
-              </button>
-            </Badge>
-          ))}
-          {local.full_name && (
-            <Badge variant="secondary" className="text-xs py-0 h-6">
-              Назва: {local.full_name}
-              <button 
-                onClick={() => setLocal(prev => ({ ...prev, full_name: undefined }))}
-                className="ml-1 hover:text-red-500 transition-colors"
-              >
-                <X size={12} />
-              </button>
-            </Badge>
-          )}
-          {local.suppliers?.map((s) => (
-            <Badge key={s} variant="secondary" className="text-xs py-0 h-6">
-              {s}
-              <button 
-                onClick={() => setLocal(prev => ({ ...prev, suppliers: prev.suppliers?.filter(supp => supp !== s) }))}
-                className="ml-1 hover:text-red-500 transition-colors"
-              >
-                <X size={12} />
-              </button>
-            </Badge>
-          ))}
-          {(local.power_min !== undefined || local.power_max !== undefined) && (
-            <Badge variant="secondary">
-              Потужн. {local.power_min ?? 0}-{local.power_max ?? 'max'} кВт
-            </Badge>
-          )}
-          {(local.price_min !== undefined || local.price_max !== undefined) && (
-            <Badge variant="secondary">
-              Ціна {local.price_min ?? 0}-{local.price_max ?? 'max'}$
-            </Badge>
-          )}
+        <div className="w-full flex flex-col gap-2">
+          <div className="flex items-start gap-2">
+            <span className="text-xs sm:text-sm font-medium flex-shrink-0 pt-1">Фільтри:</span>
+            {(() => {
+              const badges: React.ReactNode[] = [];
+              (local.brands || []).forEach((b) => {
+                badges.push(
+                  <Badge key={`brand-${b}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 h-6 text-xs">
+                    {b}
+                    <button onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(x => x !== b) }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              });
+              (local.suppliers || []).forEach((s) => {
+                badges.push(
+                  <Badge key={`supplier-${s}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200 h-6 text-xs">
+                    {s}
+                    <button onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(x => x !== s) }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              });
+              if (local.full_name) {
+                badges.push(
+                  <Badge key={`full_name`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200 h-6 text-xs">
+                    Назва: {local.full_name}
+                    <button onClick={() => setLocal(p => ({ ...p, full_name: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.power_min !== undefined || local.power_max !== undefined) {
+                badges.push(
+                  <Badge key={`power`} variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200 h-6 text-xs">
+                    Потужн.: {local.power_min ?? '∞'}-{local.power_max ?? '∞'} кВт
+                    <button onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.string_count_min !== undefined || local.string_count_max !== undefined) {
+                badges.push(
+                  <Badge key={`string_count`} variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200 h-6 text-xs">
+                    Стрінги: {local.string_count_min ?? '∞'}-{local.string_count_max ?? '∞'}
+                    <button onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.price_min !== undefined || local.price_max !== undefined) {
+                badges.push(
+                  <Badge key={`price`} variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 h-6 text-xs">
+                    Ціна: {local.price_min ?? '∞'}-{local.price_max ?? '∞'} $
+                    <button onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.inverter_type) {
+                badges.push(
+                  <Badge key={`inverter_type`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200 h-6 text-xs">
+                    Тип: {local.inverter_type}
+                    <button onClick={() => setLocal(p => ({ ...p, inverter_type: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.generation) {
+                badges.push(
+                  <Badge key={`generation`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200 h-6 text-xs">
+                    Покоління: {local.generation}
+                    <button onClick={() => setLocal(p => ({ ...p, generation: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.firmware) {
+                badges.push(
+                  <Badge key={`firmware`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200 h-6 text-xs">
+                    Firmware: {local.firmware}
+                    <button onClick={() => setLocal(p => ({ ...p, firmware: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              (local.supplier_status && local.supplier_status.length > 0 ? local.supplier_status : []).forEach((s) => {
+                badges.push(
+                  <Badge key={`status-${s}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 h-6 text-xs">
+                    Статус постач.: {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
+                    <button onClick={() => setLocal(p => ({ ...p, supplier_status: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              });
+              if (local.date_min || local.date_max) {
+                badges.push(
+                  <Badge key={`date`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200 h-6 text-xs">
+                    Період: {local.date_min || '—'} — {local.date_max || '—'}
+                    <button onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              if (local.price_sort) {
+                badges.push(
+                  <Badge key={`price_sort`} variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200 h-6 text-xs">
+                    Сортування: {local.price_sort === 'asc' ? '↑ ціна' : '↓ ціна'}
+                    <button onClick={() => setLocal(p => ({ ...p, price_sort: undefined }))} className="ml-1">
+                      <X size={12} />
+                    </button>
+                  </Badge>
+                );
+              }
+              return <ActiveBadges badges={badges} onReset={reset} />;
+            })()}
+          </div>
         </div>
       )}
 

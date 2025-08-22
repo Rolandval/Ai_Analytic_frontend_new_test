@@ -128,4 +128,13 @@
   .btn-neon:hover::before {
     opacity: 1;
   }
+
+  /* Text clamping utilities */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+  }
 }

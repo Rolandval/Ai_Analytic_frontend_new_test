@@ -9,10 +9,42 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
 import { Alert, AlertDescription } from '@/components/ui/Alert';
 import { InfoIcon, RefreshCw } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
 
 const SupplierAnalysisPage: React.FC = () => {
   const [analysisMode, setAnalysisMode] = useState<'auto' | 'manual'>('auto');
   const [isLoading, setIsLoading] = useState(false);
+  const [pageResults, setPageResults] = useState(1);
+  const [pageComparison, setPageComparison] = useState(1);
+  const [pageAlternatives, setPageAlternatives] = useState(1);
+  const [pageSize] = useState(10);
+  
+  // Demo data and pagination calculations (replace with fetched data when available)
+  const resultsRows = [
+    {
+      product: 'Приклад товару 1', code: '001234', supplier: 'Постачальник A', price: '100 грн',
+      availability: 'В наявності', leadTime: '1-2 дні', saving: '20%'
+    },
+    {
+      product: 'Приклад товару 2', code: '001235', supplier: 'Постачальник B', price: '250 грн',
+      availability: 'Під замовлення', leadTime: '3-5 днів', saving: '15%'
+    }
+  ];
+  const totalPagesResults = Math.max(1, Math.ceil(resultsRows.length / pageSize) || 1);
+  const paginatedResults = resultsRows.slice((pageResults - 1) * pageSize, pageResults * pageSize);
+  
+  // Empty placeholders for other tabs; wire real data later
+  const comparisonRows: Array<{
+    product: string; code: string; a?: string; b?: string; c?: string; diff?: string;
+  }> = [];
+  const totalPagesComparison = Math.max(1, Math.ceil(comparisonRows.length / pageSize) || 1);
+  const paginatedComparison = comparisonRows.slice((pageComparison - 1) * pageSize, pageComparison * pageSize);
+  
+  const alternativeRows: Array<{
+    original: string; code: string; alt: string; supplier: string; price: string; similarity: string; saving: string;
+  }> = [];
+  const totalPagesAlternatives = Math.max(1, Math.ceil(alternativeRows.length / pageSize) || 1);
+  const paginatedAlternatives = alternativeRows.slice((pageAlternatives - 1) * pageSize, pageAlternatives * pageSize);
   
   const handleStartAnalysis = () => {
     setIsLoading(true);
@@ -183,34 +215,28 @@ const SupplierAnalysisPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell>Приклад товару 1</TableCell>
-                    <TableCell>001234</TableCell>
-                    <TableCell>Постачальник A</TableCell>
-                    <TableCell>100 грн</TableCell>
-                    <TableCell>
-                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                        В наявності
-                      </span>
-                    </TableCell>
-                    <TableCell>1-2 дні</TableCell>
-                    <TableCell className="text-green-600">20%</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Приклад товару 2</TableCell>
-                    <TableCell>001235</TableCell>
-                    <TableCell>Постачальник B</TableCell>
-                    <TableCell>250 грн</TableCell>
-                    <TableCell>
-                      <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
-                        Під замовлення
-                      </span>
-                    </TableCell>
-                    <TableCell>3-5 днів</TableCell>
-                    <TableCell className="text-green-600">15%</TableCell>
-                  </TableRow>
+                  {paginatedResults.map((r, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{r.product}</TableCell>
+                      <TableCell>{r.code}</TableCell>
+                      <TableCell>{r.supplier}</TableCell>
+                      <TableCell>{r.price}</TableCell>
+                      <TableCell>
+                        {r.availability === 'В наявності' ? (
+                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">{r.availability}</span>
+                        ) : (
+                          <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">{r.availability}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{r.leadTime}</TableCell>
+                      <TableCell className="text-green-600">{r.saving}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
+              <div className="flex justify-end pt-3">
+                <Pagination currentPage={pageResults} totalPages={totalPagesResults} onPageChange={setPageResults} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -236,9 +262,18 @@ const SupplierAnalysisPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Порожня таблиця - дані будуть завантажені після аналізу */}
+                  {paginatedComparison.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        Немає даних для відображення
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
+              <div className="flex justify-end pt-3">
+                <Pagination currentPage={pageComparison} totalPages={totalPagesComparison} onPageChange={setPageComparison} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -265,9 +300,18 @@ const SupplierAnalysisPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {/* Порожня таблиця - дані про аналоги будуть завантажені після аналізу */}
+                  {paginatedAlternatives.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+                        Немає даних для відображення
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
+              <div className="flex justify-end pt-3">
+                <Pagination currentPage={pageAlternatives} totalPages={totalPagesAlternatives} onPageChange={setPageAlternatives} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

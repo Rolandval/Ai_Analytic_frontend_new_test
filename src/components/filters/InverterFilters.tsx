@@ -7,6 +7,7 @@ import { getInverterCities } from '@/services/cities.api';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
 import { useUsdRate } from '@/hooks/useUsdRate';
 import { Badge } from '@/components/ui/Badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import {
   DndContext,
@@ -114,6 +115,23 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
     fetchCities();
   }, []);
 
+  // total active badges counter for unified "Показати всі"
+  const totalActiveBadges = (
+    (local.brands?.length || 0) +
+    (local.suppliers?.length || 0) +
+    (local.cities?.length || 0) +
+    (local.inverter_type ? 1 : 0) +
+    (local.generation ? 1 : 0) +
+    (local.supplier_status?.length || 0) +
+    ((local.power_min !== undefined || local.power_max !== undefined) ? 1 : 0) +
+    ((local.string_count_min !== undefined || local.string_count_max !== undefined) ? 1 : 0) +
+    ((local.price_min !== undefined || local.price_max !== undefined) ? 1 : 0) +
+    ((local.usd_rate !== undefined && local.usd_rate !== 40) ? 1 : 0) +
+    ((local.markup !== undefined && local.markup !== 15) ? 1 : 0) +
+    ((local.date_min !== undefined || local.date_max !== undefined) ? 1 : 0) +
+    (local.firmware ? 1 : 0)
+  );
+
   // Auto-apply filters with debounce
   const lastAppliedRef = useRef<string>('');
   
@@ -168,174 +186,326 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
         </div>
 
         {/* Active filters */}
-        <div className="flex flex-wrap gap-2 items-center">
-          {/* Бренди */}
-          {local.brands && local.brands.length > 0 && (
-            local.brands.map(brand => (
-              <Badge key={brand} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
-                {brand}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Постачальники */}
-          {local.suppliers && local.suppliers.length > 0 && (
-            local.suppliers.map(supplier => (
-              <Badge key={supplier} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-                {supplier}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(s => s !== supplier) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Міста */}
-          {local.cities && local.cities.length > 0 && (
-            local.cities.map(city => (
-              <Badge key={city} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
-                {city}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, cities: p.cities?.filter(c => c !== city) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Тип інвертора */}
-          {local.inverter_type && (
-            <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
-              Тип: {local.inverter_type}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, inverter_type: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Покоління */}
-          {local.generation && (
-            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
-              Покоління: {local.generation}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, generation: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Статус постачальника */}
-          {local.supplier_status && local.supplier_status.length > 0 && (
-            local.supplier_status.map(status => (
-              <Badge key={status} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
-                {statusLabels[status as keyof typeof statusLabels]}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, supplier_status: p.supplier_status?.filter(s => s !== status) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Потужність */}
-          {(local.power_min || local.power_max) && (
-            <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
-              Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Кількість стрингів */}
-          {(local.string_count_min || local.string_count_max) && (
-            <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
-              Стринги: {local.string_count_min || '∞'}-{local.string_count_max || '∞'}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Ціна */}
-          {(local.price_min || local.price_max) && (
-            <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
-              Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* USD курс */}
-          {local.usd_rate && local.usd_rate !== 40 && (
-            <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
-              USD: {local.usd_rate}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, usd_rate: 40 }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Націнка */}
-          {local.markup && local.markup !== 15 && (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
-              Націнка: {local.markup}%
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, markup: 15 }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Дати */}
-          {(local.date_min || local.date_max) && (
-            <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
-              Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Firmware */}
-          {local.firmware && (
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
-              Firmware: {local.firmware}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, firmware: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Reset button - показувати тільки якщо є активні фільтри */}
-          {(local.brands?.length || local.suppliers?.length || local.cities?.length || local.inverter_type || 
-            local.generation || local.supplier_status?.length || local.power_min || local.power_max ||
-            local.string_count_min || local.string_count_max || local.price_min || local.price_max ||
-            (local.usd_rate && local.usd_rate !== 40) || (local.markup && local.markup !== 15) ||
-            local.date_min || local.date_max || local.firmware) && (
-            <Button variant="outline" onClick={onReset} size="sm">
-              <X className="w-4 h-4 mr-2" />
-              Скинути
-            </Button>
-          )}
+        <div className="flex flex-col gap-2 w-full">
+          {(() => {
+            const hasAny = totalActiveBadges > 0;
+            const overflow = Math.max(0, totalActiveBadges - 14);
+            return (
+              <>
+                {hasAny && (
+                  <div className="relative max-h-[56px] overflow-hidden">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {/* Бейджі активних фільтрів */}
+                      {/* Бренди */}
+                      {local.brands && local.brands.length > 0 && (
+                        local.brands.map(brand => (
+                          <Badge key={brand} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                            {brand}
+                            <X 
+                              className="w-3 h-3 ml-1 cursor-pointer" 
+                              onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))}
+                            />
+                          </Badge>
+                        ))
+                      )}
+                      
+                      {/* Постачальники */}
+                      {local.suppliers && local.suppliers.length > 0 && (
+                        local.suppliers.map(supplier => (
+                          <Badge key={supplier} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                            {supplier}
+                            <X 
+                              className="w-3 h-3 ml-1 cursor-pointer" 
+                              onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(s => s !== supplier) }))}
+                            />
+                          </Badge>
+                        ))
+                      )}
+                      
+                      {/* Міста */}
+                      {local.cities && local.cities.length > 0 && (
+                        local.cities.map(city => (
+                          <Badge key={city} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                            {city}
+                            <X 
+                              className="w-3 h-3 ml-1 cursor-pointer" 
+                              onClick={() => setLocal(p => ({ ...p, cities: p.cities?.filter(c => c !== city) }))}
+                            />
+                          </Badge>
+                        ))
+                      )}
+                      
+                      {/* Тип інвертора */}
+                      {local.inverter_type && (
+                        <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                          Тип: {local.inverter_type}
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, inverter_type: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Покоління */}
+                      {local.generation && (
+                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                          Покоління: {local.generation}
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, generation: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Статус постачальника */}
+                      {local.supplier_status && local.supplier_status.length > 0 && (
+                        local.supplier_status.map(status => (
+                          <Badge key={status} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                            {statusLabels[status as keyof typeof statusLabels]}
+                            <X 
+                              className="w-3 h-3 ml-1 cursor-pointer" 
+                              onClick={() => setLocal(p => ({ ...p, supplier_status: p.supplier_status?.filter(s => s !== status) }))}
+                            />
+                          </Badge>
+                        ))
+                      )}
+                      
+                      {/* Потужність */}
+                      {(local.power_min || local.power_max) && (
+                        <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                          Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Кількість стрингів */}
+                      {(local.string_count_min || local.string_count_max) && (
+                        <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
+                          Стринги: {local.string_count_min || '∞'}-{local.string_count_max || '∞'}
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Ціна */}
+                      {(local.price_min || local.price_max) && (
+                        <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
+                          Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* USD курс */}
+                      {local.usd_rate && local.usd_rate !== 40 && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          USD: {local.usd_rate}
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, usd_rate: 40 }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Націнка */}
+                      {local.markup && local.markup !== 15 && (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                          Націнка: {local.markup}%
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, markup: 15 }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Дати */}
+                      {(local.date_min || local.date_max) && (
+                        <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
+                          Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                      
+                      {/* Firmware */}
+                      {local.firmware && (
+                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                          Firmware: {local.firmware}
+                          <X 
+                            className="w-3 h-3 ml-1 cursor-pointer" 
+                            onClick={() => setLocal(p => ({ ...p, firmware: undefined }))}
+                          />
+                        </Badge>
+                      )}
+                    </div>
+                    {overflow > 0 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0 pointer-events-none" />
+                    )}
+                  </div>
+                )}
+
+                {(hasAny || overflow > 0) && (
+                  <div className="flex items-center gap-2">
+                    {overflow > 0 && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="xs" className="h-6 px-2 text-xs">
+                            {`Показати всі (+${overflow})`}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[28rem] max-h-96 overflow-auto">
+                          <div className="flex flex-wrap gap-2">
+                            {(local.brands || []).map((brand) => (
+                              <Badge key={`brand-${brand}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                                {brand}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal((p) => ({ ...p, brands: p.brands?.filter((b) => b !== brand) }))}
+                                />
+                              </Badge>
+                            ))}
+                            {(local.suppliers || []).map((supplier) => (
+                              <Badge key={`supplier-${supplier}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                                {supplier}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal((p) => ({ ...p, suppliers: p.suppliers?.filter((s) => s !== supplier) }))}
+                                />
+                              </Badge>
+                            ))}
+                            {(local.cities || []).map((city) => (
+                              <Badge key={`city-${city}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                                {city}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal((p) => ({ ...p, cities: p.cities?.filter((c) => c !== city) }))}
+                                />
+                              </Badge>
+                            ))}
+                            {local.inverter_type && (
+                              <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                                Тип: {local.inverter_type}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal((p) => ({ ...p, inverter_type: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                            {local.generation && (
+                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                                Покоління: {local.generation}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal((p) => ({ ...p, generation: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                            {(local.supplier_status || []).map((s) => (
+                              <Badge key={`supplier_status-${s}`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                                {statusLabels[s as keyof typeof statusLabels] || s}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal((p) => ({ ...p, supplier_status: p.supplier_status?.filter((ss) => ss !== s) }))}
+                                />
+                              </Badge>
+                            ))}
+                            {(local.power_min !== undefined || local.power_max !== undefined) && (
+                              <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                                Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                            {(local.string_count_min !== undefined || local.string_count_max !== undefined) && (
+                              <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
+                                Стринги: {local.string_count_min || '∞'}-{local.string_count_max || '∞'}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                            {(local.price_min !== undefined || local.price_max !== undefined) && (
+                              <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
+                                Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                            {(local.usd_rate !== undefined && local.usd_rate !== 40) && (
+                              <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                                USD: {local.usd_rate}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, usd_rate: 40 }))}
+                                />
+                              </Badge>
+                            )}
+                            {(local.markup !== undefined && local.markup !== 15) && (
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200">
+                                Націнка: {local.markup}%
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, markup: 15 }))}
+                                />
+                              </Badge>
+                            )}
+                            {(local.date_min !== undefined || local.date_max !== undefined) && (
+                              <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
+                                Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                            {local.firmware && (
+                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                                Firmware: {local.firmware}
+                                <X
+                                  className="w-3 h-3 ml-1 cursor-pointer"
+                                  onClick={() => setLocal(p => ({ ...p, firmware: undefined }))}
+                                />
+                              </Badge>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+
+                    <Button 
+                      variant="outline" 
+                      size="xs" 
+                      onClick={onReset}
+                      className="h-6 px-2 text-xs text-slate-600 hover:text-slate-800"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Скинути все
+                    </Button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
   );
-};
+}
+;
 
 export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
   const [cities, setCities] = useState<string[]>([]);
@@ -343,7 +513,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
     ...current,
     markup: current.markup !== undefined ? current.markup : 15,
   });
-  const { rate, loading: loadingRate } = useUsdRate();
+  const { rate } = useUsdRate();
   
   // Drag and drop state
   const defaultFilterOrder = [
@@ -444,14 +614,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
     return () => clearTimeout(t);
   }, [local, setFilters]);
 
-  const reset = () => {
-    const resetFilters: InverterPriceListRequestSchema = {
-      page: 1,
-      markup: 15,
-    };
-    setLocal(resetFilters);
-    setFilters(resetFilters);
-  };
+  // removed unused reset helper
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
@@ -720,7 +883,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          <div className="grid gap-5 pl-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}

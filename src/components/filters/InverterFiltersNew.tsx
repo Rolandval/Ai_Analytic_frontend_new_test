@@ -592,7 +592,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          <div className="grid gap-5 pl-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}

@@ -10,9 +10,15 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/Dialog';
 import { Send, Mail, Download, FileText, Eye, Clock, AlertCircle } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
 
 const SendOrdersPage: React.FC = () => {
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
+  const [pageReady, setPageReady] = useState(1);
+  const [pageSent, setPageSent] = useState(1);
+  const [pageConfirmed, setPageConfirmed] = useState(1);
+  const [pageAll, setPageAll] = useState(1);
+  const [pageSize] = useState(10);
   
   const toggleOrder = (id: number) => {
     if (selectedOrders.includes(id)) {
@@ -44,6 +50,21 @@ const SendOrdersPage: React.FC = () => {
 
   // Ініціалізуємо порожній масив замовлень
   const orders: Order[] = [];
+
+  // Derived collections per tab
+  const readyOrders = orders.filter(o => o.status === 'ready');
+  const sentOrders = orders.filter(o => o.status === 'sent');
+  const confirmedOrders = orders.filter(o => o.status === 'confirmed');
+
+  const totalPagesReady = Math.max(1, Math.ceil(readyOrders.length / pageSize) || 1);
+  const totalPagesSent = Math.max(1, Math.ceil(sentOrders.length / pageSize) || 1);
+  const totalPagesConfirmed = Math.max(1, Math.ceil(confirmedOrders.length / pageSize) || 1);
+  const totalPagesAll = Math.max(1, Math.ceil(orders.length / pageSize) || 1);
+
+  const pagedReady = readyOrders.slice((pageReady - 1) * pageSize, pageReady * pageSize);
+  const pagedSent = sentOrders.slice((pageSent - 1) * pageSize, pageSent * pageSize);
+  const pagedConfirmed = confirmedOrders.slice((pageConfirmed - 1) * pageSize, pageConfirmed * pageSize);
+  const pagedAll = orders.slice((pageAll - 1) * pageSize, pageAll * pageSize);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -106,9 +127,7 @@ const SendOrdersPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders
-                    .filter(order => order.status === 'ready')
-                    .map((order) => (
+                  {pagedReady.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>
                         <Checkbox 
@@ -271,21 +290,24 @@ const SendOrdersPage: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
-              {orders.filter(order => order.status === 'ready').length === 0 && (
+              {readyOrders.length === 0 && (
                 <div className="text-center py-4 text-gray-500">
                   Немає замовлень готових до відправки
                 </div>
               )}
             </CardContent>
-            {orders.filter(order => order.status === 'ready').length > 0 && (
+            {readyOrders.length > 0 && (
               <CardFooter className="flex justify-between border-t px-6 py-4">
                 <div className="text-sm text-muted-foreground">
-                  Вибрано замовлень: <strong>{selectedOrders.length}</strong> з {orders.filter(order => order.status === 'ready').length}
+                  Вибрано замовлень: <strong>{selectedOrders.length}</strong> з {readyOrders.length}
                 </div>
-                <Button>
-                  <Send className="h-4 w-4 mr-2" />
-                  Відправити вибрані
-                </Button>
+                <div className="flex items-center gap-4">
+                  <Pagination currentPage={pageReady} totalPages={totalPagesReady} onPageChange={setPageReady} />
+                  <Button>
+                    <Send className="h-4 w-4 mr-2" />
+                    Відправити вибрані
+                  </Button>
+                </div>
               </CardFooter>
             )}
           </Card>
@@ -313,9 +335,7 @@ const SendOrdersPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders
-                    .filter(order => order.status === 'sent')
-                    .map((order) => (
+                  {pagedSent.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>{order.number}</TableCell>
                       <TableCell>{order.supplier}</TableCell>
@@ -337,12 +357,17 @@ const SendOrdersPage: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
-              {orders.filter(order => order.status === 'sent').length === 0 && (
+              {sentOrders.length === 0 && (
                 <div className="text-center py-4 text-gray-500">
                   Немає відправлених замовлень
                 </div>
               )}
             </CardContent>
+            {sentOrders.length > 0 && (
+              <CardFooter className="flex justify-end border-t px-6 py-4">
+                <Pagination currentPage={pageSent} totalPages={totalPagesSent} onPageChange={setPageSent} />
+              </CardFooter>
+            )}
           </Card>
         </TabsContent>
 
@@ -368,9 +393,7 @@ const SendOrdersPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders
-                    .filter(order => order.status === 'confirmed')
-                    .map((order) => (
+                  {pagedConfirmed.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>{order.number}</TableCell>
                       <TableCell>{order.supplier}</TableCell>
@@ -392,12 +415,17 @@ const SendOrdersPage: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
-              {orders.filter(order => order.status === 'confirmed').length === 0 && (
+              {confirmedOrders.length === 0 && (
                 <div className="text-center py-4 text-gray-500">
                   Немає підтверджених замовлень
                 </div>
               )}
             </CardContent>
+            {confirmedOrders.length > 0 && (
+              <CardFooter className="flex justify-end border-t px-6 py-4">
+                <Pagination currentPage={pageConfirmed} totalPages={totalPagesConfirmed} onPageChange={setPageConfirmed} />
+              </CardFooter>
+            )}
           </Card>
         </TabsContent>
 
@@ -423,7 +451,7 @@ const SendOrdersPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => (
+                  {pagedAll.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>{order.number}</TableCell>
                       <TableCell>{order.supplier}</TableCell>
@@ -460,6 +488,11 @@ const SendOrdersPage: React.FC = () => {
                 </TableBody>
               </Table>
             </CardContent>
+            {orders.length > 0 && (
+              <CardFooter className="flex justify-end border-t px-6 py-4">
+                <Pagination currentPage={pageAll} totalPages={totalPagesAll} onPageChange={setPageAll} />
+              </CardFooter>
+            )}
           </Card>
         </TabsContent>
       </Tabs>
@@ -468,7 +501,7 @@ const SendOrdersPage: React.FC = () => {
 };
 
 // Додаємо компонент, який відсутній у імпортах
-const Phone = (props) => {
+const Phone = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
       {...props}
@@ -488,7 +521,7 @@ const Phone = (props) => {
 };
 
 // Додаємо компонент, який відсутній у імпортах
-const Check = (props) => {
+const Check = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
       {...props}

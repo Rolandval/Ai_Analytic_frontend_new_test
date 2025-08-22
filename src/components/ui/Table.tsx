@@ -58,19 +58,36 @@ const TableRow = React.forwardRef<
 ));
 TableRow.displayName = "TableRow";
 
+// Helper to extract text from React children for title attribute
+function childrenToText(children: React.ReactNode): string {
+  if (children == null || children === false) return "";
+  if (typeof children === "string" || typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(childrenToText).join("");
+  if (React.isValidElement(children)) return childrenToText(children.props?.children);
+  return "";
+}
+
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
-  <th
-    ref={ref}
-    className={cn(
-      "h-10 sm:h-12 px-2 sm:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 whitespace-nowrap",
-      className
-    )}
-    {...props}
-  />
-));
+>(({ className, children, title, ...props }, ref) => {
+  const computedTitle = title ?? childrenToText(children);
+  return (
+    <th
+      ref={ref}
+      className={cn(
+        "h-10 sm:h-12 px-2 sm:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        className
+      )}
+      title={computedTitle || undefined}
+      {...props}
+    >
+      <div className="line-clamp-2 leading-5 max-h-[2.5rem] overflow-hidden break-words">
+        {children}
+      </div>
+    </th>
+  );
+});
 TableHead.displayName = "TableHead";
 
 interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {

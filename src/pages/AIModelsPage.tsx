@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { ChatModel, ChatModelCreatePayload } from '@/types/chatModels';
 import { getChatModels, createChatModel, updateChatModel, deleteChatModel } from '@/services/chatModelsService';
+import { Pagination } from '@/components/ui/Pagination';
 
 // Тип для рядка, що редагується або є новим
 type EditableRow = {
@@ -29,6 +30,8 @@ export const AIModelsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
   
   // Стани для inline-редагування
   const [editableRows, setEditableRows] = useState<Record<string, EditableRow>>({});
@@ -65,10 +68,18 @@ export const AIModelsPage = () => {
     fetchModels();
   }, []);
 
+  // Reset page on search
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
+
   // Filter models based on search query
   const filteredModels = models.filter(model => 
     model.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredModels.length / pageSize) || 1);
+  const paginatedModels = filteredModels.slice((page - 1) * pageSize, page * pageSize);
 
   // Почати редагування моделі
   const startEditing = (model: ChatModel) => {
@@ -421,7 +432,7 @@ export const AIModelsPage = () => {
                   </td>
                 </tr>
               ) : (
-                filteredModels.map((model) => {
+                paginatedModels.map((model) => {
                   // Якщо рядок в режимі редагування
                   if (editableRows[model.id]) {
                     return renderEditableRow(editableRows[model.id]);
@@ -490,6 +501,9 @@ export const AIModelsPage = () => {
               )}
             </tbody>
           </Table>
+          <div className="flex items-center justify-end p-4 border-t">
+            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
         </Card>
       )}
 

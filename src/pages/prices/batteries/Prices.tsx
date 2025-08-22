@@ -20,7 +20,7 @@ export const BatteryPrices = () => {
     setFilters(prev => ({ ...prev, [name]: finalValue }));
   };
 
-  const totalPages = data ? Math.ceil(data.total / 10) : 0;
+  const totalPages = data ? Math.ceil((data.count ?? 0) / 10) : 0;
 
   return (
     <div className="container mx-auto p-4">
@@ -80,7 +80,7 @@ export const BatteryPrices = () => {
                     </tr>
                 </thead>
                 <tbody className="bg-gray-900 divide-y divide-gray-700">
-                    {data.data.map((item: BatteryPriceSchema) => (
+                    {data.results.map((item: BatteryPriceSchema) => (
                         <tr key={item.id}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{item.full_name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{item.brand}</td>

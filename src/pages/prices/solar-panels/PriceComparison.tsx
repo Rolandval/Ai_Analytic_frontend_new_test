@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { useGetSupplierSolarPanelComparisonMutation } from '@/services/solarPanelComparison.api';
 import { getSolarPanelBrands, getSolarPanelSuppliers } from '@/services/solarPanelPrices.api';
 import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
@@ -13,7 +12,12 @@ import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { updateSolarPanelSitePrice, UpdateSitePriceRequest } from '@/services/sitePrice.api';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Label } from '@/components/ui/Label';
+import { useToast } from '@/hooks/use-toast';
+// removed radio-group imports; using a single native radio input for unified toggle
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -71,6 +75,11 @@ export default function SolarPanelPriceComparison() {
   const [supplierColumns, setSupplierColumns] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
+  // Copying state
+  const [copying, setCopying] = useState(false);
+  const { toast } = useToast();
   const [updatePriceModalOpen, setUpdatePriceModalOpen] = useState(false);
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
     id: number | null;
@@ -82,6 +91,7 @@ export default function SolarPanelPriceComparison() {
 
   const [getSolarPanelComparison, { isLoading }] = useGetSupplierSolarPanelComparisonMutation();
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  // removed selectionMode; unified single radio toggle will derive state from selection
 
   // Прапор для відстеження, чи були застосовані фільтри користувачем
   const [filtersApplied, setFiltersApplied] = useState(false);
@@ -89,6 +99,7 @@ export default function SolarPanelPriceComparison() {
   // Стан для актуальних цін
   const markup = 15; // Фіксована націнка 15%
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
+  const [updatingRowIds, setUpdatingRowIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     // Виконуємо запит тільки якщо фільтри були застосовані
@@ -117,6 +128,110 @@ export default function SolarPanelPriceComparison() {
     processedData,
     { key: 'full_name', direction: 'asc' } // Початкове сортування за назвою
   );
+
+  // LS key
+  const LS_COLUMNS_KEY = 'solarPanelComparison.columnVisibility';
+
+  // Define static columns list and headers
+  const staticColumns = useMemo(() => ([
+    { key: 'index', header: '№' },
+    { key: 'full_name', header: 'Назва' },
+    { key: 'brand', header: 'Бренд' },
+    { key: 'power', header: 'Вт' },
+    { key: 'thickness', header: 'Товщ' },
+    { key: 'panel_type', header: 'Тип' },
+    { key: 'cell_type', header: 'Ком' },
+    { key: 'recommended', header: 'Рек' },
+    { key: 'actual', header: 'Акт' },
+    { key: 'totalAvailability', header: 'Наяв' },
+  ]), []);
+
+  // Initialize column visibility
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LS_COLUMNS_KEY);
+      if (stored) {
+        setVisibleColumns(JSON.parse(stored));
+        return;
+      }
+    } catch {}
+    const initial: Record<string, boolean> = {};
+    staticColumns.forEach(c => { initial[c.key] = true; });
+    supplierColumns.forEach(s => { initial[`supplier:${s}`] = true; });
+    setVisibleColumns(initial);
+  }, [supplierColumns, staticColumns]);
+
+  const saveVisibleColumns = (cfg: Record<string, boolean>) => {
+    setVisibleColumns(cfg);
+    try { localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(cfg)); } catch {}
+  };
+
+  // Apply single row update
+  const handleApplyRow = async (panel: SolarPanelWithSupplierPrices) => {
+    if (updatingRowIds.has(panel.id)) return;
+    const priceToApply = calculateRecommendedPrice(panel);
+    if (!priceToApply) {
+      toast({ title: 'Немає ціни', description: 'Не вдалося розрахувати актуальну ціну.', variant: 'destructive' });
+      return;
+    }
+    const siteEntry = panel.supplier_prices.find(sp => sp.site_id);
+    if (!siteEntry?.site_id) {
+      toast({ title: 'Немає site_id', description: 'Не знайдено товар на сайті для оновлення.', variant: 'destructive' });
+      return;
+    }
+    setUpdatingRowIds(prev => new Set(prev).add(panel.id));
+    const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
+    try {
+      await updateSolarPanelSitePrice(payload);
+      toast({ title: 'Успіх', description: 'Ціну оновлено на сайті.' });
+      await fetchComparisonData();
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Помилка', description: 'Не вдалося оновити ціну.', variant: 'destructive' });
+    } finally {
+      setUpdatingRowIds(prev => {
+        const next = new Set(prev);
+        next.delete(panel.id);
+        return next;
+      });
+    }
+  };
+
+  // Build export of visible headers and rows
+  const buildExport = () => {
+    if (!comparisonData || !comparisonData.panels || comparisonData.panels.length === 0) return '';
+    const headers: string[] = [];
+    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
+    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+
+    const rows = sortedPanels.map((panel, idx) => {
+      const cells: string[] = [];
+      if (visibleColumns['index'] !== false) cells.push(String((page - 1) * pageSize + idx + 1));
+      if (visibleColumns['full_name'] !== false) cells.push(panel.full_name ?? '');
+      if (visibleColumns['brand'] !== false) cells.push(panel.brand ?? '');
+      if (visibleColumns['power'] !== false) cells.push(panel.power?.toString() ?? '');
+      if (visibleColumns['thickness'] !== false) cells.push(panel.thickness?.toString() ?? '');
+      if (visibleColumns['panel_type'] !== false) cells.push(panel.panel_type ?? '');
+      if (visibleColumns['cell_type'] !== false) cells.push(panel.cell_type ?? '');
+      supplierColumns.forEach(s => {
+        if (visibleColumns[`supplier:${s}`] === false) return;
+        const price = getPriceForSupplier(panel, s);
+        cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
+      });
+      if (visibleColumns['recommended'] !== false) {
+        const r = panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+        cells.push(r !== null ? `${formatPrice(r)}₴` : '-');
+      }
+      if (visibleColumns['actual'] !== false) {
+        const v = calculateRecommendedPrice(panel);
+        cells.push(v ? `${formatPrice(v)}₴` : '-');
+      }
+      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(panel)));
+      return cells.join('\t');
+    });
+
+    return `${headers.join('\t')}\n${rows.join('\n')}`;
+  };
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -150,11 +265,12 @@ export default function SolarPanelPriceComparison() {
       
       // Extract unique supplier names to use as columns
       if (result.panels.length > 0) {
-        const uniqueSuppliers = [...new Set(
-          result.panels.flatMap((panel: SolarPanelWithSupplierPrices) => 
-            panel.supplier_prices.map((sp: SupplierPrice) => sp.supplier_name)
-          )
-        )] as string[];
+        // Normalize, filter falsy, and deduplicate supplier names
+        const rawNames = result.panels.flatMap((panel: SolarPanelWithSupplierPrices) =>
+          panel.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
+        );
+        const cleaned = rawNames.filter((n) => n.length > 0);
+        const uniqueSuppliers = Array.from(new Set(cleaned));
         setSupplierColumns(uniqueSuppliers);
       }
     } catch (error) {
@@ -264,10 +380,7 @@ export default function SolarPanelPriceComparison() {
     setSelectedRowIds(allPanelIds);
   };
 
-  // Handle deselect all
-  const handleDeselectAll = () => {
-    setSelectedRowIds(new Set());
-  };
+  // removed handleDeselectAll (no longer used)
 
   // Handle bulk price update (per selected rows)
   const handleBulkPriceUpdate = async () => {
@@ -348,24 +461,96 @@ export default function SolarPanelPriceComparison() {
       
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <RefreshDataButton onRefresh={refreshSolarPanelsData} />
-        
+        {/* Copy */}
         <Button
-          size="sm"
           variant="outline"
-          onClick={handleSelectAll}
-          className="text-xs px-2 py-1 h-7"
-        >
-          Обрати всі
-        </Button>
-        
-        <Button
           size="sm"
-          variant="outline"
-          onClick={handleDeselectAll}
-          className="text-xs px-2 py-1 h-7"
+          onClick={() => {
+            setCopying(true);
+            const text = buildExport();
+            if (!text) { setCopying(false); return; }
+            navigator.clipboard.writeText(text)
+              .then(() => toast({ title: 'Скопійовано!', description: 'Дані таблиці скопійовані в буфер обміну.', duration: 2500 }))
+              .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати дані таблиці.', variant: 'destructive', duration: 3000 }))
+              .finally(() => setCopying(false));
+          }}
         >
-          Зняти всі
+          {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         </Button>
+
+        {/* Settings */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Налаштування колонок</h4>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const all: Record<string, boolean> = {};
+                      staticColumns.forEach(c => all[c.key] = true);
+                      supplierColumns.forEach(s => all[`supplier:${s}`] = true);
+                      saveVisibleColumns(all);
+                    }}
+                  >
+                    Вибрати всі
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const minimal: Record<string, boolean> = {};
+                      ['index','full_name','brand','power','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
+                      supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
+                      saveVisibleColumns(minimal);
+                    }}
+                  >
+                    Необхідні
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {staticColumns.map(c => (
+                  <div key={c.key} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`col-${c.key}`}
+                      checked={visibleColumns[c.key] !== false}
+                      onCheckedChange={(checked: boolean | string) => {
+                        const next = { ...visibleColumns, [c.key]: checked === true };
+                        saveVisibleColumns(next);
+                      }}
+                    />
+                    <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
+                  </div>
+                ))}
+                <div className="pt-2 font-medium">Постачальники</div>
+                {supplierColumns.map(s => {
+                  const k = `supplier:${s}`;
+                  return (
+                    <div key={k} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`col-${k}`}
+                        checked={visibleColumns[k] !== false}
+                        onCheckedChange={(checked: boolean | string) => {
+                          const next = { ...visibleColumns, [k]: checked === true };
+                          saveVisibleColumns(next);
+                        }}
+                      />
+                      <Label htmlFor={`col-${k}`}>{s}</Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         
         {selectedRowIds.size > 0 && (
           <>
@@ -408,87 +593,142 @@ export default function SolarPanelPriceComparison() {
               <Table style={{userSelect: 'text'}}>
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
-                    <TableHead className="text-center w-8 text-xs">№</TableHead>
-                    <TableHead 
-                      className="min-w-[120px] text-center"
-                      onClick={() => requestSort('full_name')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Назва</span>
-                        {sortConfig?.key === 'full_name' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-xs w-16 truncate text-center">Бренд</TableHead>
-                    <TableHead 
-                      className="hidden sm:table-cell w-8 text-center"
-                      onClick={() => requestSort('power')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Вт</span>
-                        {sortConfig?.key === 'power' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Товщ</TableHead>
-                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Тип</TableHead>
-                    <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Ком</TableHead>
-                    {supplierColumns.map((supplier) => (
-                      <TableHead key={supplier} className="text-center w-16">
-                        <span className="text-xs truncate">{supplier.length > 4 ? supplier.substring(0, 4) + '...' : supplier}</span>
+                    {visibleColumns['index'] !== false && (
+                      <TableHead className="text-center w-8 text-xs">№</TableHead>
+                    )}
+                    {visibleColumns['full_name'] !== false && (
+                      <TableHead 
+                        className="min-w-[120px] text-center"
+                        onClick={() => requestSort('full_name')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Назва</span>
+                          {sortConfig?.key === 'full_name' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </TableHead>
+                    )}
+                    {visibleColumns['brand'] !== false && (
+                      <TableHead className="text-xs w-16 truncate text-center">Бренд</TableHead>
+                    )}
+                    {visibleColumns['power'] !== false && (
+                      <TableHead 
+                        className="hidden sm:table-cell w-8 text-center"
+                        onClick={() => requestSort('power')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Вати">Вт</span>
+                          {sortConfig?.key === 'power' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
+                    {visibleColumns['thickness'] !== false && (
+                      <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Товщина">Товщ</TableHead>
+                    )}
+                    {visibleColumns['panel_type'] !== false && (
+                      <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Тип</TableHead>
+                    )}
+                    {visibleColumns['cell_type'] !== false && (
+                      <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Комірки">Ком</TableHead>
+                    )}
+                    {supplierColumns.map((supplier, idx) => (
+                      visibleColumns[`supplier:${supplier}`] !== false && (
+                        <TableHead
+                          key={`sup-head-${idx}-${supplier}`}
+                          className="text-center"
+                          title={supplier}
+                        >
+                          <span className="text-xs">{supplier}</span>
+                        </TableHead>
+                      )
                     ))}
-                    <TableHead
-                      className="text-center w-12"
-                      onClick={() => requestSort('recommendedPrice')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Рек</span>
-                        {sortConfig?.key === 'recommendedPrice' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-center w-12">
-                      <span className="text-xs">Акт</span>
-                    </TableHead>
-                    <TableHead
-                      className="text-center w-8"
-                      onClick={() => requestSort('totalAvailability')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Нав</span>
-                        {sortConfig?.key === 'totalAvailability' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
+                    {visibleColumns['recommended'] !== false && (
+                      <TableHead
+                        className="text-center w-12"
+                        onClick={() => requestSort('recommendedPrice')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Рекомендована">Рек</span>
+                          {sortConfig?.key === 'recommendedPrice' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
+                    {visibleColumns['actual'] !== false && (
+                      <TableHead className="text-center w-12">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-xs" title="Актуальна">Акт</span>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const totalCount = comparisonData?.panels?.length ?? 0;
+                              const allSelected = totalCount > 0 && selectedRowIds.size === totalCount;
+                              return (
+                                <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+                                  <input
+                                    type="radio"
+                                    checked={allSelected}
+                                    onClick={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
+                                    onChange={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
+                                    className="accent-primary focus:ring-0 w-3 h-3"
+                                  />
+                                  <span className="text-[10px]">Всі</span>
+                                </label>
+                              );
+                            })()}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleBulkPriceUpdate}
+                              disabled={selectedRowIds.size === 0}
+                              className="text-[10px] px-1 py-0.5 h-5"
+                            >
+                              Заст
+                            </Button>
+                          </div>
+                        </div>
+                      </TableHead>
+                    )}
+                    {visibleColumns['totalAvailability'] !== false && (
+                      <TableHead
+                        className="text-center w-8"
+                        onClick={() => requestSort('totalAvailability')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Наявність">Наяв</span>
+                          {sortConfig?.key === 'totalAvailability' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -502,23 +742,43 @@ export default function SolarPanelPriceComparison() {
                           : "hover:bg-muted/50 dark:hover:bg-muted/70 opacity-70"
                       }
                     >
-                      <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
-                      <TableCell className="font-medium text-xs min-w-[120px] text-center">{panel.full_name}</TableCell>
-                      <TableCell className="text-xs w-16 truncate text-center">{panel.brand}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-center text-xs w-8">{panel.power}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{panel.thickness}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">{panel.panel_type}</TableCell>
-                      <TableCell className="hidden lg:table-cell text-center text-xs w-8">
-                        <span className="whitespace-nowrap">{panel.cell_type}</span>
-                      </TableCell>
+                      {visibleColumns['index'] !== false && (
+                        <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                      )}
+                      {visibleColumns['full_name'] !== false && (
+                        <TableCell
+                          className="font-medium text-xs min-w-[120px] text-center"
+                          title={panel.full_name}
+                        >
+                          {panel.full_name}
+                        </TableCell>
+                      )}
+                      {visibleColumns['brand'] !== false && (
+                        <TableCell className="text-xs text-center" title={panel.brand}>{panel.brand}</TableCell>
+                      )}
+                      {visibleColumns['power'] !== false && (
+                        <TableCell className="hidden sm:table-cell text-center text-xs w-8">{panel.power}</TableCell>
+                      )}
+                      {visibleColumns['thickness'] !== false && (
+                        <TableCell className="hidden lg:table-cell text-center text-xs w-8">{panel.thickness}</TableCell>
+                      )}
+                      {visibleColumns['panel_type'] !== false && (
+                        <TableCell className="hidden lg:table-cell text-center text-xs w-8">{panel.panel_type}</TableCell>
+                      )}
+                      {visibleColumns['cell_type'] !== false && (
+                        <TableCell className="hidden lg:table-cell text-center text-xs w-8">
+                          <span className="whitespace-nowrap">{panel.cell_type}</span>
+                        </TableCell>
+                      )}
                       
                       {/* Supplier price columns */}
-                      {supplierColumns.map((supplier) => {
+                      {supplierColumns.map((supplier, sIdx) => {
+                        if (visibleColumns[`supplier:${supplier}`] === false) return null;
                         const price = getPriceForSupplier(panel, supplier);
                         const canUpdate = canUpdatePriceOnSite(panel, supplier);
                         return (
                           <TableCell 
-                            key={supplier} 
+                            key={`sup-cell-${panel.id}-${sIdx}-${supplier}`} 
                             className="text-center font-medium w-16"
                           >
                             <div className="flex flex-col items-end space-y-2">
@@ -555,47 +815,68 @@ export default function SolarPanelPriceComparison() {
                       })}
                       
                       {/* Recommended price column */}
-                      <TableCell className="text-center font-medium">
-                        {panel.supplier_prices.some(sp => sp.recommended_price !== null) ? (
-                          <div className="flex flex-col items-center">
-                            <span className="text-purple-700 dark:text-purple-400 font-medium">
-                              {formatPrice(panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;₴
-                            </span>
-                          </div>
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
+                      {visibleColumns['recommended'] !== false && (
+                        <TableCell className="text-center font-medium">
+                          {panel.supplier_prices.some(sp => sp.recommended_price !== null) ? (
+                            <div className="flex flex-col items-center">
+                              <span className="text-purple-700 dark:text-purple-400 font-medium">
+                                {formatPrice(panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;₴
+                              </span>
+                            </div>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                      )}
                       
                       {/* Actual price display column */}
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedRowIds.has(panel.id)}
-                            onChange={(e) => handleRowSelection(panel.id, e.target.checked)}
-                            className="w-4 h-4"
-                          />
-                          {selectedRowIds.has(panel.id) && calculateRecommendedPrice(panel) && (
-                            <span className="text-blue-700 font-medium text-sm">
-                              {formatPrice(calculateRecommendedPrice(panel))}&nbsp;₴
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
+                      {visibleColumns['actual'] !== false && (
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedRowIds.has(panel.id)}
+                              onChange={(e) => handleRowSelection(panel.id, e.target.checked)}
+                              className="w-4 h-4"
+                            />
+                            {selectedRowIds.has(panel.id) && (
+                              <>
+                                {calculateRecommendedPrice(panel) ? (
+                                  <span className="text-blue-700 font-medium text-sm">
+                                    {formatPrice(calculateRecommendedPrice(panel))}&nbsp;₴
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Немає ціни</span>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-[10px] px-1 py-0.5 h-5"
+                                  onClick={() => handleApplyRow(panel)}
+                                  disabled={updatingRowIds.has(panel.id)}
+                                >
+                                  {updatingRowIds.has(panel.id) ? '...' : 'Застосувати'}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                       
                       {/* Total availability column */}
-                      <TableCell className="text-center">
-                        {getTotalAvailability(panel) > 0 ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            {getTotalAvailability(panel)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                            Немає
-                          </Badge>
-                        )}
-                      </TableCell>
+                      {visibleColumns['totalAvailability'] !== false && (
+                        <TableCell className="text-center">
+                          {getTotalAvailability(panel) > 0 ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {getTotalAvailability(panel)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                              Немає
+                            </Badge>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

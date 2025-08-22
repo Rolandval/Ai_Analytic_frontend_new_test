@@ -1,14 +1,21 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import {
-  SolarPanelPriceListRequestSchema,
-  SolarPanelMultiPriceListResponseSchema
-} from '@/types/solar-panels';
+import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
 
 const BASE = '/solar_panels/backend';
+const BASE_URL = 'http://185.233.44.234:8002';
+
+// Minimal response shape for supplier comparison used by the UI
+export interface SolarPanelMultiPriceListResponseSchema {
+  panels: any[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
 
 export const solarPanelComparisonApi = createApi({
   reducerPath: 'solarPanelComparisonApi',
-  baseQuery: fetchBaseQuery(),
+  baseQuery: fetchBaseQuery({ baseUrl: BASE_URL }),
   endpoints: (builder) => ({
     getSupplierSolarPanelComparison: builder.mutation<
       SolarPanelMultiPriceListResponseSchema,

@@ -1,14 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { AlertCircle } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
 
 const ShelfAnalysisPage: React.FC = () => {
+  // Local pagination state
+  const [pageResults, setPageResults] = useState(1);
+  const [pageHistory, setPageHistory] = useState(1);
+  const [pageSize] = useState(10);
+
+  // Placeholder datasets (to be replaced when backend is wired)
+  const lowStockItems: Array<Record<string, unknown>> = [];
+  const analysisHistory: Array<Record<string, unknown>> = [];
+
+  const totalPagesResults = Math.max(1, Math.ceil(lowStockItems.length / pageSize) || 1);
+  const totalPagesHistory = Math.max(1, Math.ceil(analysisHistory.length / pageSize) || 1);
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -82,6 +95,11 @@ const ShelfAnalysisPage: React.FC = () => {
                 </TableBody>
               </Table>
             </CardContent>
+            {lowStockItems.length > 0 && (
+              <div className="border-t px-6 py-4 flex justify-end">
+                <Pagination currentPage={pageResults} totalPages={totalPagesResults} onPageChange={setPageResults} />
+              </div>
+            )}
           </Card>
         </TabsContent>
         
@@ -110,6 +128,11 @@ const ShelfAnalysisPage: React.FC = () => {
                 </TableBody>
               </Table>
             </CardContent>
+            {analysisHistory.length > 0 && (
+              <div className="border-t px-6 py-4 flex justify-end">
+                <Pagination currentPage={pageHistory} totalPages={totalPagesHistory} onPageChange={setPageHistory} />
+              </div>
+            )}
           </Card>
         </TabsContent>
         

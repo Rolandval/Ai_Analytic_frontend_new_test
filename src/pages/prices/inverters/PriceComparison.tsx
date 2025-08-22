@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGetSupplierInverterComparisonMutation } from '@/services/inverterComparison.api';
 import { getInverterBrands, getInverterSuppliers } from '@/services/inverterPrices.api';
 import { refreshInvertersData } from '@/services/dataRefresh.api';
@@ -15,13 +15,18 @@ import {
 } from "@/components/ui/Table";
 
 import { Pagination } from '@/components/ui/Pagination';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Label } from '@/components/ui/Label';
 import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+// removed radio-group imports; using a single native radio input for unified toggle
+import { Input } from '@/components/ui/Input';
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -74,10 +79,16 @@ export default function InverterPriceComparison() {
   const [supplierColumns, setSupplierColumns] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [suppliers, setSuppliers] = useState<string[]>([]);
+  // Column visibility state (persisted per-page)
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
+  // Copying state
+  const [copying, setCopying] = useState(false);
+  const { toast } = useToast();
   
   // Стани для модального вікна оновлення ціни
   const markup = 15; // Фіксована націнка 15%
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
+  const [updatingRowIds, setUpdatingRowIds] = useState<Set<number>>(new Set());
   const [updatePriceModalOpen, setUpdatePriceModalOpen] = useState(false);
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
     id: number | null;
@@ -88,9 +99,12 @@ export default function InverterPriceComparison() {
   }>({ id: null, price: null, promo_price: null, availability: null, productName: '' });
 
   const [getInverterComparison, { isLoading }] = useGetSupplierInverterComparisonMutation();
+  // removed selectionMode; unified single radio toggle will derive state from selection
 
   // Прапор для відстеження, чи були застосовані фільтри користувачем
   const [filtersApplied, setFiltersApplied] = useState(false);
+  // External search state for full_name
+  const [search, setSearch] = useState<string>('');
 
   useEffect(() => {
     // Виконуємо запит тільки якщо фільтри були застосовані
@@ -102,6 +116,20 @@ export default function InverterPriceComparison() {
       return () => clearTimeout(timeoutId);
     }
   }, [filters, filtersApplied]);
+
+  // Sync external search with filters whenever filters.full_name changes (e.g., cleared via badges)
+  useEffect(() => {
+    setSearch(filters.full_name ?? '');
+  }, [filters.full_name]);
+
+  // Debounce search input and apply to filters
+  useEffect(() => {
+    const t = setTimeout(() => {
+      handleFiltersChange({ full_name: search ? search : undefined });
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
@@ -119,6 +147,120 @@ export default function InverterPriceComparison() {
     processedData,
     { key: 'full_name', direction: 'asc' } // Початкове сортування за назвою
   );
+
+  // Keys for localStorage (namespaced per page)
+  const LS_COLUMNS_KEY = 'inverterComparison.columnVisibility';
+
+  // Define static column keys and headers
+  const staticColumns = useMemo(() => (
+    [
+      { key: 'index', header: '№' },
+      { key: 'full_name', header: 'Назва' },
+      { key: 'brand', header: 'Бренд' },
+      { key: 'power', header: 'Вт' },
+      { key: 'string_count', header: 'Стр' },
+      { key: 'recommended', header: 'Рек' },
+      { key: 'actual', header: 'Акт' },
+      { key: 'totalAvailability', header: 'Наяв' },
+    ]
+  ), []);
+
+  // Initialize column visibility when supplier columns change or on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LS_COLUMNS_KEY);
+      if (stored) {
+        setVisibleColumns(JSON.parse(stored));
+        return;
+      }
+    } catch (e) {
+      // ignore
+    }
+    const initial: Record<string, boolean> = {};
+    staticColumns.forEach(c => { initial[c.key] = true; });
+    supplierColumns.forEach(s => { initial[`supplier:${s}`] = true; });
+    setVisibleColumns(initial);
+  }, [supplierColumns, staticColumns]);
+
+  const saveVisibleColumns = (cfg: Record<string, boolean>) => {
+    setVisibleColumns(cfg);
+    try { localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(cfg)); } catch {}
+  };
+
+  // Apply single row update
+  const handleApplyRow = async (inverter: InverterWithSupplierPrices) => {
+    if (updatingRowIds.has(inverter.id)) return;
+    const priceToApply = calculateRecommendedPrice(inverter);
+    if (!priceToApply) {
+      toast({ title: 'Немає ціни', description: 'Не вдалося розрахувати актуальну ціну.', variant: 'destructive' });
+      return;
+    }
+    const siteEntry = inverter.supplier_prices.find(sp => sp.site_id);
+    if (!siteEntry?.site_id) {
+      toast({ title: 'Немає site_id', description: 'Не знайдено товар на сайті для оновлення.', variant: 'destructive' });
+      return;
+    }
+    setUpdatingRowIds(prev => new Set(prev).add(inverter.id));
+    const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
+    try {
+      await updateInverterSitePrice(payload);
+      toast({ title: 'Успіх', description: 'Ціну оновлено на сайті.' });
+      await fetchComparisonData();
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Помилка', description: 'Не вдалося оновити ціну.', variant: 'destructive' });
+    } finally {
+      setUpdatingRowIds(prev => {
+        const next = new Set(prev);
+        next.delete(inverter.id);
+        return next;
+      });
+    }
+  };
+
+  // Build export text based on visible columns and sorted rows
+  const buildExport = () => {
+    if (!comparisonData || !comparisonData.inverters || comparisonData.inverters.length === 0) return '';
+    // headers order: static columns in defined order, then supplier columns in current order
+    const headers: string[] = [];
+    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
+    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+
+    const rows = sortedInverters.map((inv, idx) => {
+      const cells: string[] = [];
+      // index
+      if (visibleColumns['index'] !== false) cells.push(String((page - 1) * pageSize + idx + 1));
+      // full_name
+      if (visibleColumns['full_name'] !== false) cells.push(inv.full_name ?? '');
+      // brand
+      if (visibleColumns['brand'] !== false) cells.push(inv.brand ?? '');
+      // power
+      if (visibleColumns['power'] !== false) cells.push(inv.power?.toString() ?? '');
+      // string_count
+      if (visibleColumns['string_count'] !== false) cells.push(inv.string_count?.toString() ?? '');
+      // supplier columns (prices)
+      supplierColumns.forEach(s => {
+        if (visibleColumns[`supplier:${s}`] === false) return;
+        const price = getPriceForSupplier(inv, s);
+        cells.push(price !== null ? `${formatPrice(price)}$` : '-');
+      });
+      // recommended
+      if (visibleColumns['recommended'] !== false) {
+        const rec = inv.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+        cells.push(rec !== null ? `${formatPrice(rec)}$` : '-');
+      }
+      // actual (calculated recommended with markup if selected)
+      if (visibleColumns['actual'] !== false) {
+        const val = calculateRecommendedPrice(inv);
+        cells.push(val ? `${formatPrice(val)}$` : '-');
+      }
+      // totalAvailability
+      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(inv)));
+      return cells.join('\t');
+    });
+
+    return `${headers.join('\t')}\n${rows.join('\n')}`;
+  };
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -215,11 +357,6 @@ export default function InverterPriceComparison() {
     if (!comparisonData?.inverters) return;
     const allIds = new Set(comparisonData.inverters.map(i => i.id));
     setSelectedRowIds(allIds);
-  };
-
-  // Clear selection
-  const handleDeselectAll = () => {
-    setSelectedRowIds(new Set());
   };
 
   // Bulk apply: update site prices for selected rows with calculated recommended price
@@ -322,13 +459,22 @@ export default function InverterPriceComparison() {
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на інвертори</h1>
       
       <div className="space-y-4 mb-4">
+        {/* External search input placed separately above filters */}
+         <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Пошук по назві..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 w-[220px] sm:w-[280px]"
+          />
+        </div>
         <InverterComparisonFilters 
           current={filters}
           setFilters={handleFiltersChange}
           brands={brands}
           suppliers={suppliers}
         />
-        {!isLoading && comparisonData && comparisonData.inverters.length === 0 && (
+         {!isLoading && comparisonData && comparisonData.inverters.length === 0 && (
           <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200">
               Нічого не знайдено
@@ -342,22 +488,101 @@ export default function InverterPriceComparison() {
       
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <RefreshDataButton onRefresh={refreshInvertersData} />
+        {/* Copy button */}
         <Button
-          size="sm"
           variant="outline"
-          onClick={handleSelectAll}
-          className="text-xs px-2 py-1 h-7"
-        >
-          Обрати всі
-        </Button>
-        <Button
           size="sm"
-          variant="outline"
-          onClick={handleDeselectAll}
-          className="text-xs px-2 py-1 h-7"
+          onClick={() => {
+            setCopying(true);
+            const text = buildExport();
+            if (!text) { setCopying(false); return; }
+            navigator.clipboard.writeText(text)
+              .then(() => {
+                toast({ title: 'Скопійовано!', description: 'Дані таблиці скопійовані в буфер обміну.', duration: 2500 });
+              })
+              .catch(() => {
+                toast({ title: 'Помилка', description: 'Не вдалося скопіювати дані таблиці.', variant: 'destructive', duration: 3000 });
+              })
+              .finally(() => setCopying(false));
+          }}
         >
-          Зняти всі
+          {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         </Button>
+
+        {/* Settings popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Налаштування колонок</h4>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const all: Record<string, boolean> = {};
+                      staticColumns.forEach(c => all[c.key] = true);
+                      supplierColumns.forEach(s => all[`supplier:${s}`] = true);
+                      saveVisibleColumns(all);
+                    }}
+                  >
+                    Вибрати всі
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const minimal: Record<string, boolean> = {};
+                      ['index','full_name','brand','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
+                      supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
+                      saveVisibleColumns(minimal);
+                    }}
+                  >
+                    Необхідні
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {staticColumns.map(c => (
+                  <div key={c.key} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`col-${c.key}`}
+                      checked={visibleColumns[c.key] !== false}
+                      onCheckedChange={(checked: boolean | string) => {
+                        const next = { ...visibleColumns, [c.key]: checked === true };
+                        saveVisibleColumns(next);
+                      }}
+                    />
+                    <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
+                  </div>
+                ))}
+                <div className="pt-2 font-medium">Постачальники</div>
+                {supplierColumns.map(s => {
+                  const k = `supplier:${s}`;
+                  return (
+                    <div key={k} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`col-${k}`}
+                        checked={visibleColumns[k] !== false}
+                        onCheckedChange={(checked: boolean | string) => {
+                          const next = { ...visibleColumns, [k]: checked === true };
+                          saveVisibleColumns(next);
+                        }}
+                      />
+                      <Label htmlFor={`col-${k}`}>{s}</Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+        
         {selectedRowIds.size > 0 && (
           <>
             <span className="text-xs text-blue-700 ml-2">Вибрано: {selectedRowIds.size}</span>
@@ -384,101 +609,148 @@ export default function InverterPriceComparison() {
               <Table style={{userSelect: 'text'}}>
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
-                    <TableHead className="text-center w-8 text-xs">№</TableHead>
-                    <TableHead 
-                      className="min-w-[120px] text-center"
-                      onClick={() => requestSort('full_name')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Назва</span>
-                        {sortConfig?.key === 'full_name' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-xs w-16 truncate text-center">Бренд</TableHead>
-                    <TableHead 
-                      className="hidden sm:table-cell w-12 text-center"
-                      onClick={() => requestSort('power')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Вт</span>
-                        {sortConfig?.key === 'power' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead 
-                      className="hidden sm:table-cell w-8 text-center"
-                      onClick={() => requestSort('string_count')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Стр</span>
-                        {sortConfig?.key === 'string_count' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    {supplierColumns.map((supplier) => (
-                      <TableHead key={supplier} className="text-center w-16">
-                        <span className="text-xs truncate">{supplier.length > 4 ? supplier.substring(0, 4) + '...' : supplier}</span>
+                    {visibleColumns['index'] !== false && (
+                      <TableHead className="text-center w-8 text-xs">№</TableHead>
+                    )}
+                    {visibleColumns['full_name'] !== false && (
+                      <TableHead 
+                        className="min-w-[120px] text-center"
+                        onClick={() => requestSort('full_name')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Назва</span>
+                          {sortConfig?.key === 'full_name' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </TableHead>
+                    )}
+                    {visibleColumns['brand'] !== false && (
+                      <TableHead className="text-xs text-center">Бренд</TableHead>
+                    )}
+                    {visibleColumns['power'] !== false && (
+                      <TableHead 
+                        className="hidden sm:table-cell w-12 text-center"
+                        onClick={() => requestSort('power')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Вати">Вт</span>
+                          {sortConfig?.key === 'power' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
+                    {visibleColumns['string_count'] !== false && (
+                      <TableHead 
+                        className="hidden sm:table-cell w-8 text-center"
+                        onClick={() => requestSort('string_count')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Кількість стрингів">Стр</span>
+                          {sortConfig?.key === 'string_count' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
+                    {supplierColumns.map((supplier) => (
+                      visibleColumns[`supplier:${supplier}`] !== false && (
+                        <TableHead key={supplier} className="text-center">
+                          <span className="text-xs">{supplier}</span>
+                        </TableHead>
+                      )
                     ))}
-                    <TableHead
-                      className="text-center w-12"
-                      onClick={() => requestSort('recommendedPrice')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Рек</span>
-                        {sortConfig?.key === 'recommendedPrice' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
-                    <TableHead className="text-center w-12">
-                      <span className="text-xs">Акт</span>
-                    </TableHead>
-                    <TableHead
-                      className="text-center w-8"
-                      onClick={() => requestSort('totalAvailability')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Нав</span>
-                        {sortConfig?.key === 'totalAvailability' && (
-                          <span className="text-primary">
-                            {sortConfig.direction === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </TableHead>
+                    {visibleColumns['recommended'] !== false && (
+                      <TableHead
+                        className="text-center w-12"
+                        onClick={() => requestSort('recommendedPrice')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Рекомендована">Рек</span>
+                          {sortConfig?.key === 'recommendedPrice' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
+                    {visibleColumns['actual'] !== false && (
+                      <TableHead className="text-center w-12">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-xs" title="Актуальна">Акт</span>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const totalCount = comparisonData?.inverters?.length ?? 0;
+                              const allSelected = totalCount > 0 && selectedRowIds.size === totalCount;
+                              return (
+                                <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+                                  <input
+                                    type="radio"
+                                    checked={allSelected}
+                                    onClick={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
+                                    onChange={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
+                                    className="accent-primary focus:ring-0 w-3 h-3"
+                                  />
+                                  <span className="text-[10px]">Всі</span>
+                                </label>
+                              );
+                            })()}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleBulkPriceUpdate}
+                              disabled={selectedRowIds.size === 0}
+                              className="text-[10px] px-1 py-0.5 h-5"
+                            >
+                              Заст
+                            </Button>
+                          </div>
+                        </div>
+                      </TableHead>
+                    )}
+                    {visibleColumns['totalAvailability'] !== false && (
+                      <TableHead
+                        className="text-center w-8"
+                        onClick={() => requestSort('totalAvailability')}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs" title="Наявність">Наяв</span>
+                          {sortConfig?.key === 'totalAvailability' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -492,13 +764,24 @@ export default function InverterPriceComparison() {
                           : "hover:bg-muted/50 dark:hover:bg-muted/70 opacity-70"
                       }
                     >
-                      <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
-                      <TableCell className="font-medium text-xs min-w-[120px] text-center">{inverter.full_name}</TableCell>
-                      <TableCell className="text-xs w-16 truncate text-center">{inverter.brand}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-center text-xs w-12">{inverter.power}</TableCell>
-                      <TableCell className="hidden sm:table-cell text-center text-xs w-8">{inverter.string_count}</TableCell>
+                      {visibleColumns['index'] !== false && (
+                        <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                      )}
+                      {visibleColumns['full_name'] !== false && (
+                        <TableCell className="font-medium text-xs min-w-[120px] text-center">{inverter.full_name}</TableCell>
+                      )}
+                      {visibleColumns['brand'] !== false && (
+                        <TableCell className="text-xs text-center">{inverter.brand}</TableCell>
+                      )}
+                      {visibleColumns['power'] !== false && (
+                        <TableCell className="hidden sm:table-cell text-center text-xs w-12">{inverter.power}</TableCell>
+                      )}
+                      {visibleColumns['string_count'] !== false && (
+                        <TableCell className="hidden sm:table-cell text-center text-xs w-8">{inverter.string_count}</TableCell>
+                      )}
                       {/* Supplier price columns */}
                       {supplierColumns.map((supplier) => {
+                        if (visibleColumns[`supplier:${supplier}`] === false) return null;
                         const price = getPriceForSupplier(inverter, supplier);
                         const canUpdate = canUpdatePriceOnSite(inverter, supplier);
                         return (
@@ -538,47 +821,68 @@ export default function InverterPriceComparison() {
                       })}
                       
                       {/* Recommended price column */}
-                      <TableCell className="text-center font-medium">
-                        {inverter.supplier_prices.some(sp => sp.recommended_price !== null) ? (
-                          <div className="flex flex-col items-center">
-                            <span className="text-purple-700 dark:text-purple-400 font-medium">
-                              {formatPrice(inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;$
-                            </span>
-                          </div>
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
+                      {visibleColumns['recommended'] !== false && (
+                        <TableCell className="text-center font-medium">
+                          {inverter.supplier_prices.some(sp => sp.recommended_price !== null) ? (
+                            <div className="flex flex-col items-center">
+                              <span className="text-purple-700 dark:text-purple-400 font-medium">
+                                {formatPrice(inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;$
+                              </span>
+                            </div>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                      )}
                       
                       {/* Actual price display column */}
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedRowIds.has(inverter.id)}
-                            onChange={(e) => handleRowSelection(inverter.id, e.target.checked)}
-                            className="w-4 h-4"
-                          />
-                          {selectedRowIds.has(inverter.id) && calculateRecommendedPrice && calculateRecommendedPrice(inverter) && (
-                            <span className="text-blue-700 font-medium text-sm">
-                              {formatPrice(calculateRecommendedPrice(inverter))}&nbsp;$
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
+                      {visibleColumns['actual'] !== false && (
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedRowIds.has(inverter.id)}
+                              onChange={(e) => handleRowSelection(inverter.id, e.target.checked)}
+                              className="w-4 h-4"
+                            />
+                            {selectedRowIds.has(inverter.id) && (
+                              <>
+                                {calculateRecommendedPrice(inverter) ? (
+                                  <span className="text-blue-700 font-medium text-sm">
+                                    {formatPrice(calculateRecommendedPrice(inverter))}&nbsp;$
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Немає ціни</span>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-[10px] px-1 py-0.5 h-5"
+                                  onClick={() => handleApplyRow(inverter)}
+                                  disabled={updatingRowIds.has(inverter.id)}
+                                >
+                                  {updatingRowIds.has(inverter.id) ? '...' : 'Застосувати'}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                       
                       {/* Total availability column */}
-                      <TableCell className="text-center">
-                        {getTotalAvailability(inverter) > 0 ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            {getTotalAvailability(inverter)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                            Немає
-                          </Badge>
-                        )}
-                      </TableCell>
+                      {visibleColumns['totalAvailability'] !== false && (
+                        <TableCell className="text-center">
+                          {getTotalAvailability(inverter) > 0 ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {getTotalAvailability(inverter)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                              Немає
+                            </Badge>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

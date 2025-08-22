@@ -7,6 +7,7 @@ import { getBatteryCities } from '@/services/cities.api';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
 import { Badge } from '@/components/ui/Badge';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import {
   DndContext,
   closestCenter,
@@ -194,162 +195,141 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
           />
         </div>
         
-        {/* Active filters */}
-        <div className="flex  flex-wrap gap-2 items-center">
-          {/* Бренди */}
-          {local.brands && local.brands.length > 0 && (
-            local.brands.map(brand => (
-              <Badge key={brand} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
-                {brand}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Постачальники */}
-          {local.suppliers && local.suppliers.length > 0 && (
-            local.suppliers.map(supplier => (
-              <Badge key={supplier} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-                {supplier}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(s => s !== supplier) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Міста */}
-          {local.cities && local.cities.length > 0 && (
-            local.cities.map(city => (
-              <Badge key={city} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
-                {city}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, cities: p.cities?.filter(c => c !== city) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Регіон */}
-          {local.region && (
-            <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
-              Регіон: {local.region}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, region: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Полярність */}
-          {local.polarity && (
-            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
-              Полярність: {local.polarity}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, polarity: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Електроліт */}
-          {local.electrolyte && local.electrolyte.length > 0 && (
-            local.electrolyte.map(electrolyte => (
-              <Badge key={electrolyte} variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
-                Електроліт: {electrolyte}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, electrolyte: p.electrolyte?.filter(e => e !== electrolyte) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Статус постачальника */}
-          {local.supplier_status && local.supplier_status.length > 0 && (
-            local.supplier_status.map(status => (
-              <Badge key={status} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
-                {status === 'ME' ? 'ми' : status === 'SUPPLIER' ? 'постач.' : 'конкур.'}
-                <X 
-                  className="w-3 h-3 ml-1 cursor-pointer" 
-                  onClick={() => setLocal(p => ({ ...p, supplier_status: p.supplier_status?.filter(s => s !== status) }))}
-                />
-              </Badge>
-            ))
-          )}
-          
-          {/* Обʼєм */}
-          {(local.volume_min || local.volume_max) && (
-            <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
-              Обʼєм: {local.volume_min || '∞'}-{local.volume_max || '∞'} Ah
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, volume_min: undefined, volume_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Пускові ампери */}
-          {(local.c_amps_min || local.c_amps_max) && (
-            <Badge variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
-              Пуск А: {local.c_amps_min || '∞'}-{local.c_amps_max || '∞'} A
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, c_amps_min: undefined, c_amps_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Ціна */}
-          {(local.price_min || local.price_max) && (
-            <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
-              Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} грн
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Націнка */}
-          {local.markup && local.markup !== 15 && (
-            <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
-              Націнка: {local.markup}%
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, markup: 15 }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Дати */}
-          {(local.date_min || local.date_max) && (
-            <Badge variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
-              Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
-              <X 
-                className="w-3 h-3 ml-1 cursor-pointer" 
-                onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))}
-              />
-            </Badge>
-          )}
-          
-          {/* Reset button - показувати тільки якщо є активні фільтри */}
-          {(local.brands?.length || local.suppliers?.length || local.cities?.length || local.region || 
-            local.polarity || local.electrolyte?.length || local.supplier_status?.length ||
-            local.volume_min || local.volume_max || local.c_amps_min || local.c_amps_max ||
-            local.price_min || local.price_max || (local.markup && local.markup !== 15) ||
-            local.date_min || local.date_max) && (
-            <Button variant="outline" onClick={onReset} size="sm">
-              <X className="w-4 h-4 mr-2" />
-              Скинути
-            </Button>
-          )}
-        </div>
+        {/* Active filters with 2-line clamp and overflow popover */}
+        <ActiveBadges
+          badges={(() => {
+            const items: React.ReactNode[] = [];
+            // Бренди
+            if (local.brands?.length) {
+              local.brands.forEach((brand) => {
+                items.push(
+                  <Badge key={`brand-${brand}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                    {brand}
+                    <X
+                      className="w-3 h-3 ml-1 cursor-pointer"
+                      onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))}
+                    />
+                  </Badge>
+                );
+              });
+            }
+            // Постачальники
+            if (local.suppliers?.length) {
+              local.suppliers.forEach((supplier) => {
+                items.push(
+                  <Badge key={`supplier-${supplier}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                    {supplier}
+                    <X
+                      className="w-3 h-3 ml-1 cursor-pointer"
+                      onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(s => s !== supplier) }))}
+                    />
+                  </Badge>
+                );
+              });
+            }
+            // Міста
+            if (local.cities?.length) {
+              local.cities.forEach((city) => {
+                items.push(
+                  <Badge key={`city-${city}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                    {city}
+                    <X
+                      className="w-3 h-3 ml-1 cursor-pointer"
+                      onClick={() => setLocal(p => ({ ...p, cities: p.cities?.filter(c => c !== city) }))}
+                    />
+                  </Badge>
+                );
+              });
+            }
+            // Регіон
+            if (local.region) {
+              items.push(
+                <Badge key={`region`} variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                  Регіон: {local.region}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, region: undefined }))} />
+                </Badge>
+              );
+            }
+            // Полярність
+            if (local.polarity) {
+              items.push(
+                <Badge key={`polarity`} variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                  Полярність: {local.polarity}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, polarity: undefined }))} />
+                </Badge>
+              );
+            }
+            // Електроліт
+            if (local.electrolyte?.length) {
+              local.electrolyte.forEach((el) => {
+                items.push(
+                  <Badge key={`electrolyte-${el}`} variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+                    Електроліт: {el}
+                    <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, electrolyte: p.electrolyte?.filter(e => e !== el) }))} />
+                  </Badge>
+                );
+              });
+            }
+            // Статус постачальника
+            if (local.supplier_status?.length) {
+              local.supplier_status.forEach((status) => {
+                items.push(
+                  <Badge key={`status-${status}`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                    {status === 'ME' ? 'ми' : status === 'SUPPLIER' ? 'постач.' : 'конкур.'}
+                    <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, supplier_status: p.supplier_status?.filter(s => s !== status) }))} />
+                  </Badge>
+                );
+              });
+            }
+            // Обʼєм
+            if (local.volume_min || local.volume_max) {
+              items.push(
+                <Badge key={`volume`} variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                  Обʼєм: {local.volume_min || '∞'}-{local.volume_max || '∞'} Ah
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, volume_min: undefined, volume_max: undefined }))} />
+                </Badge>
+              );
+            }
+            // Пускові ампери
+            if (local.c_amps_min || local.c_amps_max) {
+              items.push(
+                <Badge key={`c-amps`} variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
+                  Пуск А: {local.c_amps_min || '∞'}-{local.c_amps_max || '∞'} A
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, c_amps_min: undefined, c_amps_max: undefined }))} />
+                </Badge>
+              );
+            }
+            // Ціна
+            if (local.price_min || local.price_max) {
+              items.push(
+                <Badge key={`price`} variant="secondary" className="bg-red-100 text-red-800 border-red-200">
+                  Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} грн
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))} />
+                </Badge>
+              );
+            }
+            // Націнка
+            if (local.markup && local.markup !== 15) {
+              items.push(
+                <Badge key={`markup`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                  Націнка: {local.markup}%
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, markup: 15 }))} />
+                </Badge>
+              );
+            }
+            // Дати
+            if (local.date_min || local.date_max) {
+              items.push(
+                <Badge key={`dates`} variant="secondary" className="bg-gray-100 text-gray-800 border-gray-200">
+                  Дата: {local.date_min || '∞'} - {local.date_max || '∞'}
+                  <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))} />
+                </Badge>
+              );
+            }
+            return items;
+          })()}
+          onReset={onReset}
+        />
       </div>
     </div>
   );
@@ -722,7 +702,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
           {/* Filter Grid with drag and drop */}
-          <div className="grid gap-5 pl-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             {filterOrder.map((filterId) => {
               const component = filterComponents[filterId];
               if (!component) return null;
@@ -738,5 +718,105 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
       </DndContext>
     </div>
     </>
+  );
+};
+
+// Helper component: shows badges clamped to 2 rows and a popover with all when overflow
+const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }> = ({ badges, onReset }) => {
+  const displayRef = useRef<HTMLDivElement | null>(null);
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(badges.length);
+
+  // Observe width changes
+  useEffect(() => {
+    if (!displayRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        setContainerWidth(Math.round(w));
+      }
+    });
+    ro.observe(displayRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Recompute visible count on size or badges change
+  useEffect(() => {
+    if (!measureRef.current || !displayRef.current) return;
+    const wrap = measureRef.current;
+    const children = Array.from(wrap.children) as HTMLElement[];
+    if (children.length === 0) { setVisibleCount(0); return; }
+    // Determine top offsets to identify rows
+    const tops: number[] = [];
+    children.forEach(el => tops.push(el.offsetTop));
+    const uniqueTops = Array.from(new Set(tops)).sort((a, b) => a - b);
+    const secondRowTop = uniqueTops[1];
+    if (secondRowTop === undefined) {
+      setVisibleCount(children.length);
+    } else {
+      // Count items whose top is <= second row top
+      let count = 0;
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].offsetTop <= secondRowTop) count++;
+      }
+      setVisibleCount(count);
+    }
+  }, [containerWidth, badges]);
+
+  const overflow = Math.max(0, badges.length - visibleCount);
+
+  const hasAny = badges.length > 0;
+  return (
+    <div className="flex flex-col gap-2 min-w-0">
+      <div ref={displayRef} className="flex flex-wrap gap-2 items-center">
+        {/* Badges area (2 rows) with gradient inside, full width to push controls to 3rd row */}
+        <div className="relative w-full">
+          <div className="flex flex-wrap gap-2 items-center">
+            {badges.slice(0, visibleCount)}
+          </div>
+          {/* Bottom fade to hint more content on overflow (only under the badges area) */}
+          {overflow > 0 && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900 z-0"
+            />
+          )}
+        </div>
+        {overflow > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="xs" variant="outline" className="h-6 px-2 text-xs">Показати всі (+{overflow})</Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[320px] max-w-[90vw]">
+              <div className="flex flex-wrap gap-2 items-center max-h-[240px] overflow-auto">
+                {badges}
+              </div>
+              {hasAny && (
+                <div className="mt-3">
+                  <Button variant="outline" size="xs" onClick={onReset}>
+                    <X className="w-4 h-4 mr-2" /> Скинути всі
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
+        {/* Reset button always visible */}
+        {hasAny && (
+          <Button variant="outline" onClick={onReset} size="xs">
+            <X className="w-4 h-4 mr-2" /> Скинути
+          </Button>
+        )}
+      </div>
+      {/* Hidden measuring container with same width */}
+      <div
+        ref={measureRef}
+        style={{ position: 'absolute', left: -99999, top: 0, width: containerWidth }}
+        className="flex flex-wrap gap-2"
+      >
+        {badges}
+      </div>
+    </div>
   );
 };

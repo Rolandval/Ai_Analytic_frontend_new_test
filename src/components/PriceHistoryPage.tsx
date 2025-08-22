@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface TableColumn<T> {
   key: keyof T | string;
   header: string;
+  headerTitle?: string; // Текст підказки (title) для заголовка, якщо відрізняється від header
   render?: (row: T) => React.ReactNode;
   sortable?: boolean; // Вказує, чи можна сортувати за цією колонкою
   sortKey?: string; // Ключ для сортування, якщо відрізняється від key
@@ -303,14 +304,16 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
       
       {/* Top search and active filters section */}
       {props.topSearchComponent && (
-        <div className="mb-4">
+        <div className="mb-2">
           {props.topSearchComponent}
         </div>
       )}
       
       {/* Top controls */}
-      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-        {filterComponent}
+      <div className="w-full mb-2 flex flex-col gap-2">
+        <div className="flex-1 min-w-0">
+          {filterComponent}
+        </div>
         <div className="flex items-center space-x-2">
           <Button 
             variant="outline" 
@@ -320,7 +323,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
               // Копіювання даних таблиці
               const tableData = sortedRows
                 .map(row => {
-                  let rowData = {};
+                  const rowData: Record<string, any> = {};
                   columns.forEach(col => {
                     // Перевірка чи колонка видима
                     if (visibleColumns[col.key as string] !== false) {
@@ -398,7 +401,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        const newVisibility = {};
+                        const newVisibility: Record<string, boolean> = {};
                         columns.forEach(column => {
                           const columnKey = column.key as string;
                           newVisibility[columnKey] = true;
@@ -590,14 +593,12 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
         <table className="w-full table-auto" style={{userSelect: 'text'}}>
           <thead style={{userSelect: 'none'}}>
             <tr className="bg-muted/50">
-              <th className="py-2 px-4 text-center font-medium text-sm w-16">№</th>
+              <th className="py-2 px-4 text-center font-medium text-sm w-16" title="№">№</th>
               {columns.map(column => {
                 if (visibleColumns[column.key as string] === false) {
                   return null;
                 }
                 
-                // Determine alignment based on column type
-                const isTextColumn = ['full_name', 'brand', 'supplier', 'city', 'contact', 'phone', 'telegram', 'firmware'].includes(column.key as string);
                 const headerAlignment = 'text-center';
                 const justifyContent = 'justify-center';
 
@@ -605,6 +606,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   <th
                     key={column.key as string}
                     className={`py-2 px-4 ${headerAlignment} font-medium text-sm`}
+                    title={column.headerTitle || column.header}
                   >
                     <div className={`flex items-center gap-1 ${justifyContent}`}>
                       <button
@@ -620,7 +622,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   </th>
                 );
               })}
-              <th className="py-2 px-4 text-center font-medium text-sm">Дії</th>
+              <th className="py-2 px-4 text-center font-medium text-sm" title="Дії">Дії</th>
             </tr>
           </thead>
           <tbody>
