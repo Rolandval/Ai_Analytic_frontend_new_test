@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd ~/projects/Ai_Analytic_frontend
+            cd ~/home/Ai_Analytic_frontend
             git pull origin main
             docker compose down
             docker compose up --build -d
