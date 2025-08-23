@@ -86,7 +86,9 @@ export default function BatteryPriceComparison() {
   const { toast } = useToast();
   
   // Стан для актуальних цін
-  const markup = 15; // Фіксована націнка 15%
+  // Націнка по рядках (за замовчуванням 15%)
+  const DEFAULT_MARKUP = 15;
+  const [rowMarkup, setRowMarkup] = useState<Record<number, number>>({});
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [updatingRowIds, setUpdatingRowIds] = useState<Set<number>>(new Set());
   const [updatePriceModalOpen, setUpdatePriceModalOpen] = useState(false);
@@ -104,25 +106,59 @@ export default function BatteryPriceComparison() {
   // Прапор для відстеження, чи були застосовані фільтри користувачем
   const [filtersApplied, setFiltersApplied] = useState(false);
 
+  // Використовуємо ефективні значення пагінації з відповіді сервера, якщо доступні
+  const effectivePage = comparisonData?.page ?? page;
+  const effectivePageSize = comparisonData?.page_size ?? pageSize;
+
+  // Debounce для змін фільтрів (коротший, щоб UI реагував швидше)
   useEffect(() => {
-    // Виконуємо запит тільки якщо фільтри були застосовані
     if (filtersApplied) {
       const timeoutId = setTimeout(() => {
         fetchComparisonData();
-      }, 500); // Збільшуємо debounce до 500ms для зменшення мерехтіння
-      
+      }, 250);
       return () => clearTimeout(timeoutId);
     }
   }, [filters, filtersApplied]);
 
+  // Миттєве завантаження при зміні сторінки/розміру сторінки
+  useEffect(() => {
+    if (filtersApplied) {
+      fetchComparisonData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
+
+  // Ініціалізуємо націнку 15% для кожного товару при завантаженні даних
+  useEffect(() => {
+    if (comparisonData?.batteries) {
+      setRowMarkup(prev => {
+        const next = { ...prev };
+        for (const b of comparisonData.batteries) {
+          if (next[b.id] === undefined) next[b.id] = DEFAULT_MARKUP;
+        }
+        return next;
+      });
+    }
+  }, [comparisonData]);
+
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
     if (comparisonData?.batteries) {
-      const data = comparisonData.batteries.map((battery, idx) => ({
+      // De-duplicate by id to avoid duplicate rows if backend or state merges return repeated items
+      const uniqueBatteries = Array.from(
+        new Map(comparisonData.batteries.map(b => [b.id, b])).values()
+      );
+      const data = uniqueBatteries.map((battery, idx) => ({
         ...battery,
         totalAvailability: getTotalAvailability(battery),
-        // Для сортування за рекомендованою ціною
-        recommendedPrice: calculateRecommendedPrice(battery),
+        // Для сортування за рекомендованою ціною: БЕРЕМО ЯВНУ ЦІНУ ПОСТАЧАЛЬНИКА (як на панелях)
+        recommendedPrice: (() => {
+          const raw = battery.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price as unknown;
+          const n = raw == null ? null : Number(raw);
+          return n != null && Number.isFinite(n) ? n : null;
+        })(),
+        // Поточна націнка рядка (для можливості сортування)
+        markup: rowMarkup[battery.id] ?? DEFAULT_MARKUP,
         // Для сортування за цінами постачальників: supplierPrices.[supplierName]
         supplierPrices: Object.fromEntries(
           battery.supplier_prices.map(sp => [sp.supplier_name, sp.price])
@@ -132,7 +168,7 @@ export default function BatteryPriceComparison() {
       }));
       setProcessedData(data);
     }
-  }, [comparisonData]);
+  }, [comparisonData, rowMarkup]);
 
   // Keys for localStorage (namespaced per page)
   const LS_COLUMNS_KEY = 'batteryComparison.columnVisibility';
@@ -149,6 +185,7 @@ export default function BatteryPriceComparison() {
       { key: 'polarity', header: 'Пол' },
       { key: 'electrolyte', header: 'Ел' },
       { key: 'recommended', header: 'Рек' },
+      { key: 'markup', header: 'Нац' },
       { key: 'actual', header: 'Акт' },
       { key: 'totalAvailability', header: 'Наяв' },
     ]
@@ -207,6 +244,69 @@ export default function BatteryPriceComparison() {
     }
   };
 
+  // Handle bulk price update (per selected rows) — aligned with solar panels logic
+  const handleBulkPriceUpdate = async () => {
+    if (selectedRowIds.size === 0) return;
+    const selectedBatteries = processedData.filter(b => selectedRowIds.has(b.id));
+    const updates = selectedBatteries.map(async (battery) => {
+      const priceToApply = calculateRecommendedPrice(battery);
+      if (!priceToApply) return Promise.resolve('skip');
+      const siteEntry = battery.supplier_prices.find(sp => sp.site_id);
+      if (!siteEntry?.site_id) return Promise.resolve('skip');
+      const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
+      try {
+        await updateBatterySitePrice(payload);
+        return 'ok';
+      } catch (e) {
+        console.error('Bulk update error (battery)', battery.id, e);
+        return 'error';
+      }
+    });
+    const results = await Promise.allSettled(updates);
+    const okCount = results.filter(r => r.status === 'fulfilled').length;
+    // eslint-disable-next-line no-alert
+    alert(`Оновлено цін: ${okCount} / ${selectedBatteries.length}`);
+    setSelectedRowIds(new Set());
+    await fetchComparisonData();
+  };
+
+  // Build export of visible headers and rows (tab-separated)
+  const buildExport = () => {
+    if (!comparisonData || !comparisonData.batteries || comparisonData.batteries.length === 0) return '';
+    const headers: string[] = [];
+    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
+    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+
+    const rows = sortedBatteries.map((battery, idx) => {
+      const cells: string[] = [];
+      if (visibleColumns['index'] !== false) cells.push(String(idx + 1));
+      if (visibleColumns['full_name'] !== false) cells.push(battery.full_name ?? '');
+      if (visibleColumns['brand'] !== false) cells.push(battery.brand ?? '');
+      if (visibleColumns['volume'] !== false) cells.push(battery.volume?.toString() ?? '');
+      if (visibleColumns['c_amps'] !== false) cells.push(battery.c_amps?.toString() ?? '');
+      if (visibleColumns['region'] !== false) cells.push(battery.region ?? '');
+      if (visibleColumns['polarity'] !== false) cells.push(battery.polarity ?? '');
+      if (visibleColumns['electrolyte'] !== false) cells.push(battery.electrolyte ?? '');
+      supplierColumns.forEach(s => {
+        if (visibleColumns[`supplier:${s}`] === false) return;
+        const price = getPriceForSupplier(battery, s);
+        cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
+      });
+      if (visibleColumns['recommended'] !== false) {
+        const r = battery.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+        cells.push(r !== null ? `${formatPrice(r)}₴` : '-');
+      }
+      if (visibleColumns['actual'] !== false) {
+        const v = calculateRecommendedPrice(battery);
+        cells.push(v ? `${formatPrice(v)}₴` : '-');
+      }
+      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(battery)));
+      return cells.join('\t');
+    });
+
+    return `${headers.join('\t')}\n${rows.join('\n')}`;
+  };
+
   // Використовуємо хук для сортування
   const { items: sortedBatteries, requestSort, sortConfig } = useSortableTable<BatteryWithSupplierPrices>(
     processedData,
@@ -242,6 +342,13 @@ export default function BatteryPriceComparison() {
       }).unwrap();
       
       setComparisonData(result);
+      // Синхронізуємо локальний стан пагінації з відповіддю сервера
+      if (typeof result.page === 'number' && result.page !== page) {
+        setPage(result.page);
+      }
+      if (typeof result.page_size === 'number' && result.page_size !== pageSize) {
+        setPageSize(result.page_size);
+      }
       
       // Extract unique supplier names to use as columns
       if (result.batteries.length > 0) {
@@ -318,48 +425,21 @@ export default function BatteryPriceComparison() {
 
   // Select all rows currently in the dataset
   const handleSelectAll = () => {
-    if (!comparisonData?.batteries) return;
-    const allIds = new Set(comparisonData.batteries.map(b => b.id));
+    if (!processedData || processedData.length === 0) return;
+    const allIds = new Set(processedData.map(b => b.id));
     setSelectedRowIds(allIds);
   };
 
-  // Bulk apply: update site prices for selected rows with calculated recommended price
-  const handleBulkPriceUpdate = async () => {
-    if (!comparisonData?.batteries || selectedRowIds.size === 0) return;
-
-    const selectedBatteries = comparisonData.batteries.filter(b => selectedRowIds.has(b.id));
-    const updates = selectedBatteries.map(async (battery) => {
-      const priceToApply = calculateRecommendedPrice(battery);
-      if (!priceToApply) return Promise.resolve('skip');
-      // Find any supplier entry that has a site_id to target update
-      const siteEntry = battery.supplier_prices.find(sp => sp.site_id);
-      if (!siteEntry?.site_id) return Promise.resolve('skip');
-      const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
-      try {
-        await updateBatterySitePrice(payload);
-        return 'ok';
-      } catch (e) {
-        console.error('Bulk update error (battery)', battery.id, e);
-        return 'error';
-      }
-    });
-
-    const results = await Promise.allSettled(updates);
-    const okCount = results.filter(r => r.status === 'fulfilled').length;
-    // Provide lightweight feedback
-    // eslint-disable-next-line no-alert
-    alert(`Оновлено цін: ${okCount} / ${selectedBatteries.length}`);
-    setSelectedRowIds(new Set());
-    fetchComparisonData();
-  };
-
-  // Calculate recommended price with markup
+  // Рекомендована ціна (як у сонячних панелях):
+  // мінімальна додатна ціна серед постачальників + націнка рядка
   const calculateRecommendedPrice = (battery: BatteryWithSupplierPrices) => {
-    const recommendedPrice = battery.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price;
-    if (recommendedPrice) {
-      return Math.round(recommendedPrice * (1 + markup / 100));
-    }
-    return null;
+    const m = rowMarkup[battery.id] ?? DEFAULT_MARKUP;
+    const prices = battery.supplier_prices
+      .map(sp => sp.price)
+      .filter((p): p is number => p !== null && p !== undefined && p > 0);
+    if (prices.length === 0) return null;
+    const minPrice = Math.min(...prices);
+    return Math.round(minPrice * (1 + m / 100));
   };
 
   // Determine if any supplier has this battery available
@@ -397,7 +477,7 @@ export default function BatteryPriceComparison() {
         price: supplierPrice.price,
         promo_price: supplierPrice.promo_price || null,
         availability: supplierPrice.availability !== undefined ? String(supplierPrice.availability) : null,
-        productName: `${battery.full_name} (${supplierName})`
+        productName: `${battery.full_name}${battery.region ? ` (${battery.region})` : ''} — ${supplierName}`
       });
       setUpdatePriceModalOpen(true);
     }
@@ -532,18 +612,7 @@ export default function BatteryPriceComparison() {
           </PopoverContent>
         </Popover>
 
-        {selectedRowIds.size > 0 && (
-          <>
-            <span className="text-xs text-blue-700 ml-2">Вибрано: {selectedRowIds.size}</span>
-            <Button 
-              onClick={handleBulkPriceUpdate}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-xs px-2 py-1 h-7"
-            >
-              Застосувати всі обрані
-            </Button>
-          </>
-        )}
+        {/* Removed top-level bulk apply controls; actions moved to 'Акт' column header */}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -575,8 +644,8 @@ export default function BatteryPriceComparison() {
                   {visibleColumns['full_name'] !== false && (
                     <TableHead 
                       className="min-w-[140px] text-center cursor-pointer select-none"
-                      onClick={() => requestSort('full_name')}
-                      title="Назва"
+                      onClick={(e) => requestSort('full_name', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-[11px]">Назва</span>
@@ -594,9 +663,9 @@ export default function BatteryPriceComparison() {
                   )}
                   {visibleColumns['brand'] !== false && (
                     <TableHead 
-                      className="text-center w-16"
-                      onClick={() => requestSort('brand')}
-                      title="Бренд"
+                      className="text-center w-16 cursor-pointer select-none"
+                      onClick={(e) => requestSort('brand', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">Бренд</span>
@@ -614,9 +683,9 @@ export default function BatteryPriceComparison() {
                   )}
                   {visibleColumns['volume'] !== false && (
                     <TableHead 
-                      className="hidden sm:table-cell w-8 text-center"
-                      onClick={() => requestSort('volume')}
-                      title="Ah"
+                      className="hidden sm:table-cell w-8 text-center cursor-pointer select-none"
+                      onClick={(e) => requestSort('volume', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">Ah</span>
@@ -634,9 +703,9 @@ export default function BatteryPriceComparison() {
                   )}
                   {visibleColumns['c_amps'] !== false && (
                     <TableHead 
-                      className="hidden sm:table-cell w-8 text-center"
-                      onClick={() => requestSort('c_amps')}
-                      title="Пуск A"
+                      className="hidden sm:table-cell w-8 text-center cursor-pointer select-none"
+                      onClick={(e) => requestSort('c_amps', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">A</span>
@@ -654,9 +723,9 @@ export default function BatteryPriceComparison() {
                   )}
                   {visibleColumns['region'] !== false && (
                     <TableHead 
-                      className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
-                      title="Тип Корпусу"
-                      onClick={() => requestSort('region')}
+                      className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none"
+                      onClick={(e) => requestSort('region', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">Рег</span>
@@ -675,8 +744,8 @@ export default function BatteryPriceComparison() {
                   {visibleColumns['polarity'] !== false && (
                     <TableHead 
                       className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
-                      title="Полярність"
-                      onClick={() => requestSort('polarity')}
+                      onClick={(e) => requestSort('polarity', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">Пол</span>
@@ -695,9 +764,9 @@ export default function BatteryPriceComparison() {
                   {visibleColumns['electrolyte'] !== false && (
                     <TableHead 
                       className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
-                      title="Електроліт"
-                      onClick={() => requestSort('electrolyte')}
-                    > 
+                      onClick={(e) => requestSort('electrolyte', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
+                    >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">Ел</span>
                         {sortConfig?.key === 'electrolyte' && (
@@ -713,37 +782,37 @@ export default function BatteryPriceComparison() {
                     </TableHead>
                   )}
                   {/* Dynamic supplier headers */}
-                  {supplierColumns.map((supplier) => (
-                    visibleColumns[`supplier:${supplier}`] === false ? null : (
-                      <TableHead
-                        key={`supplier-head-${supplier}`}
-                        className="text-center w-24 cursor-pointer select-none"
-                        onClick={() => requestSort(`supplierPrices.${supplier}`)}
-                        title={supplier}
-                      >
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs truncate max-w-[88px]">{supplier}</span>
-                          {sortConfig?.key === `supplierPrices.${supplier}` && (
-                            <span className="text-primary">
-                              {sortConfig.direction === 'asc' ? (
-                                <ChevronUp className="h-3 w-3" />
-                              ) : (
-                                <ChevronDown className="h-3 w-3" />
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      </TableHead>
-                    )
-                  ))}
-                  {visibleColumns['recommended'] !== false && (
+                  {supplierColumns.map((supplier, idx) => (
+                  visibleColumns[`supplier:${supplier}`] !== false && (
                     <TableHead
-                      className="text-center w-12"
-                      onClick={() => requestSort('recommendedPrice')}
-                      title="Рекомендована ціна"
+                      key={`sup-head-${idx}-${supplier}`}
+                      className="text-center cursor-pointer select-none"
+                      onClick={(e) => requestSort(`supplierPrices.${supplier}`, (e as any).shiftKey)}
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs">Рек</span>
+                        <span className="text-xs truncate max-w-[88px]">{supplier}</span>
+                        {sortConfig?.key === `supplierPrices.${supplier}` && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                  )
+                ))}
+                  {visibleColumns['recommended'] !== false && (
+                    <TableHead
+                      className="text-center w-12 cursor-pointer select-none"
+                      onClick={(e) => requestSort('recommendedPrice', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-[11px]">Рек</span>
                         {sortConfig?.key === 'recommendedPrice' && (
                           <span className="text-primary">
                             {sortConfig.direction === 'asc' ? (
@@ -756,14 +825,33 @@ export default function BatteryPriceComparison() {
                       </div>
                     </TableHead>
                   )}
+                  {visibleColumns['markup'] !== false && (
+                    <TableHead
+                      className="text-center w-12 cursor-pointer select-none"
+                      onClick={(e) => requestSort('markup', (e as any).shiftKey)}
+                      title="Націнка, % (Shift+Клік — додати до сортування)"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-xs">Націнка</span>
+                        {sortConfig?.key === 'markup' && (
+                          <span className="text-primary">
+                            {sortConfig.direction === 'asc' ? (
+                              <ChevronUp className="h-3 w-3" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3" />
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
+                  )}
                   {visibleColumns['actual'] !== false && (
-                    <TableHead className="text-center w-12" title="Актуалізація">
+                    <TableHead className="text-center w-12 select-none">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-xs">Акт</span>
+                        <span className="text-[11px]" title="Актуальна">Акт</span>
                         <div className="flex items-center gap-2">
-                          {/* Unified radio toggle: checked = all selected; click toggles between select all / clear all */}
                           {(() => {
-                            const totalCount = comparisonData?.batteries?.length ?? 0;
+                            const totalCount = processedData?.length ?? 0;
                             const allSelected = totalCount > 0 && selectedRowIds.size === totalCount;
                             return (
                               <label className="inline-flex items-center gap-1 cursor-pointer select-none">
@@ -793,9 +881,9 @@ export default function BatteryPriceComparison() {
                   )}
                   {visibleColumns['totalAvailability'] !== false && (
                     <TableHead
-                      className="text-center w-8"
-                      onClick={() => requestSort('totalAvailability')}
-                      title="Наявність"
+                      className="text-center w-8 cursor-pointer select-none"
+                      onClick={(e) => requestSort('totalAvailability', (e as any).shiftKey)} 
+                      title="Shift+Клік — додати до сортування"
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="text-xs">Наяв</span>
@@ -824,14 +912,14 @@ export default function BatteryPriceComparison() {
                       }
                     >
                       {visibleColumns['index'] !== false && (
-                        <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                        <TableCell className="text-center w-8 text-xs">{index + 1}</TableCell>
                       )}
                       {visibleColumns['full_name'] !== false && (
                         <TableCell
                           className="font-medium min-w-[140px] text-center truncate"
-                          title={battery.full_name}
+                          title={`${battery.full_name}${battery.region ? ` (${battery.region})` : ''}`}
                         >
-                          {battery.full_name}
+                          {battery.full_name}{battery.region ? ` (${battery.region})` : ''}
                         </TableCell>
                       )}
                       {visibleColumns['brand'] !== false && (
@@ -905,6 +993,23 @@ export default function BatteryPriceComparison() {
                           ) : (
                             '-'
                           )}
+                        </TableCell>
+                      )}
+                      {visibleColumns['markup'] !== false && (
+                        <TableCell className="text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            max={500}
+                            step={1}
+                            value={rowMarkup[battery.id] ?? DEFAULT_MARKUP}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setRowMarkup(prev => ({ ...prev, [battery.id]: isNaN(val) ? DEFAULT_MARKUP : val }));
+                            }}
+                            className="w-14 h-6 text-xs text-center border rounded px-1"
+                            title="Націнка, %"
+                          />
                         </TableCell>
                       )}
                       
@@ -989,11 +1094,11 @@ export default function BatteryPriceComparison() {
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-600">
-                  {page} / {Math.max(1, Math.ceil(comparisonData.total / pageSize))}
+                  {effectivePage} / {Math.max(1, Math.ceil(comparisonData.total / effectivePageSize))}
                 </span>
                 <div className="space-x-2">
-                  <Button disabled={page === 1} onClick={() => handlePageChange(page - 1)} size="sm">Попередня</Button>
-                  <Button disabled={page === Math.ceil(comparisonData.total / pageSize) || comparisonData.total === 0} onClick={() => handlePageChange(page + 1)} size="sm">Наступна</Button>
+                  <Button disabled={effectivePage === 1} onClick={() => handlePageChange(page - 1)} size="sm">Попередня</Button>
+                  <Button disabled={effectivePage === Math.ceil(comparisonData.total / effectivePageSize) || comparisonData.total === 0} onClick={() => handlePageChange(page + 1)} size="sm">Наступна</Button>
                 </div>
               </div>
             </div>

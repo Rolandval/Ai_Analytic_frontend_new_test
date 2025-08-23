@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 // Типи для сортування
 export type SortDirection = 'asc' | 'desc';
@@ -10,58 +10,90 @@ export interface SortConfig {
 
 // Універсальна функція для сортування будь-якого масиву за ключем
 export function useSortableTable<T>(items: T[], defaultSortConfig: SortConfig | null = null) {
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(defaultSortConfig);
-  
-  // Функція для виконання сортування
-  const sortedItems = [...items].sort((a: any, b: any) => {
-    if (!sortConfig) return 0;
-    
-    // Отримуємо значення за вказаним ключем
-    let aValue = a[sortConfig.key];
-    let bValue = b[sortConfig.key];
-    
-    // Обробка вкладених властивостей через крапку (наприклад "supplier_prices.length")
-    if (sortConfig.key.includes('.')) {
-      const keys = sortConfig.key.split('.');
-      aValue = keys.reduce((obj, key) => obj?.[key], a);
-      bValue = keys.reduce((obj, key) => obj?.[key], b);
+  // Підтримуємо як одиночне сортування (зворотна сумісність), так і стек сортувань
+  const [sortStack, setSortStack] = useState<SortConfig[]>(
+    defaultSortConfig ? [defaultSortConfig] : []
+  );
+
+  const getValueByKey = (obj: any, key: string) => {
+    if (!key) return undefined;
+    if (key.includes('.')) {
+      const keys = key.split('.');
+      return keys.reduce((acc, k) => acc?.[k], obj);
     }
-    
-    // Обробка null або undefined значень
+    return obj?.[key];
+  };
+
+  const compareBy = (a: any, b: any, cfg: SortConfig) => {
+    let aValue = getValueByKey(a, cfg.key);
+    let bValue = getValueByKey(b, cfg.key);
+
+    // null/undefined в кінець
     if (aValue === null || aValue === undefined) return 1;
     if (bValue === null || bValue === undefined) return -1;
-    
-    // Сортування чисел
+
     if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      return cfg.direction === 'asc' ? aValue - bValue : bValue - aValue;
     }
-    
-    // Сортування рядків
     if (typeof aValue === 'string' && typeof bValue === 'string') {
-      // Обробка українських символів
-      return sortConfig.direction === 'asc' 
-        ? aValue.localeCompare(bValue, 'uk-UA') 
+      return cfg.direction === 'asc'
+        ? aValue.localeCompare(bValue, 'uk-UA')
         : bValue.localeCompare(aValue, 'uk-UA');
     }
-    
-    // За замовчуванням
     return 0;
-  });
-  
-  // Функція для зміни конфігурації сортування
-  const requestSort = (key: string) => {
-    let direction: SortDirection = 'asc';
-    
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    
-    setSortConfig({ key, direction });
   };
-  
-  return { 
-    items: sortedItems, 
-    requestSort, 
-    sortConfig 
+
+  const sortedItems = useMemo(() => {
+    if (!sortStack.length) return [...items];
+    const arr = [...items];
+    arr.sort((a: any, b: any) => {
+      for (const cfg of sortStack) {
+        const res = compareBy(a, b, cfg);
+        if (res !== 0) return res;
+      }
+      return 0;
+    });
+    return arr;
+  }, [items, sortStack]);
+
+  // API сумісний: requestSort(key) — скидає стек до одного ключа
+  // requestSort(key, true) — додає/оновлює ключ у стеку (Shift+Click)
+  const requestSort = (key: string, additive?: boolean) => {
+    setSortStack(prev => {
+      // Якщо не additive — починаємо нове сортування з одним ключем
+      if (!additive) {
+        // Якщо ключ той самий — просто перемикаємо напрямок
+        if (prev.length === 1 && prev[0].key === key) {
+          const nextDir: SortDirection = prev[0].direction === 'asc' ? 'desc' : 'asc';
+          return [{ key, direction: nextDir }];
+        }
+        return [{ key, direction: 'asc' }];
+      }
+
+      // additive: оновлюємо або додаємо ключ у кінець стеку
+      const existingIndex = prev.findIndex(c => c.key === key);
+      if (existingIndex !== -1) {
+        // Перемикаємо напрямок для існуючого ключа, зберігаючи його позицію
+        const next = [...prev];
+        const current = next[existingIndex];
+        next[existingIndex] = {
+          key,
+          direction: current.direction === 'asc' ? 'desc' : 'asc',
+        };
+        return next;
+      }
+      // Додаємо новий ключ з напрямком asc у кінець стеку (менший пріоритет ніж попередні)
+      return [...prev, { key, direction: 'asc' }];
+    });
+  };
+
+  // Для зворотної сумісності залишаємо sortConfig як "поточний" (останній) елемент стеку
+  const sortConfig = sortStack.length ? sortStack[sortStack.length - 1] : null;
+
+  return {
+    items: sortedItems,
+    requestSort,
+    sortConfig,
+    sortStack,
   };
 }

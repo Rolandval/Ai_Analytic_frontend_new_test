@@ -101,23 +101,42 @@ export default function SolarPanelPriceComparison() {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [updatingRowIds, setUpdatingRowIds] = useState<Set<number>>(new Set());
 
+  // Use effective pagination values from server when available to keep numbering consistent during transitions
+  const effectivePage = comparisonData?.page ?? page;
+  const effectivePageSize = comparisonData?.page_size ?? pageSize;
+
+  // Debounced fetch for filter changes (коротший debounce для кращої чутливості)
   useEffect(() => {
-    // Виконуємо запит тільки якщо фільтри були застосовані
     if (filtersApplied) {
       const timeoutId = setTimeout(() => {
         fetchComparisonData();
-      }, 500); // Збільшуємо debounce до 500ms для зменшення мерехтіння
-      
+      }, 250);
       return () => clearTimeout(timeoutId);
     }
   }, [filters, filtersApplied]);
 
+  // Instant fetch for pagination changes — робить пагінацію миттєвою
+  useEffect(() => {
+    if (filtersApplied) {
+      fetchComparisonData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
+
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
     if (comparisonData?.panels) {
-      const data = comparisonData.panels.map(panel => ({
+      const data = comparisonData.panels.map((panel, idx) => ({
         ...panel,
-        totalAvailability: getTotalAvailability(panel)
+        totalAvailability: getTotalAvailability(panel),
+        // Для сортування за розрахованою ціною
+        recommendedPrice: calculateRecommendedPrice(panel),
+        // Для сортування за цінами постачальників: supplierPrices.[supplierName]
+        supplierPrices: Object.fromEntries(
+          panel.supplier_prices.map(sp => [sp.supplier_name, sp.price])
+        ),
+        // Для сортування за початковим порядком (№)
+        originalIndex: idx,
       }));
       setProcessedData(data);
     }
@@ -206,7 +225,7 @@ export default function SolarPanelPriceComparison() {
 
     const rows = sortedPanels.map((panel, idx) => {
       const cells: string[] = [];
-      if (visibleColumns['index'] !== false) cells.push(String((page - 1) * pageSize + idx + 1));
+      if (visibleColumns['index'] !== false) cells.push(String((effectivePage - 1) * effectivePageSize + idx + 1));
       if (visibleColumns['full_name'] !== false) cells.push(panel.full_name ?? '');
       if (visibleColumns['brand'] !== false) cells.push(panel.brand ?? '');
       if (visibleColumns['power'] !== false) cells.push(panel.power?.toString() ?? '');
@@ -262,6 +281,13 @@ export default function SolarPanelPriceComparison() {
       }).unwrap();
       
       setComparisonData(result);
+      // Keep local pagination state in sync with server response to avoid index mismatches
+      if (typeof result.page === 'number' && result.page !== page) {
+        setPage(result.page);
+      }
+      if (typeof result.page_size === 'number' && result.page_size !== pageSize) {
+        setPageSize(result.page_size);
+      }
       
       // Extract unique supplier names to use as columns
       if (result.panels.length > 0) {
@@ -605,12 +631,30 @@ export default function SolarPanelPriceComparison() {
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
                     {visibleColumns['index'] !== false && (
-                      <TableHead className="text-center w-8 text-xs" title="Номер">№</TableHead>
+                      <TableHead 
+                        className="text-center w-8 text-xs cursor-pointer select-none" 
+                        title="Номер (Shift+Клік — додати до сортування)"
+                        onClick={(e) => requestSort('originalIndex', (e as any).shiftKey)}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">№</span>
+                          {sortConfig?.key === 'originalIndex' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
                     )}
                     {visibleColumns['full_name'] !== false && (
                       <TableHead 
-                        className="min-w-[180px] text-center"
-                        onClick={() => requestSort('full_name')}
+                        className="min-w-[180px] text-center cursor-pointer select-none"
+                        title="Shift+Клік — додати до сортування"
+                        onClick={(e) => requestSort('full_name', (e as any).shiftKey)}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-[11px]">Назва</span>
@@ -627,14 +671,30 @@ export default function SolarPanelPriceComparison() {
                       </TableHead>
                     )}
                     {visibleColumns['brand'] !== false && (
-                      <TableHead className="text-xs w-16 truncate text-center" title="Бренд">
-                        <span className="whitespace-nowrap">Бренд</span>
+                      <TableHead 
+                        className="text-xs w-16 truncate text-center cursor-pointer select-none" 
+                        title="Бренд (Shift+Клік — додати до сортування)"
+                        onClick={(e) => requestSort('brand', (e as any).shiftKey)}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="whitespace-nowrap">Бренд</span>
+                          {sortConfig?.key === 'brand' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </TableHead>
                     )}
                     {visibleColumns['power'] !== false && (
                       <TableHead 
-                        className="hidden sm:table-cell w-8 text-center"
-                        onClick={() => requestSort('power')}
+                        className="hidden sm:table-cell w-8 text-center cursor-pointer select-none"
+                        title="Shift+Клік — додати до сортування"
+                        onClick={(e) => requestSort('power', (e as any).shiftKey)}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-[11px]" title="Вати">Вт</span>
@@ -651,31 +711,95 @@ export default function SolarPanelPriceComparison() {
                       </TableHead>
                     )}
                     {visibleColumns['thickness'] !== false && (
-                      <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Товщина">Товщ</TableHead>
+                      <TableHead 
+                        className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
+                        title="Товщина (Shift+Клік — додати до сортування)"
+                        onClick={(e) => requestSort('thickness', (e as any).shiftKey)}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Товщ</span>
+                          {sortConfig?.key === 'thickness' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
                     )}
                     {visibleColumns['panel_type'] !== false && (
-                      <TableHead className="hidden lg:table-cell w-8 text-center text-xs">Тип</TableHead>
+                      <TableHead 
+                        className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none"
+                        title="Shift+Клік — додати до сортування"
+                        onClick={(e) => requestSort('panel_type', (e as any).shiftKey)}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Тип</span>
+                          {sortConfig?.key === 'panel_type' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
                     )}
                     {visibleColumns['cell_type'] !== false && (
-                      <TableHead className="hidden lg:table-cell w-8 text-center text-xs" title="Комірки">Ком</TableHead>
+                      <TableHead 
+                        className="hidden lg:table-cell w-8 text-center text-xs cursor-pointer select-none" 
+                        title="Комірки (Shift+Клік — додати до сортування)"
+                        onClick={(e) => requestSort('cell_type', (e as any).shiftKey)}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Ком</span>
+                          {sortConfig?.key === 'cell_type' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
                     )}
                     {supplierColumns.map((supplier, idx) => (
                       visibleColumns[`supplier:${supplier}`] !== false && (
                         <TableHead
                           key={`sup-head-${idx}-${supplier}`}
-                          className="text-center"
-                          title={supplier}
+                          className="text-center cursor-pointer select-none"
+                          title={`${supplier} (Shift+Клік — додати до сортування)`}
+                          onClick={(e) => requestSort(`supplierPrices.${supplier}`, (e as any).shiftKey)}
                         >
-                          <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
-                            {supplier}
-                          </span>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
+                              {supplier}
+                            </span>
+                            {sortConfig?.key === `supplierPrices.${supplier}` && (
+                              <span className="text-primary">
+                                {sortConfig.direction === 'asc' ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3" />
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </TableHead>
                       )
                     ))}
                     {visibleColumns['recommended'] !== false && (
                       <TableHead
-                        className="text-center w-12"
-                        onClick={() => requestSort('recommendedPrice')}
+                        className="text-center w-12 cursor-pointer select-none"
+                        title="Shift+Клік — додати до сортування"
+                        onClick={(e) => requestSort('recommendedPrice', (e as any).shiftKey)}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-[11px]" title="Рекомендована">Рек</span>
@@ -727,8 +851,9 @@ export default function SolarPanelPriceComparison() {
                     )}
                     {visibleColumns['totalAvailability'] !== false && (
                       <TableHead
-                        className="text-center w-8"
-                        onClick={() => requestSort('totalAvailability')}
+                        className="text-center cursor-pointer select-none"
+                        title="Shift+Клік — додати до сортування"
+                        onClick={(e) => requestSort('totalAvailability', (e as any).shiftKey)}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-[11px]" title="Наявність">Наяв</span>
@@ -758,7 +883,7 @@ export default function SolarPanelPriceComparison() {
                       }
                     >
                       {visibleColumns['index'] !== false && (
-                        <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                        <TableCell className="text-center w-8 text-xs">{(effectivePage - 1) * effectivePageSize + index + 1}</TableCell>
                       )}
                       {visibleColumns['full_name'] !== false && (
                         <TableCell
@@ -912,7 +1037,7 @@ export default function SolarPanelPriceComparison() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="text-xs sm:text-sm text-muted-foreground">
-                  Показано {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}
+                  Показано {((effectivePage - 1) * effectivePageSize) + 1} - {Math.min(effectivePage * effectivePageSize, comparisonData.total)} з {comparisonData.total}
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-xs sm:text-sm text-muted-foreground">На сторінці:</span>
@@ -935,8 +1060,8 @@ export default function SolarPanelPriceComparison() {
                 </div>
               </div>
               <Pagination
-                currentPage={page}
-                totalPages={Math.ceil(comparisonData.total / pageSize)}
+                currentPage={effectivePage}
+                totalPages={Math.ceil(comparisonData.total / effectivePageSize)}
                 onPageChange={handlePageChange}
               />
             </div>

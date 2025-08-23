@@ -121,10 +121,23 @@ export default function InverterPriceComparison() {
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
     if (comparisonData?.inverters) {
-      const data = comparisonData.inverters.map(inverter => ({
-        ...inverter,
-        totalAvailability: getTotalAvailability(inverter)
-      }));
+      const data = comparisonData.inverters.map((inverter, idx) => {
+        const supplierPrices: Record<string, number | null> = {};
+        inverter.supplier_prices.forEach((sp) => {
+          const name = (sp.supplier_name ?? '').toString().trim();
+          if (name) supplierPrices[name] = sp.price ?? null;
+        });
+
+        const recommendedPrice = inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+
+        return {
+          ...inverter,
+          originalIndex: (comparisonData.page - 1) * comparisonData.page_size + idx + 1,
+          totalAvailability: getTotalAvailability(inverter),
+          recommendedPrice,
+          supplierPrices,
+        };
+      });
       setProcessedData(data);
     }
   }, [comparisonData]);
@@ -600,12 +613,30 @@ export default function InverterPriceComparison() {
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
                     {visibleColumns['index'] !== false && (
-                      <TableHead className="text-center w-8 text-xs">№</TableHead>
+                      <TableHead 
+                        className="text-center w-8 text-xs"
+                        onClick={(e) => requestSort('originalIndex', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">№</span>
+                          {sortConfig?.key === 'originalIndex' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
                     )}
                     {visibleColumns['full_name'] !== false && (
                       <TableHead 
                         className="min-w-[140px] text-center"
-                        onClick={() => requestSort('full_name')}
+                        onClick={(e) => requestSort('full_name', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-[11px]" title="Назва">Назва</span>
@@ -622,12 +653,30 @@ export default function InverterPriceComparison() {
                       </TableHead>
                     )}
                     {visibleColumns['brand'] !== false && (
-                      <TableHead className="text-xs text-center">Бренд</TableHead>
+                      <TableHead 
+                        className="text-xs text-center"
+                        onClick={(e) => requestSort('brand', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Бренд</span>
+                          {sortConfig?.key === 'brand' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
                     )}
                     {visibleColumns['power'] !== false && (
                       <TableHead 
                         className="hidden sm:table-cell w-12 text-center"
-                        onClick={() => requestSort('power')}
+                        onClick={(e) => requestSort('power', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-xs" title="Вати">Вт</span>
@@ -646,7 +695,8 @@ export default function InverterPriceComparison() {
                     {visibleColumns['string_count'] !== false && (
                       <TableHead 
                         className="hidden sm:table-cell w-8 text-center"
-                        onClick={() => requestSort('string_count')}
+                        onClick={(e) => requestSort('string_count', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-xs" title="Кількість стрингів">Стр</span>
@@ -666,19 +716,32 @@ export default function InverterPriceComparison() {
                       visibleColumns[`supplier:${supplier}`] !== false && (
                         <TableHead
                           key={`sup-head-${idx}-${supplier}`}
-                          className="text-center"
-                          title={supplier}
+                          className="text-center cursor-pointer select-none"
+                          onClick={(e) => requestSort(`supplierPrices.${supplier}`, (e as any).shiftKey)}
+                          title="Shift+Клік — додати до сортування"
                         >
-                          <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
-                            {supplier}
-                          </span>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={supplier}>
+                              {supplier}
+                            </span>
+                            {sortConfig?.key === `supplierPrices.${supplier}` && (
+                              <span className="text-primary">
+                                {sortConfig.direction === 'asc' ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3" />
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </TableHead>
                       )
                     ))}
                     {visibleColumns['recommended'] !== false && (
                       <TableHead
                         className="text-center w-12"
-                        onClick={() => requestSort('recommendedPrice')}
+                        onClick={(e) => requestSort('recommendedPrice', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-xs" title="Рекомендована">Рек</span>
@@ -731,7 +794,8 @@ export default function InverterPriceComparison() {
                     {visibleColumns['totalAvailability'] !== false && (
                       <TableHead
                         className="text-center w-8"
-                        onClick={() => requestSort('totalAvailability')}
+                        onClick={(e) => requestSort('totalAvailability', (e as any).shiftKey)}
+                        title="Shift+Клік — додати до сортування"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-xs" title="Наявність">Наяв</span>
