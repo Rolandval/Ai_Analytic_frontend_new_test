@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
 import { Badge } from '@/components/ui/Badge';
 import { Filter, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -89,96 +88,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
-  // Active badges clamped to two rows with popover overflow
-  const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }> = ({ badges, onReset }) => {
-    const displayRef = useRef<HTMLDivElement | null>(null);
-    const measureRef = useRef<HTMLDivElement | null>(null);
-    const [containerWidth, setContainerWidth] = useState(0);
-    const [visibleCount, setVisibleCount] = useState(badges.length);
-
-    useEffect(() => {
-      if (!displayRef.current) return;
-      const ro = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          setContainerWidth(Math.round(entry.contentRect.width));
-        }
-      });
-      ro.observe(displayRef.current);
-      return () => ro.disconnect();
-    }, []);
-
-    useEffect(() => {
-      if (!measureRef.current) return;
-      const wrap = measureRef.current;
-      const children = Array.from(wrap.children) as HTMLElement[];
-      if (children.length === 0) { setVisibleCount(0); return; }
-      const tops: number[] = [];
-      children.forEach(el => tops.push(el.offsetTop));
-      const uniqueTops = Array.from(new Set(tops)).sort((a, b) => a - b);
-      const secondRowTop = uniqueTops[1];
-      if (secondRowTop === undefined) {
-        setVisibleCount(children.length);
-      } else {
-        let count = 0;
-        for (let i = 0; i < children.length; i++) {
-          if (children[i].offsetTop <= secondRowTop) count++;
-        }
-        setVisibleCount(count);
-      }
-    }, [containerWidth, badges]);
-
-    const overflow = Math.max(0, badges.length - visibleCount);
-    const hasAny = badges.length > 0;
-
-    return (
-      <div className="flex flex-col gap-2 min-w-0 w-full">
-        <div ref={displayRef} className="flex flex-wrap gap-2 items-center min-w-0">
-          <div className="relative w-full">
-            <div className="flex flex-wrap gap-2 items-center">
-              {badges.slice(0, visibleCount)}
-            </div>
-            {overflow > 0 && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900 z-0"
-              />
-            )}
-          </div>
-          {overflow > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button size="xs" variant="outline" className="h-6 px-2 text-xs">Показати всі (+{overflow})</Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[320px] max-w-[90vw]">
-                <div className="flex flex-wrap gap-2 items-center max-h-[240px] overflow-auto">
-                  {badges}
-                </div>
-                {hasAny && (
-                  <div className="mt-3">
-                    <Button variant="outline" size="xs" onClick={onReset}>
-                      <X className="w-4 h-4 mr-2" /> Скинути всі
-                    </Button>
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
-          )}
-          {hasAny && (
-            <Button variant="outline" onClick={onReset} size="xs">
-              <X className="w-4 h-4 mr-2" /> Скинути
-            </Button>
-          )}
-        </div>
-        <div
-          ref={measureRef}
-          style={{ position: 'absolute', left: -99999, top: 0, width: containerWidth }}
-          className="flex flex-wrap gap-2"
-        >
-          {badges}
-        </div>
-      </div>
-    );
-  };
+  // Active badges: simple full render without clamping/popover
   
   // Drag and drop state
   const defaultFilterOrder = [
@@ -650,7 +560,16 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
                   </Badge>
                 );
               }
-              return <ActiveBadges badges={badges} onReset={reset} />;
+              return (
+                <div className="flex flex-wrap gap-2 items-center">
+                  {badges}
+                  {badges.length > 0 && (
+                    <Button variant="outline" onClick={reset} size="xs">
+                      <X className="w-4 h-4 mr-2" /> Скинути
+                    </Button>
+                  )}
+                </div>
+              );
             })()}
           </div>
         </div>

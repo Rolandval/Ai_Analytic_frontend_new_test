@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
 import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
+import { Pagination } from '@/components/ui/Pagination';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { ChevronUp, ChevronDown } from 'lucide-react';
@@ -67,7 +68,7 @@ interface BatteryComparisonResponse {
 }
 
 export default function BatteryPriceComparison() {
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(100);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<BatteryPriceListRequestSchema>({
     page: page,
@@ -1076,31 +1077,31 @@ export default function BatteryPriceComparison() {
         
         {comparisonData && (
           <div className="p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Показати:</span>
-                <Select value={String(pageSize)} onValueChange={(value) => handlePageSizeChange(Number(value))}>
-                  <SelectTrigger className="w-[90px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="30">30</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-gray-600">записів</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-600">
-                  {effectivePage} / {Math.max(1, Math.ceil(comparisonData.total / effectivePageSize))}
-                </span>
-                <div className="space-x-2">
-                  <Button disabled={effectivePage === 1} onClick={() => handlePageChange(page - 1)} size="sm">Попередня</Button>
-                  <Button disabled={effectivePage === Math.ceil(comparisonData.total / effectivePageSize) || comparisonData.total === 0} onClick={() => handlePageChange(page + 1)} size="sm">Наступна</Button>
+                <div className="text-xs sm:text-sm text-muted-foreground">
+                  Показано {(effectivePage - 1) * effectivePageSize + 1} - {Math.min(effectivePage * effectivePageSize, comparisonData.total)} з {comparisonData.total}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs sm:text-sm text-muted-foreground">На сторінці:</span>
+                  <select
+                    className="p-1 text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 bg-background"
+                    value={pageSize}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
                 </div>
               </div>
+              <Pagination
+                currentPage={page}
+                totalPages={Math.ceil(comparisonData.total / pageSize)}
+                onPageChange={handlePageChange}
+              />
             </div>
           </div>
         )}

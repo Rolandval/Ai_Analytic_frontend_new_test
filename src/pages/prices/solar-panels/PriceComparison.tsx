@@ -59,7 +59,7 @@ interface SolarPanelComparisonResponse {
 }
 
 export default function SolarPanelPriceComparison() {
-  const [pageSize, setPageSize] = useState(10); // Динамічний розмір сторінки
+  const [pageSize, setPageSize] = useState(100); // Динамічний розмір сторінки (дефолт 100)
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<SolarPanelPriceListRequestSchema>({
     page: page,
@@ -97,13 +97,20 @@ export default function SolarPanelPriceComparison() {
   const [filtersApplied, setFiltersApplied] = useState(false);
 
   // Стан для актуальних цін
-  const markup = 15; // Фіксована націнка 15%
+  const DEFAULT_MARKUP = 15; // Націнка за замовчуванням, %
+  const [rowMarkup, setRowMarkup] = useState<Record<number, number>>({});
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
   const [updatingRowIds, setUpdatingRowIds] = useState<Set<number>>(new Set());
 
-  // Use effective pagination values from server when available to keep numbering consistent during transitions
-  const effectivePage = comparisonData?.page ?? page;
-  const effectivePageSize = comparisonData?.page_size ?? pageSize;
+  // Normalize supplier names and detect target supplier ("АКУМУЛЯТОР-Центр")
+  const normalizeName = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+  const targetSupplierNorm = normalizeName('АКУМУЛЯТОР-Центр');
+  const targetSupplier = useMemo(() => supplierColumns.find(s => normalizeName(s) === targetSupplierNorm) ?? null, [supplierColumns]);
+  const otherSuppliers = useMemo(() => supplierColumns.filter(s => normalizeName(s) !== targetSupplierNorm), [supplierColumns]);
+
+  // Local pagination drives controls; display uses server's slice when available to avoid mismatch
+  const displayPage = comparisonData?.page ?? page;
+  const displayPageSize = comparisonData?.page_size ?? pageSize;
 
   // Debounced fetch for filter changes (коротший debounce для кращої чутливості)
   useEffect(() => {
@@ -123,14 +130,39 @@ export default function SolarPanelPriceComparison() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize]);
 
+  // Ініціалізуємо націнку 15% для кожного товару при завантаженні даних
+  useEffect(() => {
+    if (comparisonData?.panels) {
+      setRowMarkup(prev => {
+        const next = { ...prev } as Record<number, number>;
+        for (const p of comparisonData.panels) {
+          if (next[p.id] === undefined) next[p.id] = DEFAULT_MARKUP;
+        }
+        return next;
+      });
+    }
+  }, [comparisonData]);
+
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
     if (comparisonData?.panels) {
-      const data = comparisonData.panels.map((panel, idx) => ({
+      // Deduplicate panels preserving order.
+      // Prefer panel_id; when missing, use a composite of normalized fields.
+      const seen = new Set<string | number>();
+      const uniquePanels = comparisonData.panels.filter((p) => {
+        const composite = `name:${normalizeName(p.full_name || '')}|brand:${normalizeName(p.brand || '')}|power:${p.power ?? ''}|type:${normalizeName(p.panel_type || '')}|cell:${normalizeName(p.cell_type || '')}`;
+        const key: string | number = (p.panel_id ?? composite);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      const data = uniquePanels.map((panel, idx) => ({
         ...panel,
         totalAvailability: getTotalAvailability(panel),
         // Для сортування за розрахованою ціною
         recommendedPrice: calculateRecommendedPrice(panel),
+        // Поточна націнка рядка (для можливості сортування)
+        markup: rowMarkup[panel.id] ?? DEFAULT_MARKUP,
         // Для сортування за цінами постачальників: supplierPrices.[supplierName]
         supplierPrices: Object.fromEntries(
           panel.supplier_prices.map(sp => [sp.supplier_name, sp.price])
@@ -140,7 +172,7 @@ export default function SolarPanelPriceComparison() {
       }));
       setProcessedData(data);
     }
-  }, [comparisonData]);
+  }, [comparisonData, rowMarkup]);
 
   // Використовуємо хук для сортування
   const { items: sortedPanels, requestSort, sortConfig } = useSortableTable<SolarPanelWithSupplierPrices>(
@@ -161,6 +193,7 @@ export default function SolarPanelPriceComparison() {
     { key: 'panel_type', header: 'Тип' },
     { key: 'cell_type', header: 'Ком' },
     { key: 'recommended', header: 'Рек' },
+    { key: 'markup', header: 'Нац' },
     { key: 'actual', header: 'Акт' },
     { key: 'totalAvailability', header: 'Наяв' },
   ]), []);
@@ -220,19 +253,36 @@ export default function SolarPanelPriceComparison() {
   const buildExport = () => {
     if (!comparisonData || !comparisonData.panels || comparisonData.panels.length === 0) return '';
     const headers: string[] = [];
-    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
-    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+    // Static before supplier blocks
+    const pushIf = (cond: boolean, val: string) => { if (cond) headers.push(val); };
+    pushIf(visibleColumns['index'] !== false, '№');
+    pushIf(visibleColumns['full_name'] !== false, 'Назва');
+    pushIf(visibleColumns['brand'] !== false, 'Бренд');
+    pushIf(visibleColumns['power'] !== false, 'Вт');
+    pushIf(visibleColumns['thickness'] !== false, 'Товщ');
+    pushIf(visibleColumns['panel_type'] !== false, 'Тип');
+    pushIf(visibleColumns['cell_type'] !== false, 'Ком');
+    // Other suppliers
+    otherSuppliers.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+    // Recommended and markup
+    pushIf(visibleColumns['recommended'] !== false, 'Рек');
+    pushIf(visibleColumns['markup'] !== false, 'Нац');
+    // Target supplier just before Actual
+    if (targetSupplier && visibleColumns[`supplier:${targetSupplier}`] !== false) headers.push(targetSupplier);
+    // Actual and total availability
+    pushIf(visibleColumns['actual'] !== false, 'Акт');
+    pushIf(visibleColumns['totalAvailability'] !== false, 'Наяв');
 
     const rows = sortedPanels.map((panel, idx) => {
       const cells: string[] = [];
-      if (visibleColumns['index'] !== false) cells.push(String((effectivePage - 1) * effectivePageSize + idx + 1));
+      if (visibleColumns['index'] !== false) cells.push(String(idx + 1));
       if (visibleColumns['full_name'] !== false) cells.push(panel.full_name ?? '');
       if (visibleColumns['brand'] !== false) cells.push(panel.brand ?? '');
       if (visibleColumns['power'] !== false) cells.push(panel.power?.toString() ?? '');
       if (visibleColumns['thickness'] !== false) cells.push(panel.thickness?.toString() ?? '');
       if (visibleColumns['panel_type'] !== false) cells.push(panel.panel_type ?? '');
       if (visibleColumns['cell_type'] !== false) cells.push(panel.cell_type ?? '');
-      supplierColumns.forEach(s => {
+      otherSuppliers.forEach(s => {
         if (visibleColumns[`supplier:${s}`] === false) return;
         const price = getPriceForSupplier(panel, s);
         cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
@@ -240,6 +290,14 @@ export default function SolarPanelPriceComparison() {
       if (visibleColumns['recommended'] !== false) {
         const r = panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
         cells.push(r !== null ? `${formatPrice(r)}₴` : '-');
+      }
+      if (visibleColumns['markup'] !== false) {
+        const m = rowMarkup[panel.id] ?? DEFAULT_MARKUP;
+        cells.push(String(m));
+      }
+      if (targetSupplier && visibleColumns[`supplier:${targetSupplier}`] !== false) {
+        const price = getPriceForSupplier(panel, targetSupplier);
+        cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
       }
       if (visibleColumns['actual'] !== false) {
         const v = calculateRecommendedPrice(panel);
@@ -281,12 +339,14 @@ export default function SolarPanelPriceComparison() {
       }).unwrap();
       
       setComparisonData(result);
-      // Keep local pagination state in sync with server response to avoid index mismatches
-      if (typeof result.page === 'number' && result.page !== page) {
-        setPage(result.page);
-      }
-      if (typeof result.page_size === 'number' && result.page_size !== pageSize) {
-        setPageSize(result.page_size);
+      // Do not override local page/pageSize with server values.
+      // Clamp local page if it exceeds available pages for the returned total.
+      if (typeof result.total === 'number') {
+        const maxPages = Math.max(1, Math.ceil(result.total / pageSize));
+        if (page > maxPages) {
+          setPage(maxPages);
+          setFilters(prev => ({ ...prev, page: maxPages }));
+        }
       }
       
       // Extract unique supplier names to use as columns
@@ -297,14 +357,7 @@ export default function SolarPanelPriceComparison() {
         );
         const cleaned = rawNames.filter((n) => n.length > 0);
         const uniqueSuppliers = Array.from(new Set(cleaned));
-        // Move "АКУМУЛЯТОР-Центр" column to the end (right before Recommended column)
-        const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
-        const targetNorm = normalize('АКУМУЛЯТОР-Центр');
-        const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
-        if (idx !== -1) {
-          const [target] = uniqueSuppliers.splice(idx, 1);
-          uniqueSuppliers.push(target);
-        }
+        // Do not reorder here; rendering will position target supplier before 'Акт'
         setSupplierColumns(uniqueSuppliers);
       }
     } catch (error) {
@@ -332,15 +385,13 @@ export default function SolarPanelPriceComparison() {
     return Math.round(price).toLocaleString('uk-UA', { maximumFractionDigits: 0 });
   };
 
-  // Format date without year
-  const formatDateWithTime = (dateString: string | null) => {
-    if (!dateString) return '-';
+  // Format date as day/month without year and time
+  const formatDayMonth = (dateString: string | null) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleString('uk-UA', {
       day: '2-digit',
       month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
     });
   };
 
@@ -374,7 +425,7 @@ export default function SolarPanelPriceComparison() {
     return panel.supplier_prices.find(sp => sp.supplier_name === supplierName) || null;
   };
   
-  // Calculate recommended price with markup
+  // Calculate recommended price with per-row markup
   const calculateRecommendedPrice = (panel: SolarPanelWithSupplierPrices) => {
     const minPrice = Math.min(...panel.supplier_prices
       .map(sp => sp.price)
@@ -382,7 +433,8 @@ export default function SolarPanelPriceComparison() {
     
     if (!isFinite(minPrice)) return null;
     
-    return Math.round(minPrice * (1 + markup / 100));
+    const m = rowMarkup[panel.id] ?? DEFAULT_MARKUP;
+    return Math.round(minPrice * (1 + m / 100));
   };
 
   // Handle row selection for bulk update
@@ -478,6 +530,21 @@ export default function SolarPanelPriceComparison() {
   // Calculate total availability for a panel across all suppliers
   const getTotalAvailability = (panel: SolarPanelWithSupplierPrices) => {
     return panel.supplier_prices.reduce((total, sp) => total + (sp.availability || 0), 0);
+  };
+
+  // Toggle select-all and auto-apply bulk update (deduplicates onClick/onChange logic)
+  const handleToggleSelectAllAndBulk = () => {
+    const totalCount = comparisonData?.panels?.length ?? 0;
+    const allSelected = totalCount > 0 && selectedRowIds.size === totalCount;
+    if (allSelected) {
+      setSelectedRowIds(new Set());
+    } else {
+      handleSelectAll();
+      // авто-застосування після вибору всіх
+      setTimeout(() => {
+        handleBulkPriceUpdate();
+      }, 0);
+    }
   };
 
   return (
@@ -586,21 +653,7 @@ export default function SolarPanelPriceComparison() {
           </PopoverContent>
         </Popover>
         
-        {selectedRowIds.size > 0 && (
-          <>
-            <span className="text-xs text-blue-700 ml-2">
-              Вибрано: {selectedRowIds.size}
-            </span>
-            <Button 
-              onClick={handleBulkPriceUpdate}
-              disabled={isBulkUpdating}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-xs px-2 py-1 h-7"
-            >
-              {isBulkUpdating ? 'Оновлення...' : 'Застосувати всі обрані'}
-            </Button>
-          </>
-        )}
+        
       </div>
 
       {!isLoading && comparisonData && comparisonData.panels.length === 0 && (
@@ -632,21 +685,11 @@ export default function SolarPanelPriceComparison() {
                   <TableRow>
                     {visibleColumns['index'] !== false && (
                       <TableHead 
-                        className="text-center w-8 text-xs cursor-pointer select-none" 
-                        title="Номер (Shift+Клік — додати до сортування)"
-                        onClick={(e) => requestSort('originalIndex', (e as any).shiftKey)}
+                        className="text-center w-8 text-xs select-none" 
+                        title="Номер"
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-xs">№</span>
-                          {sortConfig?.key === 'originalIndex' && (
-                            <span className="text-primary">
-                              {sortConfig.direction === 'asc' ? (
-                                <ChevronUp className="h-3 w-3" />
-                              ) : (
-                                <ChevronDown className="h-3 w-3" />
-                              )}
-                            </span>
-                          )}
                         </div>
                       </TableHead>
                     )}
@@ -770,7 +813,7 @@ export default function SolarPanelPriceComparison() {
                         </div>
                       </TableHead>
                     )}
-                    {supplierColumns.map((supplier, idx) => (
+                    {otherSuppliers.map((supplier, idx) => (
                       visibleColumns[`supplier:${supplier}`] !== false && (
                         <TableHead
                           key={`sup-head-${idx}-${supplier}`}
@@ -815,6 +858,50 @@ export default function SolarPanelPriceComparison() {
                         </div>
                       </TableHead>
                     )}
+                    {visibleColumns['markup'] !== false && (
+                      <TableHead
+                        className="text-center w-12 cursor-pointer select-none"
+                        onClick={(e) => requestSort('markup', (e as any).shiftKey)}
+                        title="Націнка, % (Shift+Клік — додати до сортування)"
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-xs">Нац</span>
+                          {sortConfig?.key === 'markup' && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
+                    {/* Target supplier header placed before 'Акт' (after 'Нац') */}
+                    {targetSupplier && visibleColumns[`supplier:${targetSupplier}`] !== false && (
+                      <TableHead
+                        key={`sup-head-target-${targetSupplier}`}
+                        className="text-center cursor-pointer select-none"
+                        title={`${targetSupplier} (Shift+Клік — додати до сортування)`}
+                        onClick={(e) => requestSort(`supplierPrices.${targetSupplier}`, (e as any).shiftKey)}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="text-[11px] truncate max-w-[90px] inline-block align-middle" title={targetSupplier}>
+                            {targetSupplier}
+                          </span>
+                          {sortConfig?.key === `supplierPrices.${targetSupplier}` && (
+                            <span className="text-primary">
+                              {sortConfig.direction === 'asc' ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </TableHead>
+                    )}
                     {visibleColumns['actual'] !== false && (
                       <TableHead className="text-center w-12">
                         <div className="flex flex-col items-center gap-1">
@@ -828,8 +915,7 @@ export default function SolarPanelPriceComparison() {
                                   <input
                                     type="radio"
                                     checked={allSelected}
-                                    onClick={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
-                                    onChange={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
+                                    onChange={handleToggleSelectAllAndBulk}
                                     className="accent-primary focus:ring-0 w-3 h-3"
                                   />
                                   <span className="text-[10px]">Всі</span>
@@ -883,7 +969,9 @@ export default function SolarPanelPriceComparison() {
                       }
                     >
                       {visibleColumns['index'] !== false && (
-                        <TableCell className="text-center w-8 text-xs">{(effectivePage - 1) * effectivePageSize + index + 1}</TableCell>
+                        <TableCell className="text-center w-8 text-xs">
+                          {(displayPage - 1) * displayPageSize + index + 1}
+                        </TableCell>
                       )}
                       {visibleColumns['full_name'] !== false && (
                         <TableCell
@@ -914,11 +1002,11 @@ export default function SolarPanelPriceComparison() {
                       )}
                       
                       {/* Supplier price columns */}
-                      {supplierColumns.map((supplier, sIdx) => {
+                      {otherSuppliers.map((supplier, sIdx) => {
                         if (visibleColumns[`supplier:${supplier}`] === false) return null;
                         const price = getPriceForSupplier(panel, supplier);
                         const canUpdate = canUpdatePriceOnSite(panel, supplier);
-                        const updatedAt = getSupplierPriceObject(panel, supplier)?.updated_at as string | undefined;
+                        const updatedAt = (getSupplierPriceObject(panel, supplier)?.date ?? getSupplierPriceObject(panel, supplier)?.updated_at) as string | undefined;
                         const priceClass = panel.supplier_prices.some(sp => sp.recommended_price !== null)
                           ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)
                           : 'text-primary dark:text-primary-foreground font-medium';
@@ -927,11 +1015,16 @@ export default function SolarPanelPriceComparison() {
                             key={`sup-cell-${panel.id}-${sIdx}-${supplier}`} 
                             className="text-center font-medium w-24"
                           >
-                            <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                               {price !== null ? (
-                                <span className={`${priceClass} text-xs`}>
-                                  {formatPrice(price)}₴
-                                </span>
+                                <>
+                                  <span className={`${priceClass} text-xs`}>
+                                    {formatPrice(price)}₴
+                                  </span>
+                                  {updatedAt && (
+                                    <span className="text-[10px] text-gray-500">{formatDayMonth(updatedAt)}</span>
+                                  )}
+                                </>
                               ) : (
                                 <span className="text-xs">-</span>
                               )}
@@ -946,15 +1039,10 @@ export default function SolarPanelPriceComparison() {
                                 </Button>
                               )}
                             </div>
-                            {updatedAt && (
-                              <div className="mt-1 text-[10px] text-gray-500 whitespace-nowrap text-center">
-                                {formatDateWithTime(updatedAt)}
-                              </div>
-                            )}
                           </TableCell>
                         );
                       })}
-                      
+                       
                       {/* Recommended price column */}
                       {visibleColumns['recommended'] !== false && (
                         <TableCell className="text-center font-medium">
@@ -969,7 +1057,70 @@ export default function SolarPanelPriceComparison() {
                           )}
                         </TableCell>
                       )}
-                      
+
+                      {/* Markup column */}
+                      {visibleColumns['markup'] !== false && (
+                        <TableCell className="text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            max={500}
+                            step={1}
+                            value={rowMarkup[panel.id] ?? DEFAULT_MARKUP}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setRowMarkup(prev => ({ ...prev, [panel.id]: isNaN(val) ? DEFAULT_MARKUP : val }));
+                            }}
+                            className="w-14 h-6 text-xs text-center border rounded px-1"
+                            title="Націнка, %"
+                          />
+                        </TableCell>
+                      )}
+
+                      {/* Target supplier cell after 'Нац' and before 'Акт' */}
+                      {targetSupplier && visibleColumns[`supplier:${targetSupplier}`] !== false && (() => {
+                        const supplier = targetSupplier;
+                        const price = getPriceForSupplier(panel, supplier);
+                        const canUpdate = canUpdatePriceOnSite(panel, supplier);
+                        const updatedAt = (getSupplierPriceObject(panel, supplier)?.date ?? getSupplierPriceObject(panel, supplier)?.updated_at) as string | undefined;
+                        const priceClass = panel.supplier_prices.some(sp => sp.recommended_price !== null)
+                          ? getPriceColorClass(price, panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)
+                          : 'text-primary dark:text-primary-foreground font-medium';
+                        return (
+                          <TableCell 
+                            key={`sup-cell-target-${panel.id}-${supplier}`} 
+                            className="text-center font-medium w-24"
+                          >
+                            <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                              {price !== null ? (
+                                <>
+                                  <span className={`${priceClass} text-xs`}>
+                                    {formatPrice(price)}₴
+                                  </span>
+                                  {updatedAt && (
+                                    <span className="text-[10px] text-gray-500">{formatDayMonth(updatedAt)}</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-xs">-</span>
+                              )}
+                            </div>
+                            {canUpdate && (
+                              <div className="mt-1">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="text-[10px] px-1 py-0.5 h-5 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800"
+                                  onClick={() => handleOpenPriceUpdateModal(panel, supplier)}
+                                >
+                                  <span className="text-[10px]">Онов</span>
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        );
+                      })()}
+
                       {/* Actual price display column */}
                       {visibleColumns['actual'] !== false && (
                         <TableCell className="text-center">
@@ -1003,7 +1154,7 @@ export default function SolarPanelPriceComparison() {
                           </div>
                         </TableCell>
                       )}
-                      
+
                       {/* Total availability column */}
                       {visibleColumns['totalAvailability'] !== false && (
                         <TableCell className="text-center">
@@ -1037,7 +1188,7 @@ export default function SolarPanelPriceComparison() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="text-xs sm:text-sm text-muted-foreground">
-                  Показано {((effectivePage - 1) * effectivePageSize) + 1} - {Math.min(effectivePage * effectivePageSize, comparisonData.total)} з {comparisonData.total}
+                  Показано {((displayPage - 1) * displayPageSize) + 1} - {Math.min(displayPage * displayPageSize, comparisonData.total)} з {comparisonData.total}
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-xs sm:text-sm text-muted-foreground">На сторінці:</span>
@@ -1046,9 +1197,11 @@ export default function SolarPanelPriceComparison() {
                     value={pageSize}
                     onChange={(e) => {
                       const newSize = Number(e.target.value);
+                      // Reset to first page when page size changes for predictable numbering
+                      const newPage = 1;
                       setPageSize(newSize);
-                      setFilters(prev => ({ ...prev, page: 1, page_size: newSize }));
-                      setPage(1);
+                      setFilters(prev => ({ ...prev, page: newPage, page_size: newSize }));
+                      setPage(newPage);
                     }}
                   >
                     <option value={5}>5</option>
@@ -1060,8 +1213,8 @@ export default function SolarPanelPriceComparison() {
                 </div>
               </div>
               <Pagination
-                currentPage={effectivePage}
-                totalPages={Math.ceil(comparisonData.total / effectivePageSize)}
+                currentPage={page}
+                totalPages={Math.ceil(comparisonData.total / pageSize)}
                 onPageChange={handlePageChange}
               />
             </div>
