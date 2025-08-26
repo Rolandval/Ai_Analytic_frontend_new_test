@@ -5,6 +5,7 @@ import { useThemeStore } from '@/store/themeStore';
 import { ArrowLeft, ChevronLeft, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from './ThemeToggle';
+import { ServerStatusPanel } from './ServerStatusPanel';
 
 export const MainLayout = () => {
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -97,6 +98,8 @@ export const MainLayout = () => {
             `}
           >
             <Sidebar collapsed={false} />
+            {/* Панель статусів серверів/БД під сайдбаром */}
+             {/* <ServerStatusPanel />   */}
             
             {/* Кнопка згортання для десктопа */}
             <div className="hidden lg:block absolute top-1/2 -right-3 transform -translate-y-1/2">

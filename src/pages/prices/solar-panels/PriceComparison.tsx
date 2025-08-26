@@ -7,12 +7,10 @@ import { getSolarPanelBrands, getSolarPanelSuppliers } from '@/services/solarPan
 import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
 import { SolarPanelComparisonFilters } from '@/components/filters/SolarPanelComparisonFilters';
 import { Pagination } from '@/components/ui/Pagination';
-import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
-import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { updateSolarPanelSitePrice, UpdateSitePriceRequest } from '@/services/sitePrice.api';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, Settings } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
@@ -77,8 +75,6 @@ export default function SolarPanelPriceComparison() {
   const [suppliers, setSuppliers] = useState<string[]>([]);
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
-  // Copying state
-  const [copying, setCopying] = useState(false);
   const { toast } = useToast();
   const [updatePriceModalOpen, setUpdatePriceModalOpen] = useState(false);
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
@@ -90,7 +86,6 @@ export default function SolarPanelPriceComparison() {
   }>({ id: null, price: null, promo_price: null, availability: null, productName: '' });
 
   const [getSolarPanelComparison, { isLoading }] = useGetSupplierSolarPanelComparisonMutation();
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   // removed selectionMode; unified single radio toggle will derive state from selection
 
   // Прапор для відстеження, чи були застосовані фільтри користувачем
@@ -146,17 +141,9 @@ export default function SolarPanelPriceComparison() {
   // Обробляємо дані для сортування, додаючи обчислювані властивості
   useEffect(() => {
     if (comparisonData?.panels) {
-      // Deduplicate panels preserving order.
-      // Prefer panel_id; when missing, use a composite of normalized fields.
-      const seen = new Set<string | number>();
-      const uniquePanels = comparisonData.panels.filter((p) => {
-        const composite = `name:${normalizeName(p.full_name || '')}|brand:${normalizeName(p.brand || '')}|power:${p.power ?? ''}|type:${normalizeName(p.panel_type || '')}|cell:${normalizeName(p.cell_type || '')}`;
-        const key: string | number = (p.panel_id ?? composite);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      const data = uniquePanels.map((panel, idx) => ({
+      // ВАЖЛИВО: не виконуємо дедуплікацію на клієнті, щоб не ламати пагінацію.
+      // Рендеримо рівно ті елементи, які надіслав сервер на поточній сторінці.
+      const data = comparisonData.panels.map((panel, idx) => ({
         ...panel,
         totalAvailability: getTotalAvailability(panel),
         // Для сортування за розрахованою ціною
@@ -218,6 +205,82 @@ export default function SolarPanelPriceComparison() {
     try { localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(cfg)); } catch {}
   };
 
+  // Compact Settings button to place inside filters' draggable actions block
+  const settingsButton = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="secondary" size="xs" className="h-8 px-2 text-xs" title="Налаштування колонок" aria-label="Налаштування колонок">
+          <Settings className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Налаштування колонок</h4>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const all: Record<string, boolean> = {};
+                  staticColumns.forEach(c => all[c.key] = true);
+                  supplierColumns.forEach(s => all[`supplier:${s}`] = true);
+                  saveVisibleColumns(all);
+                }}
+              >
+                Вибрати всі
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const minimal: Record<string, boolean> = {};
+                  ['index','full_name','brand','power','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
+                  supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
+                  saveVisibleColumns(minimal);
+                }}
+              >
+                Необхідні
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {staticColumns.map(c => (
+              <div key={c.key} className="flex items-center gap-2">
+                <Checkbox
+                  id={`col-${c.key}`}
+                  checked={visibleColumns[c.key] !== false}
+                  onCheckedChange={(checked: boolean | string) => {
+                    const next = { ...visibleColumns, [c.key]: checked === true };
+                    saveVisibleColumns(next);
+                  }}
+                />
+                <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
+              </div>
+            ))}
+            <div className="pt-2 font-medium">Постачальники</div>
+            {supplierColumns.map(s => {
+              const k = `supplier:${s}`;
+              return (
+                <div key={k} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`col-${k}`}
+                    checked={visibleColumns[k] !== false}
+                    onCheckedChange={(checked: boolean | string) => {
+                      const next = { ...visibleColumns, [k]: checked === true };
+                      saveVisibleColumns(next);
+                    }}
+                  />
+                  <Label htmlFor={`col-${k}`}>{s}</Label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
   // Apply single row update
   const handleApplyRow = async (panel: SolarPanelWithSupplierPrices) => {
     if (updatingRowIds.has(panel.id)) return;
@@ -249,66 +312,7 @@ export default function SolarPanelPriceComparison() {
     }
   };
 
-  // Build export of visible headers and rows
-  const buildExport = () => {
-    if (!comparisonData || !comparisonData.panels || comparisonData.panels.length === 0) return '';
-    const headers: string[] = [];
-    // Static before supplier blocks
-    const pushIf = (cond: boolean, val: string) => { if (cond) headers.push(val); };
-    pushIf(visibleColumns['index'] !== false, '№');
-    pushIf(visibleColumns['full_name'] !== false, 'Назва');
-    pushIf(visibleColumns['brand'] !== false, 'Бренд');
-    pushIf(visibleColumns['power'] !== false, 'Вт');
-    pushIf(visibleColumns['thickness'] !== false, 'Товщ');
-    pushIf(visibleColumns['panel_type'] !== false, 'Тип');
-    pushIf(visibleColumns['cell_type'] !== false, 'Ком');
-    // Other suppliers
-    otherSuppliers.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
-    // Recommended and markup
-    pushIf(visibleColumns['recommended'] !== false, 'Рек');
-    pushIf(visibleColumns['markup'] !== false, 'Нац');
-    // Target supplier just before Actual
-    if (targetSupplier && visibleColumns[`supplier:${targetSupplier}`] !== false) headers.push(targetSupplier);
-    // Actual and total availability
-    pushIf(visibleColumns['actual'] !== false, 'Акт');
-    pushIf(visibleColumns['totalAvailability'] !== false, 'Наяв');
-
-    const rows = sortedPanels.map((panel, idx) => {
-      const cells: string[] = [];
-      if (visibleColumns['index'] !== false) cells.push(String(idx + 1));
-      if (visibleColumns['full_name'] !== false) cells.push(panel.full_name ?? '');
-      if (visibleColumns['brand'] !== false) cells.push(panel.brand ?? '');
-      if (visibleColumns['power'] !== false) cells.push(panel.power?.toString() ?? '');
-      if (visibleColumns['thickness'] !== false) cells.push(panel.thickness?.toString() ?? '');
-      if (visibleColumns['panel_type'] !== false) cells.push(panel.panel_type ?? '');
-      if (visibleColumns['cell_type'] !== false) cells.push(panel.cell_type ?? '');
-      otherSuppliers.forEach(s => {
-        if (visibleColumns[`supplier:${s}`] === false) return;
-        const price = getPriceForSupplier(panel, s);
-        cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
-      });
-      if (visibleColumns['recommended'] !== false) {
-        const r = panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
-        cells.push(r !== null ? `${formatPrice(r)}₴` : '-');
-      }
-      if (visibleColumns['markup'] !== false) {
-        const m = rowMarkup[panel.id] ?? DEFAULT_MARKUP;
-        cells.push(String(m));
-      }
-      if (targetSupplier && visibleColumns[`supplier:${targetSupplier}`] !== false) {
-        const price = getPriceForSupplier(panel, targetSupplier);
-        cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
-      }
-      if (visibleColumns['actual'] !== false) {
-        const v = calculateRecommendedPrice(panel);
-        cells.push(v ? `${formatPrice(v)}₴` : '-');
-      }
-      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(panel)));
-      return cells.join('\t');
-    });
-
-    return `${headers.join('\t')}\n${rows.join('\n')}`;
-  };
+  // buildExport was removed as Copy functionality moved out from this page
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -332,11 +336,19 @@ export default function SolarPanelPriceComparison() {
 
   const fetchComparisonData = async () => {
     try {
+      // Debug: log requested pagination (explicit values)
+      console.info(`[SP Comparison] requesting -> page=${page}, page_size=${pageSize}`);
       const result = await getSolarPanelComparison({
         ...filters,
         page,
         page_size: pageSize
       }).unwrap();
+      
+      // Debug: log returned pagination summary (explicit values)
+      const panelsLen = Array.isArray(result?.panels) ? result.panels.length : -1;
+      console.info(
+        `[SP Comparison] response -> page=${result?.page}, page_size=${result?.page_size}, total=${result?.total}, panels_length=${panelsLen}`
+      );
       
       setComparisonData(result);
       // Do not override local page/pageSize with server values.
@@ -427,14 +439,13 @@ export default function SolarPanelPriceComparison() {
   
   // Calculate recommended price with per-row markup
   const calculateRecommendedPrice = (panel: SolarPanelWithSupplierPrices) => {
-    const minPrice = Math.min(...panel.supplier_prices
-      .map(sp => sp.price)
-      .filter(price => price !== null && price > 0) as number[]);
-    
-    if (!isFinite(minPrice)) return null;
-    
-    const m = rowMarkup[panel.id] ?? DEFAULT_MARKUP;
-    return Math.round(minPrice * (1 + m / 100));
+    // Base on recommended_price provided by suppliers, not on min market price
+    const recommended = panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+
+    if (recommended === null || typeof recommended !== 'number' || !isFinite(recommended)) return null;
+
+    const m = rowMarkup[panel.id] ?? DEFAULT_MARKUP; // markup in percent
+    return Math.round(recommended * (1 + m / 100));
   };
 
   // Handle row selection for bulk update
@@ -461,8 +472,8 @@ export default function SolarPanelPriceComparison() {
 
   // Handle select all
   const handleSelectAll = () => {
-    if (!comparisonData?.panels) return;
-    const allPanelIds = new Set(comparisonData.panels.map(panel => panel.id));
+    if (!processedData || processedData.length === 0) return;
+    const allPanelIds = new Set(processedData.map(panel => panel.id));
     setSelectedRowIds(allPanelIds);
   };
 
@@ -471,7 +482,6 @@ export default function SolarPanelPriceComparison() {
   // Handle bulk price update (per selected rows)
   const handleBulkPriceUpdate = async () => {
     if (!comparisonData?.panels || selectedRowIds.size === 0) return;
-    setIsBulkUpdating(true);
     const selectedPanels = comparisonData.panels.filter(p => selectedRowIds.has(p.id));
     const updates = selectedPanels.map(async (panel) => {
       const priceToApply = calculateRecommendedPrice(panel);
@@ -494,7 +504,6 @@ export default function SolarPanelPriceComparison() {
     alert(`Оновлено цін: ${okCount} / ${selectedPanels.length}`);
     setSelectedRowIds(new Set());
     await fetchComparisonData();
-    setIsBulkUpdating(false);
   };
   
   // Handle opening the price update modal
@@ -557,104 +566,11 @@ export default function SolarPanelPriceComparison() {
           setFilters={handleFiltersChange}
           brands={brands}
           suppliers={suppliers}
+          settingsButton={settingsButton}
         />
       </div>
       
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <RefreshDataButton onRefresh={refreshSolarPanelsData} />
-        {/* Copy */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setCopying(true);
-            const text = buildExport();
-            if (!text) { setCopying(false); return; }
-            navigator.clipboard.writeText(text)
-              .then(() => toast({ title: 'Скопійовано!', description: 'Дані таблиці скопійовані в буфер обміну.', duration: 2500 }))
-              .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати дані таблиці.', variant: 'destructive', duration: 3000 }))
-              .finally(() => setCopying(false));
-          }}
-        >
-          {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
-
-        {/* Settings */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Налаштування колонок</h4>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const all: Record<string, boolean> = {};
-                      staticColumns.forEach(c => all[c.key] = true);
-                      supplierColumns.forEach(s => all[`supplier:${s}`] = true);
-                      saveVisibleColumns(all);
-                    }}
-                  >
-                    Вибрати всі
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const minimal: Record<string, boolean> = {};
-                      ['index','full_name','brand','power','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
-                      supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
-                      saveVisibleColumns(minimal);
-                    }}
-                  >
-                    Необхідні
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {staticColumns.map(c => (
-                  <div key={c.key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`col-${c.key}`}
-                      checked={visibleColumns[c.key] !== false}
-                      onCheckedChange={(checked: boolean | string) => {
-                        const next = { ...visibleColumns, [c.key]: checked === true };
-                        saveVisibleColumns(next);
-                      }}
-                    />
-                    <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
-                  </div>
-                ))}
-                <div className="pt-2 font-medium">Постачальники</div>
-                {supplierColumns.map(s => {
-                  const k = `supplier:${s}`;
-                  return (
-                    <div key={k} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`col-${k}`}
-                        checked={visibleColumns[k] !== false}
-                        onCheckedChange={(checked: boolean | string) => {
-                          const next = { ...visibleColumns, [k]: checked === true };
-                          saveVisibleColumns(next);
-                        }}
-                      />
-                      <Label htmlFor={`col-${k}`}>{s}</Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        
-      </div>
+      <div className="mb-6 flex flex-wrap items-center gap-2" />
 
       {!isLoading && comparisonData && comparisonData.panels.length === 0 && (
         <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
@@ -961,7 +877,7 @@ export default function SolarPanelPriceComparison() {
                   {/* Використовуємо відсортований масив */}
                   {sortedPanels.map((panel, index) => (
                     <TableRow 
-                      key={panel.id}
+                      key={`${panel.id}-${index}-${displayPage}`}
                       className={
                         isAvailable(panel)
                           ? "hover:bg-muted/50 dark:hover:bg-muted/70"

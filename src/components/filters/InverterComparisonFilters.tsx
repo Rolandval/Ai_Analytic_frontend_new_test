@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { refreshInvertersData } from '@/services/dataRefresh.api';
+ 
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
@@ -32,8 +35,8 @@ const generations = ['1G', '2G', '3G'];
 const supplierStatuses = ['ME', 'SUPPLIER', 'COMPETITOR'];
 const statusLabels: Record<string, string> = {
   ME: 'ми',
-  SUPPLIER: 'постачальник',
-  COMPETITOR: 'конкурент',
+  SUPPLIER: 'постач.',
+  COMPETITOR: 'конкур.',
 };
 
 interface Props {
@@ -41,6 +44,7 @@ interface Props {
   setFilters: (f: InverterPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
+  settingsButton?: React.ReactNode;
 }
 
 interface DraggableFilterItemProps {
@@ -82,16 +86,18 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
   );
 };
 
-export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
+export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
   const debounceRef = useRef<NodeJS.Timeout>();
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  const { toast } = useToast();
   // Active badges: simple full render without clamping/popover
   
   // Drag and drop state
   const defaultFilterOrder = [
+    'actions',
     // 'full_name' moved outside of the filters panel
     'brands',
     'suppliers',
@@ -159,6 +165,59 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     // full_name input removed from filters; now rendered externally on the page
+    actions: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Дії</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-8 px-2 text-xs"
+            onClick={async () => {
+              try {
+                await refreshInvertersData();
+                toast({ title: 'Оновлено', description: 'Дані про наявність оновлено.', duration: 2000 });
+              } catch (e) {
+                toast({ title: 'Помилка', description: 'Не вдалося оновити дані про наявність.', variant: 'destructive' });
+              }
+            }}
+            title="Оновити дані про наявність"
+            aria-label="Оновити дані про наявність"
+          >
+            Оновити
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-8 px-2 text-xs"
+            onClick={() => {
+              const normalize = (o: Record<string, any>) => {
+                const n: Record<string, any> = {};
+                Object.entries(o).forEach(([k, v]) => {
+                  if (v === '' || v === null) return;
+                  if (Array.isArray(v)) {
+                    if (v.length > 0) n[k] = v.slice();
+                  } else if (v !== undefined) {
+                    n[k] = v;
+                  }
+                });
+                return n;
+              };
+              const payload = normalize({ ...local });
+              const text = JSON.stringify(payload, null, 2);
+              navigator.clipboard.writeText(text)
+                .then(() => toast({ title: 'Скопійовано', description: 'Налаштування фільтрів скопійовано в буфер обміну.', duration: 2000 }))
+                .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати налаштування.', variant: 'destructive' }));
+            }}
+            title="Копіювати налаштування"
+            aria-label="Копіювати налаштування"
+          >
+            Копіювати
+          </Button>
+          {settingsButton}
+        </div>
+      </div>
+    ),
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover
@@ -314,7 +373,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
                 onChange={() => setLocal((p) => ({ ...p, supplier_status: [s] }))}
                 className="peer accent-primary"
               />
-              <span className="truncate max-w-[80px]" title={statusLabels[s] || s}>
+              <span className="whitespace-nowrap" title={statusLabels[s] || s}>
                 {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
               </span>
             </label>
@@ -595,16 +654,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           </div>
         </SortableContext>
       </DndContext>
-
-      {/* actions */}
-      <div className={cn(
-        "sticky bottom-0 flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border z-10",
-        isExpanded ? "flex" : "hidden md:flex"
-      )}>
-        <Button size="sm" variant="ghost" onClick={reset} className="text-xs sm:text-sm h-8 sm:h-10">
-          Скинути
-        </Button>
-      </div>
     </div>
     </>
   );

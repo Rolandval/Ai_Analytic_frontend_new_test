@@ -631,7 +631,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
                 onChange={() => setLocal((p) => ({ ...p, supplier_status: [s] }))}
                 className="peer accent-primary"
               />
-              <span className="truncate max-w-[80px]" title={s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постачальник' : 'конкурент'}>
+              <span className="whitespace-nowrap" title={s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постачальник' : 'конкурент'}>
                 {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
               </span>
             </label>
@@ -659,7 +659,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
             setLocal((p) => ({ ...p, date_min: startDate, date_max: endDate }));
           }}
           placeholder="Оберіть період"
-          className="w-full h-10"
+          className="w-full  "
         />
       </div>
     ),

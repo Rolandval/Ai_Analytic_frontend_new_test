@@ -214,6 +214,82 @@ export default function BatteryPriceComparison() {
     try { localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(cfg)); } catch {}
   };
 
+  // Compact Settings button to place inside filters' draggable actions block
+  const settingsButton = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="secondary" size="xs" className="h-8 px-2 text-xs" title="Налаштування колонок" aria-label="Налаштування колонок">
+          <Settings className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Налаштування колонок</h4>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const all: Record<string, boolean> = {};
+                  staticColumns.forEach(c => all[c.key] = true);
+                  supplierColumns.forEach(s => all[`supplier:${s}`] = true);
+                  saveVisibleColumns(all);
+                }}
+              >
+                Вибрати всі
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const minimal: Record<string, boolean> = {};
+                  ['index','full_name','brand','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
+                  supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
+                  saveVisibleColumns(minimal);
+                }}
+              >
+                Необхідні
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {staticColumns.map(c => (
+              <div key={c.key} className="flex items-center gap-2">
+                <Checkbox
+                  id={`col-${c.key}`}
+                  checked={visibleColumns[c.key] !== false}
+                  onCheckedChange={(checked: boolean | string) => {
+                    const next = { ...visibleColumns, [c.key]: checked === true };
+                    saveVisibleColumns(next);
+                  }}
+                />
+                <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
+              </div>
+            ))}
+            <div className="pt-2 font-medium">Постачальники</div>
+            {supplierColumns.map(s => {
+              const k = `supplier:${s}`;
+              return (
+                <div key={k} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`col-${k}`}
+                    checked={visibleColumns[k] !== false}
+                    onCheckedChange={(checked: boolean | string) => {
+                      const next = { ...visibleColumns, [k]: checked === true };
+                      saveVisibleColumns(next);
+                    }}
+                  />
+                  <Label htmlFor={`col-${k}`}>{s}</Label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
   // Apply single row update
   const handleApplyRow = async (battery: BatteryWithSupplierPrices) => {
     if (updatingRowIds.has(battery.id)) return;
@@ -343,12 +419,14 @@ export default function BatteryPriceComparison() {
       }).unwrap();
       
       setComparisonData(result);
-      // Синхронізуємо локальний стан пагінації з відповіддю сервера
-      if (typeof result.page === 'number' && result.page !== page) {
-        setPage(result.page);
-      }
-      if (typeof result.page_size === 'number' && result.page_size !== pageSize) {
-        setPageSize(result.page_size);
+      // Не перезаписуємо локальні page/pageSize значення відповіддю сервера.
+      // Якщо поточна сторінка виходить за межі доступних — зменшуємо її до максимальної.
+      if (typeof result.total === 'number') {
+        const maxPages = Math.max(1, Math.ceil(result.total / pageSize));
+        if (page > maxPages) {
+          setPage(maxPages);
+          setFilters(prev => ({ ...prev, page: maxPages }));
+        }
       }
       
       // Extract unique supplier names to use as columns
@@ -510,108 +588,14 @@ export default function BatteryPriceComparison() {
           setFilters={handleFiltersChange}
           brands={brands}
           suppliers={suppliers}
+          settingsButton={settingsButton}
         />
       </div>
       
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <RefreshDataButton onRefresh={refreshBatteriesData} />
-        
-        {/* Copy button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setCopying(true);
-            const text = buildExport();
-            if (!text) { setCopying(false); return; }
-            navigator.clipboard.writeText(text)
-              .then(() => {
-                toast({ title: 'Скопійовано!', description: 'Дані таблиці скопійовані в буфер обміну.', duration: 2500 });
-              })
-              .catch(() => {
-                toast({ title: 'Помилка', description: 'Не вдалося скопіювати дані таблиці.', variant: 'destructive', duration: 3000 });
-              })
-              .finally(() => setCopying(false));
-          }}
-        >
-          {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
+  
 
-        {/* Settings popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Налаштування колонок</h4>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const all: Record<string, boolean> = {};
-                      staticColumns.forEach(c => all[c.key] = true);
-                      supplierColumns.forEach(s => all[`supplier:${s}`] = true);
-                      saveVisibleColumns(all);
-                    }}
-                  >
-                    Вибрати всі
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // Minimal useful set
-                      const minimal: Record<string, boolean> = {};
-                      ['index','full_name','brand','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
-                      // keep first 3 suppliers by default
-                      supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
-                      saveVisibleColumns(minimal);
-                    }}
-                  >
-                    Необхідні
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {staticColumns.map(c => (
-                  <div key={c.key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`col-${c.key}`}
-                      checked={visibleColumns[c.key] !== false}
-                      onCheckedChange={(checked: boolean | string) => {
-                        const next = { ...visibleColumns, [c.key]: checked === true };
-                        saveVisibleColumns(next);
-                      }}
-                    />
-                    <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
-                  </div>
-                ))}
-                <div className="pt-2 font-medium">Постачальники</div>
-                {supplierColumns.map(s => {
-                  const k = `supplier:${s}`;
-                  return (
-                    <div key={k} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`col-${k}`}
-                        checked={visibleColumns[k] !== false}
-                        onCheckedChange={(checked: boolean | string) => {
-                          const next = { ...visibleColumns, [k]: checked === true };
-                          saveVisibleColumns(next);
-                        }}
-                      />
-                      <Label htmlFor={`col-${k}`}>{s}</Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Settings moved into filters via settingsButton prop */}
 
         {/* Removed top-level bulk apply controls; actions moved to 'Акт' column header */}
       </div>

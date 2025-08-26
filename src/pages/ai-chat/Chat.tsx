@@ -1,8 +1,7 @@
 import React from 'react';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatWindow } from '@/components/chat/ChatWindow';
-import { ServerStatusPanel } from '@/components/layout/ServerStatusPanel';
-import { McpLiveLogger } from '@/components/mcp-logs/McpLiveLogger';
+ import { McpLiveLogger } from '@/components/mcp-logs/McpLiveLogger';
 import { cn } from '@/lib/utils';
 
 const AIChat: React.FC = () => (
@@ -30,7 +29,7 @@ const AIChat: React.FC = () => (
     </div>
     
     {/* Status panel з відновленим розташуванням */}
-    <ServerStatusPanel />
+ 
     
     {/* MCP Live Logger for SQL queries */}
     <McpLiveLogger />

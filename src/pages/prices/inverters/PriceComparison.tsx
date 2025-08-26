@@ -14,17 +14,16 @@ import {
   TableRow,
 } from "@/components/ui/Table";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
-import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/Select';
 // removed radio-group imports; using a single native radio input for unified toggle
 // removed page-level name search input; now handled inside InverterComparisonFilters
 
@@ -81,13 +80,11 @@ export default function InverterPriceComparison() {
   const [suppliers, setSuppliers] = useState<string[]>([]);
   // Column visibility state (persisted per-page)
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
-  // Copying state
-  const [copying, setCopying] = useState(false);
   const { toast } = useToast();
   
   // Стани для модального вікна оновлення ціни
-  const markup = 15; // Фіксована націнка 15%
-  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
+  const DEFAULT_MARKUP = 15; // Націнка за замовчуванням, %
+  const [rowMarkup, setRowMarkup] = useState<Record<number, number>>({});
   const [updatingRowIds, setUpdatingRowIds] = useState<Set<number>>(new Set());
   const [updatePriceModalOpen, setUpdatePriceModalOpen] = useState(false);
   const [selectedPriceInfo, setSelectedPriceInfo] = useState<{
@@ -142,6 +139,19 @@ export default function InverterPriceComparison() {
     }
   }, [comparisonData]);
 
+  // Ініціалізуємо націнку для кожного інвертора при завантаженні даних
+  useEffect(() => {
+    if (comparisonData?.inverters) {
+      setRowMarkup(prev => {
+        const next = { ...prev } as Record<number, number>;
+        for (const inv of comparisonData.inverters) {
+          if (next[inv.id] === undefined) next[inv.id] = DEFAULT_MARKUP;
+        }
+        return next;
+      });
+    }
+  }, [comparisonData]);
+
   // Використовуємо хук для сортування
   const { items: sortedInverters, requestSort, sortConfig } = useSortableTable<InverterWithSupplierPrices>(
     processedData,
@@ -160,6 +170,7 @@ export default function InverterPriceComparison() {
       { key: 'power', header: 'Вт' },
       { key: 'string_count', header: 'Стр' },
       { key: 'recommended', header: 'Рек' },
+      { key: 'markup', header: 'Нац' },
       { key: 'actual', header: 'Акт' },
       { key: 'totalAvailability', header: 'Наяв' },
     ]
@@ -186,6 +197,88 @@ export default function InverterPriceComparison() {
     setVisibleColumns(cfg);
     try { localStorage.setItem(LS_COLUMNS_KEY, JSON.stringify(cfg)); } catch {}
   };
+
+  // Compact settings popover button to embed into filters actions block
+  const settingsButton = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="secondary"
+          size="xs"
+          className="h-8 px-2 text-xs"
+          title="Налаштування колонок"
+          aria-label="Налаштування колонок"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium">Налаштування колонок</h4>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const all: Record<string, boolean> = {};
+                  staticColumns.forEach(c => all[c.key] = true);
+                  supplierColumns.forEach(s => all[`supplier:${s}`] = true);
+                  saveVisibleColumns(all);
+                }}
+              >
+                Вибрати всі
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const minimal: Record<string, boolean> = {};
+                  ['index','full_name','brand','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
+                  supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
+                  saveVisibleColumns(minimal);
+                }}
+              >
+                Необхідні
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {staticColumns.map(c => (
+              <div key={c.key} className="flex items-center gap-2">
+                <Checkbox
+                  id={`col-${c.key}`}
+                  checked={visibleColumns[c.key] !== false}
+                  onCheckedChange={(checked: boolean | string) => {
+                    const next = { ...visibleColumns, [c.key]: checked === true };
+                    saveVisibleColumns(next);
+                  }}
+                />
+                <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
+              </div>
+            ))}
+            <div className="pt-2 font-medium">Постачальники</div>
+            {supplierColumns.map(s => {
+              const k = `supplier:${s}`;
+              return (
+                <div key={k} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`col-${k}`}
+                    checked={visibleColumns[k] !== false}
+                    onCheckedChange={(checked: boolean | string) => {
+                      const next = { ...visibleColumns, [k]: checked === true };
+                      saveVisibleColumns(next);
+                    }}
+                  />
+                  <Label htmlFor={`col-${k}`}>{s}</Label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 
   // Apply single row update
   const handleApplyRow = async (inverter: InverterWithSupplierPrices) => {
@@ -218,49 +311,7 @@ export default function InverterPriceComparison() {
     }
   };
 
-  // Build export text based on visible columns and sorted rows
-  const buildExport = () => {
-    if (!comparisonData || !comparisonData.inverters || comparisonData.inverters.length === 0) return '';
-    // headers order: static columns in defined order, then supplier columns in current order
-    const headers: string[] = [];
-    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
-    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
-
-    const rows = sortedInverters.map((inv, idx) => {
-      const cells: string[] = [];
-      // index
-      if (visibleColumns['index'] !== false) cells.push(String((page - 1) * pageSize + idx + 1));
-      // full_name
-      if (visibleColumns['full_name'] !== false) cells.push(inv.full_name ?? '');
-      // brand
-      if (visibleColumns['brand'] !== false) cells.push(inv.brand ?? '');
-      // power
-      if (visibleColumns['power'] !== false) cells.push(inv.power?.toString() ?? '');
-      // string_count
-      if (visibleColumns['string_count'] !== false) cells.push(inv.string_count?.toString() ?? '');
-      // supplier columns (prices)
-      supplierColumns.forEach(s => {
-        if (visibleColumns[`supplier:${s}`] === false) return;
-        const price = getPriceForSupplier(inv, s);
-        cells.push(price !== null ? `${formatPrice(price)}$` : '-');
-      });
-      // recommended
-      if (visibleColumns['recommended'] !== false) {
-        const rec = inv.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
-        cells.push(rec !== null ? `${formatPrice(rec)}$` : '-');
-      }
-      // actual (calculated recommended with markup if selected)
-      if (visibleColumns['actual'] !== false) {
-        const val = calculateRecommendedPrice(inv);
-        cells.push(val ? `${formatPrice(val)}$` : '-');
-      }
-      // totalAvailability
-      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(inv)));
-      return cells.join('\t');
-    });
-
-    return `${headers.join('\t')}\n${rows.join('\n')}`;
-  };
+  // buildExport removed (now unused after consolidating actions into filters)
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -351,61 +402,18 @@ export default function InverterPriceComparison() {
     });
   };
 
-  // Handle row selection for bulk update
-  const handleRowSelection = (inverterId: number, checked: boolean) => {
-    setSelectedRowIds(prev => {
-      const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(inverterId);
-      } else {
-        newSet.delete(inverterId);
-      }
-      return newSet;
-    });
-  };
+  
 
-  // Select all rows currently in the dataset
-  const handleSelectAll = () => {
-    if (!comparisonData?.inverters) return;
-    const allIds = new Set(comparisonData.inverters.map(i => i.id));
-    setSelectedRowIds(allIds);
-  };
-
-  // Bulk apply: update site prices for selected rows with calculated recommended price
-  const handleBulkPriceUpdate = async () => {
-    if (!comparisonData?.inverters || selectedRowIds.size === 0) return;
-
-    const selectedItems = comparisonData.inverters.filter(i => selectedRowIds.has(i.id));
-    const updates = selectedItems.map(async (inverter) => {
-      const priceToApply = calculateRecommendedPrice(inverter);
-      if (!priceToApply) return Promise.resolve('skip');
-      const siteEntry = inverter.supplier_prices.find(sp => sp.site_id);
-      if (!siteEntry?.site_id) return Promise.resolve('skip');
-      const payload: UpdateSitePriceRequest = { site_id: siteEntry.site_id, price: priceToApply };
-      try {
-        await updateInverterSitePrice(payload);
-        return 'ok';
-      } catch (e) {
-        console.error('Bulk update error (inverter)', inverter.id, e);
-        return 'error';
-      }
-    });
-
-    const results = await Promise.allSettled(updates);
-    const okCount = results.filter(r => r.status === 'fulfilled').length;
-    // eslint-disable-next-line no-alert
-    alert(`Оновлено цін: ${okCount} / ${selectedItems.length}`);
-    setSelectedRowIds(new Set());
-    fetchComparisonData();
-  };
-
-  // Calculate recommended price with markup
+  // Calculate actual price from min supplier price with per-row markup
   const calculateRecommendedPrice = (inverter: InverterWithSupplierPrices) => {
-    const recommendedPrice = inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price;
-    if (recommendedPrice) {
-      return Math.round(recommendedPrice * (1 + markup / 100));
-    }
-    return null;
+    const minPrice = Math.min(
+      ...inverter.supplier_prices
+        .map(sp => sp.price)
+        .filter((p): p is number => p !== null && p !== undefined && p > 0)
+    );
+    if (!isFinite(minPrice)) return null;
+    const m = rowMarkup[inverter.id] ?? DEFAULT_MARKUP;
+    return Math.round(minPrice * (1 + m / 100));
   };
 
   // Determine if any supplier has this inverter available
@@ -476,6 +484,7 @@ export default function InverterPriceComparison() {
           setFilters={handleFiltersChange}
           brands={brands}
           suppliers={suppliers}
+          settingsButton={settingsButton}
         />
         {!isLoading && comparisonData && comparisonData.inverters.length === 0 && (
           <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
@@ -489,116 +498,7 @@ export default function InverterPriceComparison() {
         )}
       </div>
       
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <RefreshDataButton onRefresh={refreshInvertersData} />
-        {/* Copy button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setCopying(true);
-            const text = buildExport();
-            if (!text) { setCopying(false); return; }
-            navigator.clipboard.writeText(text)
-              .then(() => {
-                toast({ title: 'Скопійовано!', description: 'Дані таблиці скопійовані в буфер обміну.', duration: 2500 });
-              })
-              .catch(() => {
-                toast({ title: 'Помилка', description: 'Не вдалося скопіювати дані таблиці.', variant: 'destructive', duration: 3000 });
-              })
-              .finally(() => setCopying(false));
-          }}
-        >
-          {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
-
-        {/* Settings popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-80">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">Налаштування колонок</h4>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const all: Record<string, boolean> = {};
-                      staticColumns.forEach(c => all[c.key] = true);
-                      supplierColumns.forEach(s => all[`supplier:${s}`] = true);
-                      saveVisibleColumns(all);
-                    }}
-                  >
-                    Вибрати всі
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const minimal: Record<string, boolean> = {};
-                      ['index','full_name','brand','recommended','actual','totalAvailability'].forEach(k => minimal[k] = true);
-                      supplierColumns.slice(0,3).forEach(s => minimal[`supplier:${s}`] = true);
-                      saveVisibleColumns(minimal);
-                    }}
-                  >
-                    Необхідні
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {staticColumns.map(c => (
-                  <div key={c.key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`col-${c.key}`}
-                      checked={visibleColumns[c.key] !== false}
-                      onCheckedChange={(checked: boolean | string) => {
-                        const next = { ...visibleColumns, [c.key]: checked === true };
-                        saveVisibleColumns(next);
-                      }}
-                    />
-                    <Label htmlFor={`col-${c.key}`}>{c.header}</Label>
-                  </div>
-                ))}
-                <div className="pt-2 font-medium">Постачальники</div>
-                {supplierColumns.map(s => {
-                  const k = `supplier:${s}`;
-                  return (
-                    <div key={k} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`col-${k}`}
-                        checked={visibleColumns[k] !== false}
-                        onCheckedChange={(checked: boolean | string) => {
-                          const next = { ...visibleColumns, [k]: checked === true };
-                          saveVisibleColumns(next);
-                        }}
-                      />
-                      <Label htmlFor={`col-${k}`}>{s}</Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-        
-        {selectedRowIds.size > 0 && (
-          <>
-            <span className="text-xs text-blue-700 ml-2">Вибрано: {selectedRowIds.size}</span>
-            <Button 
-              onClick={handleBulkPriceUpdate}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-xs px-2 py-1 h-7"
-            >
-              Застосувати всі обрані
-            </Button>
-          </>
-        )}
-      </div>
+      {/* Top toolbar removed: actions are now inside filters' compact block */}
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="overflow-auto">
@@ -757,37 +657,17 @@ export default function InverterPriceComparison() {
                         </div>
                       </TableHead>
                     )}
+                    {visibleColumns['markup'] !== false && (
+                      <TableHead className="text-center w-12">
+                        <div className="flex items-center justify-center">
+                          <span className="text-xs" title="Націнка">Нац</span>
+                        </div>
+                      </TableHead>
+                    )}
                     {visibleColumns['actual'] !== false && (
                       <TableHead className="text-center w-12">
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center justify-center">
                           <span className="text-xs" title="Актуальна">Акт</span>
-                          <div className="flex items-center gap-2">
-                            {(() => {
-                              const totalCount = comparisonData?.inverters?.length ?? 0;
-                              const allSelected = totalCount > 0 && selectedRowIds.size === totalCount;
-                              return (
-                                <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-                                  <input
-                                    type="radio"
-                                    checked={allSelected}
-                                    onClick={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
-                                    onChange={() => (allSelected ? setSelectedRowIds(new Set()) : handleSelectAll())}
-                                    className="accent-primary focus:ring-0 w-3 h-3"
-                                  />
-                                  <span className="text-[10px]">Всі</span>
-                                </label>
-                              );
-                            })()}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleBulkPriceUpdate}
-                              disabled={selectedRowIds.size === 0}
-                              className="text-[10px] px-1 py-0.5 h-5"
-                            >
-                              Заст
-                            </Button>
-                          </div>
                         </div>
                       </TableHead>
                     )}
@@ -899,36 +779,44 @@ export default function InverterPriceComparison() {
                         </TableCell>
                       )}
                       
+                      {/* Markup column */}
+                      {visibleColumns['markup'] !== false && (
+                        <TableCell className="text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={rowMarkup[inverter.id] ?? DEFAULT_MARKUP}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setRowMarkup(prev => ({ ...prev, [inverter.id]: isNaN(val) ? DEFAULT_MARKUP : val }));
+                            }}
+                            className="w-14 h-6 text-[11px] border border-gray-300 rounded px-1 text-center"
+                          />
+                        </TableCell>
+                      )}
+
                       {/* Actual price display column */}
                       {visibleColumns['actual'] !== false && (
                         <TableCell className="text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedRowIds.has(inverter.id)}
-                              onChange={(e) => handleRowSelection(inverter.id, e.target.checked)}
-                              className="w-4 h-4"
-                            />
-                            {selectedRowIds.has(inverter.id) && (
-                              <>
-                                {calculateRecommendedPrice(inverter) ? (
-                                  <span className="text-blue-700 font-medium text-sm">
-                                    {formatPrice(calculateRecommendedPrice(inverter))}&nbsp;$
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">Немає ціни</span>
-                                )}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-[10px] px-1 py-0.5 h-5"
-                                  onClick={() => handleApplyRow(inverter)}
-                                  disabled={updatingRowIds.has(inverter.id)}
-                                >
-                                  {updatingRowIds.has(inverter.id) ? '...' : 'Застосувати'}
-                                </Button>
-                              </>
+                          <div className="flex flex-col items-center gap-1">
+                            {calculateRecommendedPrice(inverter) ? (
+                              <span className="text-blue-700 font-medium text-sm">
+                                {formatPrice(calculateRecommendedPrice(inverter))}&nbsp;$
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Немає ціни</span>
                             )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-[10px] px-1 py-0.5 h-5"
+                              onClick={() => handleApplyRow(inverter)}
+                              disabled={updatingRowIds.has(inverter.id) || !calculateRecommendedPrice(inverter)}
+                            >
+                              {updatingRowIds.has(inverter.id) ? '...' : 'Застосувати'}
+                            </Button>
                           </div>
                         </TableCell>
                       )}

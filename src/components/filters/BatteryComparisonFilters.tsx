@@ -167,9 +167,10 @@ interface Props {
   setFilters: (f: BatteryPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
+  settingsButton?: React.ReactNode;
 }
 
-export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
+export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current
   });
@@ -226,6 +227,7 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
       }
     }
     return [
+      'actions',
       'brands',
       'suppliers',
       'volume',
@@ -262,6 +264,59 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
+    actions: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Дії</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-8 px-2 text-xs"
+            onClick={async () => {
+              try {
+                await refreshBatteriesData();
+                toast({ title: 'Оновлено', description: 'Дані про наявність оновлено.', duration: 2000 });
+              } catch (e) {
+                toast({ title: 'Помилка', description: 'Не вдалося оновити дані про наявність.', variant: 'destructive' });
+              }
+            }}
+            title="Оновити дані про наявність"
+            aria-label="Оновити дані про наявність"
+          >
+            Оновити
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-8 px-2 text-xs"
+            onClick={() => {
+              const normalize = (o: Record<string, any>) => {
+                const n: Record<string, any> = {};
+                Object.entries(o).forEach(([k, v]) => {
+                  if (v === '' || v === null) return;
+                  if (Array.isArray(v)) {
+                    if (v.length > 0) n[k] = v.slice();
+                  } else if (v !== undefined) {
+                    n[k] = v;
+                  }
+                });
+                return n;
+              };
+              const payload = normalize({ ...local });
+              const text = JSON.stringify(payload, null, 2);
+              navigator.clipboard.writeText(text)
+                .then(() => toast({ title: 'Скопійовано', description: 'Налаштування фільтрів скопійовано в буфер обміну.', duration: 2000 }))
+                .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати налаштування.', variant: 'destructive' }));
+            }}
+            title="Копіювати налаштування"
+            aria-label="Копіювати налаштування"
+          >
+            Копіювати
+          </Button>
+          {settingsButton}
+        </div>
+      </div>
+    ),
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover
@@ -456,7 +511,7 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
                 onChange={() => setLocal((p) => ({ ...p, supplier_status: [s] }))}
                 className="peer accent-primary"
               />
-              <span className="truncate max-w-[80px]" title={s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постачальник' : 'конкурент'}>
+              <span className="whitespace-nowrap" title={s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постачальник' : 'конкурент'}>
                 {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
               </span>
             </label>
@@ -484,7 +539,7 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
           setLocal((p) => ({ ...p, date_min: startDate, date_max: endDate }));
         }}
         placeholder="Оберіть період"
-        className="w-full h-10"
+        className="w-full "
       />
       </div>
     ),
@@ -745,16 +800,6 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
           </div>
         </SortableContext>
       </DndContext>
-
-      {/* actions */}
-      <div className={cn(
-        "sticky bottom-0 flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border z-10",
-        isExpanded ? "flex" : "hidden md:flex"
-      )}>
-        <Button size="sm" variant="ghost" onClick={reset} className="text-xs sm:text-sm h-8 sm:h-10">
-          Скинути
-        </Button>
-      </div>
     </div>
   );
 };

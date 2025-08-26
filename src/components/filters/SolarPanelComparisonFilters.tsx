@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
 import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
@@ -36,8 +38,8 @@ const frameColors = ['black', 'silver'];
 const supplierStatuses = ['ME', 'SUPPLIER', 'COMPETITOR'];
 const statusLabels: Record<string, string> = {
   ME: 'ми',
-  SUPPLIER: 'постачальник',
-  COMPETITOR: 'конкурент',
+  SUPPLIER: 'постач.',
+  COMPETITOR: 'конкур.',
 };
 
 // DraggableFilterItem component
@@ -81,14 +83,16 @@ interface Props {
   setFilters: (f: SolarPanelPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
+  settingsButton?: React.ReactNode;
 }
 
-export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
+export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<SolarPanelPriceListRequestSchema>({
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  const { toast } = useToast();
   // total active badges counter for unified "Показати всі"
   const totalActiveBadges = (
     (local.brands?.length || 0) +
@@ -116,6 +120,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
   // Filter order state
   const defaultFilterOrder = [
+    'actions',
     'brands', 'suppliers', 'cities', 'power', 'price', 'price_per_w', 'thickness',
     'panel_type', 'cell_type', 'panel_color', 'frame_color', 'supplier_status', 'date_range'
   ];
@@ -194,6 +199,59 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
+    actions: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Дії</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-8 px-2 text-xs"
+            onClick={async () => {
+              try {
+                await refreshSolarPanelsData();
+                toast({ title: 'Оновлено', description: 'Дані про наявність оновлено.', duration: 2000 });
+              } catch (e) {
+                toast({ title: 'Помилка', description: 'Не вдалося оновити дані про наявність.', variant: 'destructive' });
+              }
+            }}
+            title="Оновити дані про наявність"
+            aria-label="Оновити дані про наявність"
+          >
+            Оновити
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-8 px-2 text-xs"
+            onClick={() => {
+              const normalize = (o: Record<string, any>) => {
+                const n: Record<string, any> = {};
+                Object.entries(o).forEach(([k, v]) => {
+                  if (v === '' || v === null) return;
+                  if (Array.isArray(v)) {
+                    if (v.length > 0) n[k] = v.slice();
+                  } else if (v !== undefined) {
+                    n[k] = v;
+                  }
+                });
+                return n;
+              };
+              const payload = normalize({ ...local });
+              const text = JSON.stringify(payload, null, 2);
+              navigator.clipboard.writeText(text)
+                .then(() => toast({ title: 'Скопійовано', description: 'Налаштування фільтрів скопійовано в буфер обміну.', duration: 2000 }))
+                .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати налаштування.', variant: 'destructive' }));
+            }}
+            title="Копіювати налаштування"
+            aria-label="Копіювати налаштування"
+          >
+            Копіювати
+          </Button>
+          {settingsButton}
+        </div>
+      </div>
+    ),
     brands: (
       <div className="flex flex-col gap-1 h-[60px]">
         <label className="text-[12px] font-medium text-slate-600">Бренди</label>
@@ -449,7 +507,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     supplier_status: (
       <div className="flex flex-col gap-1 h-[60px]">
         <label className="text-[12px] font-medium text-slate-600">Статус постач.</label>
-        <div className="flex flex-nowrap gap-2 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
+        <div className="flex flex-nowrap gap-1 text-[14px] leading-tight overflow-hidden h-[60px] items-end">
           {supplierStatuses.map((status) => (
             <label key={status} className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
               <input
@@ -459,7 +517,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
                 onChange={() => setLocal(p => ({ ...p, supplier_status: [status] }))}
                 className="peer accent-primary"
               />
-              <span className="truncate max-w-[80px]" title={statusLabels[status]}>{statusLabels[status]}</span>
+              <span className="whitespace-nowrap" title={statusLabels[status]}>{statusLabels[status]}</span>
             </label>
           ))}
           <label className="inline-flex items-center gap-1 cursor-pointer text-slate-700 whitespace-nowrap">
@@ -470,13 +528,13 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
               onChange={() => setLocal(p => ({ ...p, supplier_status: undefined }))}
               className="peer accent-primary"
             />
-            <span className="max-w-[80px] truncate">всі</span>
+            <span className="whitespace-nowrap">всі</span>
           </label>
         </div>
       </div>
     ),
     date_range: (
-      <div className="flex flex-col gap-1 h-[60px]">
+      <div className="flex flex-col gap-1 h-[60px]  align-end">
         <label className="text-[12px] font-medium text-slate-600">Період</label>
         <div className="h-[60px] flex items-end justify-center">
           <DateRangePicker
@@ -489,7 +547,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
                 date_max: end
               }));
             }}
-            className="w-full h-10 text-sm"
+            className="w-full text-sm"
           />
         </div>
       </div>
@@ -690,7 +748,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
                       ))}
                       {(local.date_min || local.date_max) && (
                         <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
-                          Період: {local.date_min || '—'} — {local.date_max || '—'}
+                          Період : {local.date_min || '—'} — {local.date_max || '—'}
                           <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))} />
                         </Badge>
                       )}
@@ -749,12 +807,10 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
       {/* Actions */}
       <div className={cn(
-        "sticky bottom-0 flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border z-10 mt-4",
+        "flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border z-10 mt-4",
         isExpanded ? "flex" : "hidden md:flex"
       )}>
-        <Button size="sm" variant="ghost" onClick={reset} className="text-xs sm:text-sm h-8 sm:h-10">
-          Скинути
-        </Button>
+        
       </div>
     </div>
   );
