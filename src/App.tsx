@@ -23,6 +23,10 @@ import InverterPriceComparisonPage from './pages/prices/inverters/PriceCompariso
 import InverterAnalyticsPage from './pages/inverters/Analytics';
 import SolarPanelAnalyticsPage from './pages/solar-panels/Analytics';
 import QRCodeGenerator from './pages/ai-character/qr-code/Generate';
+import AIProductFillerHome from './pages/ai-product-filler/Home';
+import AIProductFillerGeneration from './pages/ai-product-filler/Generation';
+import Settings from './pages/ai-product-filler/Settings';
+import AIProductFillerTemplates from './pages/ai-product-filler/Templates';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -168,6 +172,12 @@ function App() {
           <Route path="/ai-character/qr-code/generate" element={<QRCodeGenerator />} />
           <Route path="/ai-sales" element={<ServicePage />} />
           <Route path="/ai-video" element={<ServicePage />} />
+
+          {/* AI Product Filler */}
+          <Route path="/ai-product-filler" element={<AIProductFillerHome />} />
+          <Route path="/ai-product-filler/generation" element={<AIProductFillerGeneration />} />
+          <Route path="/ai-product-filler/templates" element={<AIProductFillerTemplates />} />
+          <Route path="/ai-product-filler/settings" element={<Settings/>} />
 
           {/* AI Supply Manager */}
           <Route path="/ai-supply" element={<ServicePage />} />

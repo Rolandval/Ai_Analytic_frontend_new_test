@@ -12,6 +12,7 @@ interface ServiceState {
   isCharacterService: () => boolean;
   isForecastingService: () => boolean;
   isSupplyManagerService: () => boolean;
+  isProductFillerService: () => boolean;
 }
 
 export const useServiceStore = create<ServiceState>((set, get) => ({
@@ -70,5 +71,10 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
   isSupplyManagerService: () => {
     const path = get().currentServicePath;
     return path === '/ai-supply' || path.startsWith('/ai-supply/');
+  },
+
+  isProductFillerService: () => {
+    const path = get().currentServicePath;
+    return path === '/ai-product-filler' || path.startsWith('/ai-product-filler/');
   }
 }));

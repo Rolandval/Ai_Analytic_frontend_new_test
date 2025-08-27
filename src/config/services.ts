@@ -9,7 +9,8 @@ import {
   UserCircle, 
   Store, 
   Video,
-  PackageCheck
+  PackageCheck,
+  Package
 } from 'lucide-react';
 
 export type AIService = {
@@ -97,6 +98,13 @@ export const aiServices: AIService[] = [
     path: "/ai-video",
     color: "hsl(198, 93%, 60%)", // Блакитний
     icon: Video
+  },
+  {
+    name: "Ai - product filler",
+    description: "Автоматичне заповнення карток товарів: генерація описів, характеристик, тегів та зображень. Прискорює публікацію товарів і забезпечує консистентність контенту.",
+    path: "/ai-product-filler",
+    color: "hsl(260, 70%, 55%)",
+    icon: Package
   }
 ];
 

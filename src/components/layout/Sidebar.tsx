@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { navItems } from '@/config/nav';
 import { accountantNavItems } from '@/config/accountantNav';
 import { contentNavItems } from '@/config/contentNav';
+import { productFillerNavItems } from '@/config/productFillerNav';
 import { adsManagerNavItems } from '@/config/adsManagerNav';
 import { characterNavItems } from '@/config/characterNav';
 import { forecastingNavItems } from '@/config/forecastingNav';
@@ -29,7 +30,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
   const [openItem, setOpenItem] = useState('');
   // Використовуємо props для стану згорнення
   const setAccentColor = useThemeStore((state) => state.setAccentColor);
-  const { setCurrentServicePath, getCurrentService, isAnalyticsService, isAccountantService, isContentService, isAdsManagerService, isCharacterService, isForecastingService, isSupplyManagerService } = useServiceStore();
+  const { setCurrentServicePath, getCurrentService, isAnalyticsService, isAccountantService, isContentService, isAdsManagerService, isCharacterService, isForecastingService, isSupplyManagerService, isProductFillerService } = useServiceStore();
 
   useEffect(() => {
     // Update current service path
@@ -158,6 +159,68 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
               )}
             </li>
           ))}
+
+          {isProductFillerService() && productFillerNavItems.map((item) => (
+            <li key={item.title} className="mb-2">
+              <Link
+                to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}
+                onClick={(e) => {
+                  if (item.subItems && item.subItems.length > 0) {
+                    e.preventDefault();
+                    toggleItem(item.title);
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  item.basePath &&
+                    location.pathname.startsWith(item.basePath) &&
+                    'text-foreground bg-primary/20'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon && <item.icon className="w-5 h-5 stroke-[1.3]" />}
+                  {!collapsed && <span>{item.title}</span>}
+                </div>
+                {!collapsed && item.subItems && item.subItems.length > 0 && (
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 transition-transform',
+                      openItem === item.title && 'rotate-180'
+                    )}
+                  />
+                )}
+              </Link>
+              {!collapsed && (
+              <AnimatePresence>
+                {openItem === item.title && item.subItems && item.subItems.length > 0 && (
+                  <motion.ul
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden mt-1 ml-4 border-l border-border"
+                  >
+                    {item.subItems.map((subItem) => (
+                      <li key={subItem.href}>
+                        <Link
+                          to={subItem.href || '#'}
+                          className={cn(
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            location.pathname === subItem.href && 'text-foreground bg-primary/10'
+                          )}
+                        >
+                          {subItem.icon && <subItem.icon className="w-4 h-4 flex-shrink-0 stroke-[1.3]" />}
+                          <span className="flex-1">{subItem.title}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+              )}
+            </li>
+          ))}
+
+          
 
           {isAnalyticsService() && navItems.map((item) => (
             <li key={item.title} className="mb-2">
