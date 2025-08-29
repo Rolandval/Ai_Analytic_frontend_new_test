@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { refreshInvertersData } from '@/services/dataRefresh.api';
- 
+
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
 import { Filter, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -87,7 +88,6 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
 };
 
 export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
-  const debounceRef = useRef<NodeJS.Timeout>();
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current
   });
@@ -98,7 +98,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   // Drag and drop state
   const defaultFilterOrder = [
     'actions',
-    // 'full_name' moved outside of the filters panel
     'brands',
     'suppliers',
     'power',
@@ -139,22 +138,18 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
     }
   };
 
-  // Auto-apply filters with debounce
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    debounceRef.current = setTimeout(() => {
-      setFilters({ ...local, page: 1 });
-    }, 300);
-  }, [local, setFilters]);
-
   // Keep local.full_name in sync with external current.full_name (controlled outside)
   useEffect(() => {
     setLocal((prev) => ({ ...prev, full_name: current.full_name }));
     // We only care about current.full_name changes here
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current.full_name]);
+
+  // Debounced sync of local state to filters
+  useEffect(() => {
+    const timeoutId = setTimeout(() => setFilters(local), 300);
+    return () => clearTimeout(timeoutId);
+  }, [local, setFilters]);
 
   const reset = () => {
     const base = { page: 1, page_size: current.page_size ?? 10 } as InverterPriceListRequestSchema;
@@ -224,7 +219,10 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           placeholder="+ Виробник"
           options={brands}
           values={local.brands ?? []}
-          onChange={(brands: string[] | undefined) => setLocal(prev => ({ ...prev, brands }))} 
+          onChange={(brands: string[] | undefined) => {
+            const newLocal = { ...local, brands, page: 1 };
+            setLocal(newLocal);
+          }}
           showSelectAll
           selectAllLabel="Вибрати всі бренди"
           clearLabel="Скинути"
@@ -238,7 +236,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           placeholder="+ Постачальник"
           options={suppliers}
           values={local.suppliers}
-          onChange={(vals) => setLocal((p) => ({ ...p, suppliers: vals }))}
+          onChange={(vals) => {
+            const newLocal = { ...local, suppliers: vals, page: 1 };
+            setLocal(newLocal);
+            setFilters(newLocal);
+          }}
           showSelectAll
           selectAllLabel="Вибрати всіх постачальників"
           clearLabel="Скинути"
@@ -254,7 +256,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             type="number"
             placeholder="від"
             value={local.power_min ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, power_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
@@ -262,7 +268,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             type="number"
             placeholder="до"
             value={local.power_max ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, power_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-10 text-sm border-gray-300"
           />
         </div>
@@ -278,7 +288,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
                 type="radio"
                 name="inverter-type-comp"
                 checked={local.inverter_type === t}
-                onChange={() => setLocal((p) => ({ ...p, inverter_type: t }))}
+                onChange={() => {
+                  const newLocal = { ...local, inverter_type: t, page: 1 };
+                  setLocal(newLocal);
+                  setFilters(newLocal);
+                }}
                 className="peer accent-primary"
               />
               <span className="truncate max-w-[80px]" title={t}>
@@ -291,7 +305,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               type="radio"
               name="inverter-type-comp"
               checked={local.inverter_type === undefined}
-              onChange={() => setLocal((p) => ({ ...p, inverter_type: undefined }))}
+              onChange={() => {
+                const newLocal = { ...local, inverter_type: undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
               className="peer accent-primary"
             />
             <span>всі</span>
@@ -307,7 +325,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             type="number"
             placeholder="від"
             value={local.string_count_min ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, string_count_min: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, string_count_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
@@ -315,7 +337,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             type="number"
             placeholder="до"
             value={local.string_count_max ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, string_count_max: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, string_count_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-10 text-sm border-gray-300"
           />
         </div>
@@ -331,7 +357,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
                 type="radio"
                 name="generation-comp"
                 checked={local.generation === g}
-                onChange={() => setLocal((p) => ({ ...p, generation: g }))}
+                onChange={() => {
+                  const newLocal = { ...local, generation: g, page: 1 };
+                  setLocal(newLocal);
+                  setFilters(newLocal);
+                }}
                 className="peer accent-primary"
               />
               <span className="truncate max-w-[80px]" title={g}>{g}</span>
@@ -342,7 +372,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               type="radio"
               name="generation-comp"
               checked={local.generation === undefined}
-              onChange={() => setLocal((p) => ({ ...p, generation: undefined }))}
+              onChange={() => {
+                const newLocal = { ...local, generation: undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
               className="peer accent-primary"
             />
             <span>всі</span>
@@ -355,7 +389,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         <Input
           placeholder="Firmware"
           value={local.firmware ?? ''}
-          onChange={(e) => setLocal((p) => ({ ...p, firmware: e.target.value || undefined }))}
+          onChange={(e) => {
+            const newLocal = { ...local, firmware: e.target.value || undefined, page: 1 };
+            setLocal(newLocal);
+            setFilters(newLocal);
+          }}
           className="h-10"
         />
       </div>
@@ -370,7 +408,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
                 type="radio"
                 name="supplier-status-comp"
                 checked={local.supplier_status?.[0] === s}
-                onChange={() => setLocal((p) => ({ ...p, supplier_status: [s] }))}
+                onChange={() => {
+                  const newLocal = { ...local, supplier_status: [s], page: 1 };
+                  setLocal(newLocal);
+                  setFilters(newLocal);
+                }}
                 className="peer accent-primary"
               />
               <span className="whitespace-nowrap" title={statusLabels[s] || s}>
@@ -383,7 +425,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               type="radio"
               name="supplier-status-comp"
               checked={!local.supplier_status || local.supplier_status.length === 0}
-              onChange={() => setLocal((p) => ({ ...p, supplier_status: undefined }))}
+              onChange={() => {
+                const newLocal = { ...local, supplier_status: undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
               className="peer accent-primary"
             />
             <span>всі</span>
@@ -399,7 +445,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             type="number"
             placeholder="від"
             value={local.price_min ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, price_min: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, price_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-10 text-sm border-gray-300"
           />
           <span className="text-xs text-slate-400">-</span>
@@ -407,7 +457,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             type="number"
             placeholder="до"
             value={local.price_max ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, price_max: e.target.value ? Number(e.target.value) : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, price_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-10 text-sm border-gray-300"
           />
         </div>
@@ -420,7 +474,9 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           startDate={local.date_min}
           endDate={local.date_max}
           onChange={(startDate: string | undefined, endDate: string | undefined) => {
-            setLocal((p) => ({ ...p, date_min: startDate, date_max: endDate }));
+            const newLocal = { ...local, date_min: startDate, date_max: endDate, page: 1 };
+            setLocal(newLocal);
+            setFilters(newLocal);
           }}
           placeholder="Оберіть період"
           className="w-full"
@@ -436,7 +492,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               type="radio"
               name="price-sort-comp"
               checked={local.price_sort === 'asc'}
-              onChange={() => setLocal((p) => ({ ...p, price_sort: 'asc' }))}
+              onChange={() => {
+                const newLocal = { ...local, price_sort: 'asc', page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
               className="peer accent-primary"
             />
             <span className="truncate max-w-[80px]">↑ ціна</span>
@@ -446,7 +506,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               type="radio"
               name="price-sort-comp"
               checked={local.price_sort === 'desc'}
-              onChange={() => setLocal((p) => ({ ...p, price_sort: 'desc' }))}
+              onChange={() => {
+                const newLocal = { ...local, price_sort: 'desc', page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
               className="peer accent-primary"
             />
             <span className="truncate max-w-[80px]">↓ ціна</span>
@@ -456,7 +520,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               type="radio"
               name="price-sort-comp"
               checked={local.price_sort === undefined}
-              onChange={() => setLocal((p) => ({ ...p, price_sort: undefined }))}
+              onChange={() => {
+                const newLocal = { ...local, price_sort: undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
               className="peer accent-primary"
             />
             <span>без сорт.</span>
@@ -466,171 +534,267 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
     ),
   };
 
+  const totalActiveBadges = 
+    (local.brands?.length || 0) +
+    (local.suppliers?.length || 0) +
+    (local.power_min || local.power_max ? 1 : 0) +
+    (local.string_count_min || local.string_count_max ? 1 : 0) +
+    (local.price_min || local.price_max ? 1 : 0) +
+    (local.inverter_type ? 1 : 0) +
+    (local.generation ? 1 : 0) +
+    (local.firmware ? 1 : 0) +
+    (local.supplier_status?.length || 0) +
+    (local.date_min || local.date_max ? 1 : 0) +
+    (local.price_sort ? 1 : 0);
+
   return (
     <>
 
     <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-2 sm:gap-4">
-      {/* Фільтр тогл для мобільних */}
-      <div className="flex items-center justify-between md:hidden p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <div className="flex items-end gap-1 h-[60px]">
-          <Filter size={18} className="text-gray-500" />
-          <span className="text-sm font-medium">Параметри фільтрації</span>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => setIsExpanded(!isExpanded)} 
-          className="h-8 w-8 p-0">
-          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </Button>
-      </div>
-
-      {/* Search + Active filter badges in one row */}
-      <div className="w-full flex flex-col gap-2">
-        <div className="flex items-start gap-2 flex-wrap">
-          {/* Left: external name search, controlled via local.full_name */}
+      {/* Top search and active filters */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        {/* Name search input */}
+        <div className="flex-shrink-0">
           <Input
             placeholder="Пошук по назві..."
             value={local.full_name ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, full_name: e.target.value ? e.target.value : undefined }))}
+            onChange={(e) => {
+              const newLocal = { ...local, full_name: e.target.value ? e.target.value : undefined, page: 1 };
+              setLocal(newLocal);
+              setFilters(newLocal);
+            }}
             className="h-8 w-[220px] sm:w-[280px]"
           />
-          {/* Right: badges take remaining space */}
-          <div className="flex-1 min-w-[200px]">
-            {(() => {
-              const badges: React.ReactNode[] = [];
-              (local.brands || []).forEach((b) => {
-                badges.push(
-                  <Badge key={`brand-${b}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 h-6 text-xs">
-                    {b}
-                    <button onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(x => x !== b) }))} className="ml-1">
-                      <X size={12} />
-                    </button>
+        </div>
+        
+        {/* Active filters */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Visible badges area (clamped to 2 rows with fade overlay) */}
+          <div className="relative overflow-hidden max-h-[56px]">
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Бренди */}
+              {local.brands && local.brands.length > 0 && (
+                local.brands.map(brand => (
+                  <Badge key={brand} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                    {brand}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))}
+                    />
                   </Badge>
-                );
-              });
-              (local.suppliers || []).forEach((s) => {
-                badges.push(
-                  <Badge key={`supplier-${s}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200 h-6 text-xs">
-                    {s}
-                    <button onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(x => x !== s) }))} className="ml-1">
-                      <X size={12} />
-                    </button>
+                ))
+              )}
+              
+              {/* Постачальники */}
+              {local.suppliers && local.suppliers.length > 0 && (
+                local.suppliers.map(supplier => (
+                  <Badge key={supplier} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                    {supplier}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(s => s !== supplier) }))}
+                    />
                   </Badge>
-                );
-              });
-              if (local.full_name) {
-                badges.push(
-                  <Badge key={`full_name`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200 h-6 text-xs">
-                    Назва: {local.full_name}
-                    <button onClick={() => setLocal(p => ({ ...p, full_name: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.power_min !== undefined || local.power_max !== undefined) {
-                badges.push(
-                  <Badge key={`power`} variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200 h-6 text-xs">
-                    Потужн.: {local.power_min ?? '∞'}-{local.power_max ?? '∞'} кВт
-                    <button onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.string_count_min !== undefined || local.string_count_max !== undefined) {
-                badges.push(
-                  <Badge key={`string_count`} variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200 h-6 text-xs">
-                    Стрінги: {local.string_count_min ?? '∞'}-{local.string_count_max ?? '∞'}
-                    <button onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.price_min !== undefined || local.price_max !== undefined) {
-                badges.push(
-                  <Badge key={`price`} variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200 h-6 text-xs">
-                    Ціна: {local.price_min ?? '∞'}-{local.price_max ?? '∞'} $
-                    <button onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.inverter_type) {
-                badges.push(
-                  <Badge key={`inverter_type`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200 h-6 text-xs">
-                    Тип: {local.inverter_type}
-                    <button onClick={() => setLocal(p => ({ ...p, inverter_type: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.generation) {
-                badges.push(
-                  <Badge key={`generation`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200 h-6 text-xs">
-                    Покоління: {local.generation}
-                    <button onClick={() => setLocal(p => ({ ...p, generation: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.firmware) {
-                badges.push(
-                  <Badge key={`firmware`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200 h-6 text-xs">
-                    Firmware: {local.firmware}
-                    <button onClick={() => setLocal(p => ({ ...p, firmware: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              (local.supplier_status && local.supplier_status.length > 0 ? local.supplier_status : []).forEach((s) => {
-                badges.push(
-                  <Badge key={`status-${s}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200 h-6 text-xs">
-                    Статус постач.: {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
-                    <button onClick={() => setLocal(p => ({ ...p, supplier_status: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              });
-              if (local.date_min || local.date_max) {
-                badges.push(
-                  <Badge key={`date`} variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200 h-6 text-xs">
-                    Період: {local.date_min || '—'} — {local.date_max || '—'}
-                    <button onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              if (local.price_sort) {
-                badges.push(
-                  <Badge key={`price_sort`} variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200 h-6 text-xs">
-                    Сортування: {local.price_sort === 'asc' ? '↑ ціна' : '↓ ціна'}
-                    <button onClick={() => setLocal(p => ({ ...p, price_sort: undefined }))} className="ml-1">
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                );
-              }
-              return (
-                <div className="flex flex-wrap gap-2 items-center">
-                  {badges}
-                  {badges.length > 0 && (
-                    <Button variant="outline" onClick={reset} size="xs">
-                      <X className="w-4 h-4 mr-2" /> Скинути
-                    </Button>
-                  )}
-                </div>
-              );
-            })()}
+                ))
+              )}
+              
+              {/* Потужність */}
+              {(local.power_min || local.power_max) && (
+                <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                  Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} кВт
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Стрінги */}
+              {(local.string_count_min || local.string_count_max) && (
+                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                  Стрінги: {local.string_count_min || '∞'}-{local.string_count_max || '∞'}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Ціна */}
+              {(local.price_min || local.price_max) && (
+                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                  Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Тип інвертора */}
+              {local.inverter_type && (
+                <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                  Тип: {local.inverter_type}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, inverter_type: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Покоління */}
+              {local.generation && (
+                <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                  Покоління: {local.generation}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, generation: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Firmware */}
+              {local.firmware && (
+                <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                  Firmware: {local.firmware}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, firmware: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Статус постачальника */}
+              {(local.supplier_status && local.supplier_status.length > 0 ? local.supplier_status : []).map((s) => (
+                <Badge key={`status-${s}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                  Статус постач.: {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, supplier_status: undefined }))}
+                  />
+                </Badge>
+              ))}
+              
+              {/* Дата */}
+              {(local.date_min || local.date_max) && (
+                <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                  Період: {local.date_min || '—'} — {local.date_max || '—'}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))}
+                  />
+                </Badge>
+              )}
+              
+              {/* Сортування */}
+              {local.price_sort && (
+                <Badge variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+                  Сортування: {local.price_sort === 'asc' ? '↑ ціна' : '↓ ціна'}
+                  <X 
+                    className="w-3 h-3 ml-1 cursor-pointer" 
+                    onClick={() => setLocal(p => ({ ...p, price_sort: undefined }))}
+                  />
+                </Badge>
+              )}
+            </div>
+            {totalActiveBadges > 14 && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0 dark:hidden" />
+            )}
           </div>
+
+          {/* Unified compact controls: show-all and reset-all */}
+          {Object.values(local).some(v => v !== undefined && v !== '' && v !== null && !(Array.isArray(v) && v.length === 0)) && (
+            <div className="flex items-center gap-2">
+              {totalActiveBadges > 14 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="xs" className="h-6 px-2 text-xs">
+                      {`Показати всі (+${totalActiveBadges})`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[28rem] max-h-96 overflow-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {(local.brands || []).map((brand) => (
+                        <Badge key={`brand-${brand}`} variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                          {brand}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, brands: p.brands?.filter(b => b !== brand) }))} />
+                        </Badge>
+                      ))}
+                      {(local.suppliers || []).map((s) => (
+                        <Badge key={`supplier-${s}`} variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                          {s}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, suppliers: p.suppliers?.filter(x => x !== s) }))} />
+                        </Badge>
+                      ))}
+                      {(local.power_min !== undefined || local.power_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                          Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} кВт
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.string_count_min !== undefined || local.string_count_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                          Стрінги: {local.string_count_min || '∞'}-{local.string_count_max || '∞'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, string_count_min: undefined, string_count_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.price_min !== undefined || local.price_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+                          Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.inverter_type && (
+                        <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                          Тип: {local.inverter_type}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, inverter_type: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.generation && (
+                        <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                          Покоління: {local.generation}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, generation: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.firmware && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Firmware: {local.firmware}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, firmware: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.supplier_status && local.supplier_status.length > 0 ? local.supplier_status : []).map((s) => (
+                        <Badge key={`status-${s}`} variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                          Статус постач.: {s === 'ME' ? 'ми' : s === 'SUPPLIER' ? 'постач.' : 'конкур.'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, supplier_status: undefined }))} />
+                        </Badge>
+                      ))}
+                      {(local.date_min || local.date_max) && (
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-800 border-slate-200">
+                          Період: {local.date_min || '—'} — {local.date_max || '—'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, date_min: undefined, date_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {local.price_sort && (
+                        <Badge variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+                          Сортування: {local.price_sort === 'asc' ? '↑ ціна' : '↓ ціна'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, price_sort: undefined }))} />
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <Button className="h-6 px-2 text-xs" variant="ghost" size="xs" onClick={reset}>
+                        Скинути все
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <Button variant="outline" size="xs" onClick={reset} className="h-6 px-2 text-xs">
+                <X className="w-4 h-4 mr-1" />
+                Скинути
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

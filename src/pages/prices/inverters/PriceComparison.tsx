@@ -125,13 +125,18 @@ export default function InverterPriceComparison() {
           if (name) supplierPrices[name] = sp.price ?? null;
         });
 
-        const recommendedPrice = inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+        const recommendedPrice = Math.min(
+          ...inverter.supplier_prices
+            .map(sp => sp.price)
+            .filter((p): p is number => p !== null && p !== undefined && p > 0)
+        );
+        const finalRecommendedPrice = isFinite(recommendedPrice) ? recommendedPrice : null;
 
         return {
           ...inverter,
           originalIndex: (comparisonData.page - 1) * comparisonData.page_size + idx + 1,
           totalAvailability: getTotalAvailability(inverter),
-          recommendedPrice,
+          recommendedPrice: finalRecommendedPrice,
           supplierPrices,
         };
       });
@@ -767,10 +772,10 @@ export default function InverterPriceComparison() {
                       {/* Recommended price column */}
                       {visibleColumns['recommended'] !== false && (
                         <TableCell className="text-center font-medium">
-                          {inverter.supplier_prices.some(sp => sp.recommended_price !== null) ? (
+                          {inverter.recommendedPrice !== null ? (
                             <div className="flex flex-col items-center">
                               <span className="text-purple-700 dark:text-purple-400 font-medium text-[11px]">
-                                {formatPrice(inverter.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price || null)}&nbsp;$
+                                {formatPrice(inverter.recommendedPrice)}&nbsp;$
                               </span>
                             </div>
                           ) : (

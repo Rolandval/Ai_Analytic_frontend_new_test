@@ -102,6 +102,8 @@ export default function AIProductFillerGeneration() {
           </div>
         </div>
 
+        
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <Button variant="outline" size="sm" className={selectedCategory === 'Все' ? 'bg-blue-100' : ''}>
