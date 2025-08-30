@@ -48,7 +48,7 @@
     "react-syntax-highlighter": "^15.6.1",
     "react-textarea-autosize": "^8.5.9",
     "react-use-websocket": "^4.13.0",
-    "react-window": "^1.8.6",
+    "react-window": "^2.0.0",
     "recharts": "^3.0.0",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
