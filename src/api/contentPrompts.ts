@@ -129,6 +129,25 @@ export const fetchAllColumnPrompts = async (
   return out;
 };
 
+export interface CreateSiteContentPromptRequest {
+  name: string;
+  prompt: string;
+  site_column_name: SiteColumnName;
+}
+
+export const createSiteContentPrompt = async (
+  body: CreateSiteContentPromptRequest
+): Promise<SiteContentPrompt> => {
+  const res = await apiClient.post('/content/create_site_content_prompt', body);
+  const data = res?.data;
+  if (data && typeof data === 'object') {
+    const items = normalizePromptItems(data, body.site_column_name);
+    if (items?.[0]) return items[0];
+  }
+  // If backend returns simple OK/1/true, echo back body with synthetic id 0.
+  return { id: 0, ...body } as SiteContentPrompt;
+};
+
 export interface UpdateSiteContentPromptRequest {
   id: number;
   name: string;
@@ -140,7 +159,12 @@ export const updateSiteContentPrompt = async (
   body: UpdateSiteContentPromptRequest
 ): Promise<SiteContentPrompt> => {
   const res = await apiClient.post('/content/update_site_content_prompt', body);
-  // Try to normalize returned item
-  const items = normalizePromptItems(res?.data, body.site_column_name);
-  return items?.[0] ?? { ...body };
+  const data = res?.data;
+  // If backend returns an object/array with updated item(s), normalize and use it.
+  if (data && typeof data === 'object') {
+    const items = normalizePromptItems(data, body.site_column_name);
+    if (items?.[0]) return items[0];
+  }
+  // Some backends return plain 'OK'/true/1 on success. In that case, echo back the sent body.
+  return { ...body };
 };

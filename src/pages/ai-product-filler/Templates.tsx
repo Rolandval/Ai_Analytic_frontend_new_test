@@ -13,7 +13,8 @@ import {
   fetchAllColumnPrompts,
   fetchColumnPrompts,
   updateSiteContentPrompt,
-  SITE_COLUMNS,
+  createSiteContentPrompt,
+  mapProductFieldKeyToSiteColumnName,
   type SiteColumnName,
   type SiteContentPrompt,
 } from '@/api/contentPrompts';
@@ -49,72 +50,68 @@ export default function AIProductFillerTemplates() {
   const [categoryTpl, setCategoryTpl] = useState<CategoryTemplates | null>(null);
   const [saving, setSaving] = useState(false);
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
-  const [selectedColumn, setSelectedColumn] = useState<'all' | SiteColumnName>('all');
   const [prompts, setPrompts] = useState<Partial<Record<SiteColumnName, SiteContentPrompt[]>>>({});
-  const [loadingPrompts, setLoadingPrompts] = useState(false);
-  const [promptsError, setPromptsError] = useState<string | null>(null);
   const [savingPromptId, setSavingPromptId] = useState<number | null>(null);
+  const [creatingColumn, setCreatingColumn] = useState<SiteColumnName | null>(null);
   const [originalPrompts, setOriginalPrompts] = useState<
     Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>>
   >({});
 
   // Load templates
   useEffect(() => {
+    // Keep local defaults as fallback only. Product fields will read from API prompts.
     setProductTpl(getTemplates('product', lang));
     setCategoryTpl(getTemplates('category', lang));
   }, [lang]);
 
-  const loadPrompts = async (col: 'all' | SiteColumnName) => {
-    setLoadingPrompts(true);
-    setPromptsError(null);
+  const loadAllPrompts = async () => {
     try {
-      if (col === 'all') {
-        const data = await fetchAllColumnPrompts();
-        setPrompts(data);
-        // build originals
-        const orig: Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>> = {};
-        SITE_COLUMNS.forEach(c => {
-          const list = data[c] ?? [];
-          orig[c] = list.reduce((acc, it) => {
-            acc[it.id] = { name: it.name, prompt: it.prompt };
-            return acc;
-          }, {} as Record<number, { name: string; prompt: string }>);
-        });
-        setOriginalPrompts(orig);
-      } else {
-        const data = await fetchColumnPrompts(col);
-        setPrompts(prev => ({ ...prev, [col]: data }));
-        // update originals for this column
-        const map = data.reduce((acc, it) => {
+      const data = await fetchAllColumnPrompts();
+      setPrompts(data);
+      // build originals baseline map for all returned columns
+      const orig: Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>> = {};
+      (Object.keys(data) as SiteColumnName[]).forEach((c) => {
+        const list = data[c] ?? [];
+        orig[c] = list.reduce((acc, it) => {
           acc[it.id] = { name: it.name, prompt: it.prompt };
           return acc;
         }, {} as Record<number, { name: string; prompt: string }>);
-        setOriginalPrompts(prev => ({ ...prev, [col]: map }));
-      }
+      });
+      setOriginalPrompts(orig);
     } catch (e) {
-      setPromptsError('Не вдалося завантажити підказки');
+      console.error('Не вдалося завантажити підказки', e);
+    }
+  };
+
+  const createPrompt = async (column: SiteColumnName, name: string, prompt: string) => {
+    setCreatingColumn(column);
+    try {
+      const payload = { name, prompt, site_column_name: column } as const;
+      console.log('[CreateSiteContentPrompt] Payload:', payload);
+      await createSiteContentPrompt(payload);
+      // After create, reload this column to get real ID from backend
+      const list = await fetchColumnPrompts(column);
+      console.log('[CreateSiteContentPrompt] Reloaded column list:', column, list);
+      setPrompts(prev => ({ ...prev, [column]: list }));
+      const orig = list.reduce((acc, it) => {
+        acc[it.id] = { name: it.name, prompt: it.prompt };
+        return acc;
+      }, {} as Record<number, { name: string; prompt: string }>);
+      setOriginalPrompts(prev => ({ ...prev, [column]: orig }));
+    } catch (e) {
+      console.error('Не вдалося створити підказку', e);
     } finally {
-      setLoadingPrompts(false);
+      setCreatingColumn(null);
     }
   };
 
   useEffect(() => {
-    void loadPrompts(selectedColumn);
-  }, [selectedColumn]);
+    void loadAllPrompts();
+  }, []);
 
   const vars = useMemo(() => (entity === 'product' ? PRODUCT_VARIABLES : CATEGORY_VARIABLES), [entity]);
   const fields = useMemo(() => (entity === 'product' ? PRODUCT_FIELDS : CATEGORY_FIELDS), [entity]);
-  const columnLabels = useMemo(() => ({
-    product: 'product',
-    shortname: 'shortname',
-    short_description: 'short_description',
-    full_description: 'full_description',
-    meta_keywords: 'meta_keywords',
-    meta_description: 'meta_description',
-    searchwords: 'searchwords',
-    page_title: 'page_title',
-    promo_text: 'promo_text',
-  }), []);
+  // left labels removed with Saved prompts UI
 
   const handlePromptChange = (
     column: SiteColumnName,
@@ -131,12 +128,15 @@ export default function AIProductFillerTemplates() {
   const savePrompt = async (item: SiteContentPrompt) => {
     setSavingPromptId(item.id);
     try {
-      const updated = await updateSiteContentPrompt({
+      const payload = {
         id: item.id,
         name: item.name,
         prompt: item.prompt,
         site_column_name: item.site_column_name,
-      });
+      };
+      console.log('[UpdateSiteContentPrompt] Payload:', payload);
+      const updated = await updateSiteContentPrompt(payload);
+      console.log('[UpdateSiteContentPrompt] Response:', updated);
       setPrompts(prev => {
         const list = prev[item.site_column_name] ?? [];
         const next = list.map(p => (p.id === item.id ? updated : p));
@@ -151,7 +151,7 @@ export default function AIProductFillerTemplates() {
         },
       }));
     } catch (e) {
-      setPromptsError('Не вдалося зберегти підказку');
+      console.error('Не вдалося зберегти підказку', e);
     } finally {
       setSavingPromptId(null);
     }
@@ -165,6 +165,17 @@ export default function AIProductFillerTemplates() {
 
   const onChangeField = (key: string, value: string) => {
     if (entity === 'product') {
+      // Try map product field key to API column and update first prompt item inline
+      const column = mapProductFieldKeyToSiteColumnName(key as keyof ProductTemplates);
+      if (column) {
+        const list = prompts[column] ?? [];
+        const first = list[0];
+        if (first) {
+          handlePromptChange(column, first.id, { prompt: value });
+          return;
+        }
+      }
+      // Fallback to local state if no mapping or no prompt item
       setProductTpl(prev => (prev ? ({ ...prev, [key]: value } as ProductTemplates) : prev));
     } else {
       setCategoryTpl(prev => (prev ? ({ ...prev, [key]: value } as CategoryTemplates) : prev));
@@ -174,7 +185,20 @@ export default function AIProductFillerTemplates() {
   const onSave = async () => {
     setSaving(true);
     try {
-      if (entity === 'product' && productTpl) setTemplates('product', lang, productTpl);
+      if (entity === 'product') {
+        // Save changed prompts for mapped columns (first item per column)
+        const tasks: Promise<unknown>[] = [];
+        PRODUCT_FIELDS.forEach((f) => {
+          const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+          if (!column) return;
+          const item = (prompts[column] ?? [])[0];
+          if (!item) return;
+          if (isDirty(column, item)) {
+            tasks.push(savePrompt(item));
+          }
+        });
+        await Promise.allSettled(tasks);
+      }
       if (entity === 'category' && categoryTpl) setTemplates('category', lang, categoryTpl);
     } finally {
       setSaving(false);
@@ -255,125 +279,6 @@ export default function AIProductFillerTemplates() {
                 </li>
               ))}
             </ul>
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium">Підказки (збережені)</h3>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="text-xs border rounded px-2 py-1 bg-white/70 dark:bg-neutral-900/40"
-                    value={selectedColumn}
-                    onChange={(e) => setSelectedColumn(e.target.value as 'all' | SiteColumnName)}
-                  >
-                    <option value="all">Всі</option>
-                    {SITE_COLUMNS.map(c => (
-                      <option key={c} value={c}>{columnLabels[c]}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => loadPrompts(selectedColumn)}
-                    className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60"
-                  >
-                    Оновити
-                  </button>
-                </div>
-              </div>
-              {promptsError && (
-                <div className="text-red-600 text-xs mb-2">{promptsError}</div>
-              )}
-              {loadingPrompts ? (
-                <div className="text-xs text-muted-foreground">Завантаження…</div>
-              ) : (
-                <div className="space-y-3">
-                  {selectedColumn === 'all' ? (
-                    SITE_COLUMNS.map(c => (
-                      <div key={c}>
-                        <div className="text-xs font-medium text-muted-foreground mb-1">{columnLabels[c]}</div>
-                        <ul className="space-y-2">
-                          {(prompts[c] ?? []).length ? (
-                            (prompts[c] ?? []).map((p) => (
-                              <li key={`${c}-${p.id}`} className="space-y-1">
-                                <input
-                                  className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 px-2 py-1"
-                                  placeholder="Назва"
-                                  value={p.name}
-                                  onChange={(e) => handlePromptChange(c, p.id, { name: e.target.value })}
-                                />
-                                <textarea
-                                  className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 p-2"
-                                  placeholder="Промпт"
-                                  value={p.prompt}
-                                  onChange={(e) => handlePromptChange(c, p.id, { prompt: e.target.value })}
-                                />
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => copyVar(p.prompt)}
-                                    className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60"
-                                  >
-                                    Копіювати
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => savePrompt(p)}
-                                    className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60 disabled:opacity-50"
-                                    disabled={!isDirty(c, p) || savingPromptId === p.id}
-                                  >
-                                    {savingPromptId === p.id ? 'Збереження…' : 'Оновити промпт'}
-                                  </button>
-                                </div>
-                              </li>
-                            ))
-                          ) : (
-                            <li className="text-xs text-muted-foreground">Немає підказок</li>
-                          )}
-                        </ul>
-                      </div>
-                    ))
-                  ) : (
-                    <ul className="space-y-2">
-                      {(prompts[selectedColumn] ?? []).length ? (
-                        (prompts[selectedColumn] ?? []).map((p) => (
-                          <li key={`${selectedColumn}-${p.id}`} className="space-y-1">
-                            <input
-                              className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 px-2 py-1"
-                              placeholder="Назва"
-                              value={p.name}
-                              onChange={(e) => handlePromptChange(selectedColumn, p.id, { name: e.target.value })}
-                            />
-                            <textarea
-                              className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 p-2"
-                              placeholder="Промпт"
-                              value={p.prompt}
-                              onChange={(e) => handlePromptChange(selectedColumn, p.id, { prompt: e.target.value })}
-                            />
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => copyVar(p.prompt)}
-                                className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60"
-                              >
-                                Копіювати
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => savePrompt(p)}
-                                className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60 disabled:opacity-50"
-                                disabled={!isDirty(selectedColumn, p) || savingPromptId === p.id}
-                              >
-                                {savingPromptId === p.id ? 'Збереження…' : 'Оновити промпт'}
-                              </button>
-                            </div>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="text-xs text-muted-foreground">Немає підказок</li>
-                      )}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
@@ -394,13 +299,89 @@ export default function AIProductFillerTemplates() {
                   </div>
                   <textarea
                     className="w-full min-h-[120px] rounded-md border bg-white/70 dark:bg-neutral-900/40 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                    value={entity === 'product' ? (productTpl?.[f.key as keyof ProductTemplates] ?? '') : (categoryTpl?.[f.key as keyof CategoryTemplates] ?? '')}
+                    value={(
+                      () => {
+                        if (entity === 'product') {
+                          const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                          if (column) {
+                            const list = prompts[column] ?? [];
+                            const first = list[0];
+                            if (first) return first.prompt;
+                          }
+                          return productTpl?.[f.key as keyof ProductTemplates] ?? '';
+                        } else {
+                          return categoryTpl?.[f.key as keyof CategoryTemplates] ?? '';
+                        }
+                      }
+                    )()}
                     onChange={(e) => onChangeField(f.key, e.target.value)}
                     placeholder="Введіть шаблон..."
                   />
                   <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Довжина: {(entity === 'product' ? (productTpl?.[f.key as keyof ProductTemplates] ?? '') : (categoryTpl?.[f.key as keyof CategoryTemplates] ?? '')).length}</span>
-                    <a href={`#field-${f.key}`} className="hover:underline">#</a>
+                    <span>Довжина: {(() => {
+                      if (entity === 'product') {
+                        const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                        if (column) {
+                          const list = prompts[column] ?? [];
+                          const first = list[0];
+                          if (first) return first.prompt.length;
+                        }
+                        return (productTpl?.[f.key as keyof ProductTemplates] ?? '').length;
+                      }
+                      return (categoryTpl?.[f.key as keyof CategoryTemplates] ?? '').length;
+                    })()}</span>
+                    <div className="flex items-center gap-2">
+                      <a href={`#field-${f.key}`} className="hover:underline">#</a>
+                      {(() => {
+                        if (entity !== 'product') return null;
+                        const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                        if (!column) return null;
+                        const first = (prompts[column] ?? [])[0] as SiteContentPrompt | undefined;
+                        // Current textarea value for this field
+                        const currentPrompt = (() => {
+                          if (first) return first.prompt;
+                          return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
+                        })();
+                        const loading = first
+                          ? savingPromptId === first.id
+                          : creatingColumn === column;
+                        return first ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              console.log('[UI] Click update for column', column, 'with item:', {
+                                id: first.id,
+                                name: first.name,
+                                prompt: first.prompt,
+                                site_column_name: first.site_column_name,
+                              });
+                              savePrompt(first);
+                            }}
+                            className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60 disabled:opacity-50"
+                            disabled={loading}
+                            title={'Оновити промпт у БД'}
+                          >
+                            {loading ? 'Збереження…' : 'Оновити промпт'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              console.log('[UI] Click create for column', column, 'with values:', {
+                                name: column,
+                                prompt: currentPrompt,
+                              });
+                              void createPrompt(column, column, currentPrompt);
+                            }}
+                            className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60 disabled:opacity-50"
+                            disabled={loading}
+                            title={'Створити промпт у БД'}
+                          >
+                            {loading ? 'Створення…' : 'Створити промпт'}
+                          </button>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               ))}
