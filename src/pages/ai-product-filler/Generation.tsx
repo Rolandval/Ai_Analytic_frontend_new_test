@@ -6,9 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Search, Loader2, Plus, X } from 'lucide-react';
-import { fetchContentDescriptions, ProductType } from '@/api/contentDescriptions';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { fetchContentDescriptions, ProductType, generateAiDescription } from '@/api/contentDescriptions';
 import { Pagination } from '@/components/ui/Pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
+import { fetchColumnPrompts } from '@/api/contentPrompts';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 
 interface ContentDescription {
   id?: number;
@@ -66,6 +70,13 @@ export default function AIProductFillerGeneration() {
   const isScrollingRef = useRef(false);
   const [tableWidth, setTableWidth] = useState(1500);
   const [showScrollbars, setShowScrollbars] = useState(false);
+  // Вибрані рядки та промпт для генерації
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [generating, setGenerating] = useState(false);
+  const [fullDescPrompt, setFullDescPrompt] = useState<string>('');
+  const { toast } = useToast();
+  const [lastResult, setLastResult] = useState<string | null>(null);
+  const [resultOpen, setResultOpen] = useState(false);
   
   const fetchData = async () => {
     setLoading(true);
@@ -91,6 +102,19 @@ export default function AIProductFillerGeneration() {
   useEffect(() => {
     fetchData();
   }, [selectedProductType, page, limit]);
+
+  // Завантажуємо промпт для генерації повного опису
+  useEffect(() => {
+    (async () => {
+      try {
+        const prompts = await fetchColumnPrompts('full_description');
+        setFullDescPrompt(prompts?.[0]?.prompt ?? '');
+        console.log('[Generation] Loaded full_description prompt:', prompts?.[0]);
+      } catch (e) {
+        console.error('[Generation] Не вдалося завантажити промпт для full_description', e);
+      }
+    })();
+  }, []);
 
   // При зміні пошуку або користувацьких фільтрів переходимо на першу сторінку
   useEffect(() => {
@@ -147,6 +171,56 @@ export default function AIProductFillerGeneration() {
     requestAnimationFrame(() => {
       isScrollingRef.current = false;
     });
+  };
+
+  // Перемикання вибору рядка
+  const toggleRow = (key: string) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // Запуск генерації для вибраних рядків
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const selected = filteredDescriptions.filter((desc, index) => {
+        const rowKey = String(desc.id ?? desc.site_product ?? index);
+        return selectedRows.has(rowKey);
+      });
+      for (let i = 0; i < selected.length; i++) {
+        const desc = selected[i];
+        const site_product = desc.site_product || desc.product_name || '';
+        const site_full_description = desc.site_full_description || desc.description || '';
+        const payload = {
+          site_product,
+          site_full_description,
+          prompt: fullDescPrompt,
+          model_name: 'GPT-4o-mini',
+        };
+        console.log('[GenerateAI] Payload:', payload);
+        try {
+          const result = await generateAiDescription(payload);
+          console.log('[GenerateAI] Response:', result);
+          setLastResult(result ?? '');
+          toast({
+            title: 'Генерація завершена',
+            description: `${site_product}: ${String(result ?? '').slice(0, 160)}`,
+          });
+        } catch (e) {
+          console.error('[GenerateAI] Error:', e);
+          toast({
+            variant: 'destructive',
+            title: 'Помилка генерації',
+            description: `${site_product}: не вдалося згенерувати опис`,
+          });
+        }
+      }
+    } finally {
+      setGenerating(false);
+    }
   };
 
   // Дозволяємо прокручувати верхній скролбар коліщатком миші (вертикальне -> горизонтальне)
@@ -359,160 +433,216 @@ export default function AIProductFillerGeneration() {
             
             {/* Кнопки та опції */}
             <div className="flex flex-wrap items-center gap-2 justify-end">
+              <Button
+                onClick={handleGenerate}
+                disabled={generating || selectedRows.size === 0 || !fullDescPrompt}
+              >
+                {generating ? 'Генерація...' : 'Generate AI Description'}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!lastResult}
+                onClick={() => setResultOpen(true)}
+              >
+                Переглянути результат
+              </Button>
               <Button variant="outline" onClick={fetchData}>
                 Оновити
               </Button>
             </div>
+
           </div>
         </div>
       </div>
 
       {/* Top horizontal scrollbar (outside card to avoid clipping) */}
-    {/*   {showScrollbars && (
+      {showScrollbars && (
         <div
           ref={topScrollRef}
           onScroll={onTopScroll}
-          onWheel={onTopWheel} 
-          className="overflow-x-scroll w-full h-8 cursor-pointer sticky top-0 z-50 pointer-events-auto bg-gray-200/95 dark:bg-gray-800/95 backdrop-blur border-y border-gray-400 dark:border-gray-600 shadow-md [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar-thumb]:bg-gray-600 dark:[&::-webkit-scrollbar-thumb]:bg-gray-500 [&::-webkit-scrollbar-thumb]:rounded-md [&::-webkit-scrollbar-thumb:hover]:bg-gray-700 dark:[&::-webkit-scrollbar-thumb:hover]:bg-gray-400 [&::-webkit-scrollbar-track]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-gray-700"
-          style={{ scrollbarWidth: 'auto', msOverflowStyle: 'auto' }}
+          onWheel={onTopWheel}
+          className="overflow-x-auto overflow-y-hidden h-4 mb-2"
         >
-          <div className="h-px" style={{ width: tableWidth, minWidth: "100%" }} aria-hidden />
+          <div style={{ width: tableWidth }} className="h-1" />
         </div>
-      )}*/}
+      )}
 
-      {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border shadow-sm overflow-x-hidden">
-        {loading ? (
-          <div className="flex justify-center items-center p-8">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <span className="ml-2">Завантаження...</span>
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center text-red-500">{error}</div>
-        ) : (
-          <>
-            {/* Контейнер з таблицею (нижній скролбар) */}
-            <div
-              ref={tableScrollRef}
-              onScroll={onBottomScroll}
-              className="overflow-x-auto"
-            >
-              <div style={{ width: tableWidth, minWidth: "100%" }}>
-              <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 dark:bg-gray-900">
-                  <TableHead className="w-24 text-gray-700 dark:text-gray-300 font-medium">Мова</TableHead>
-                  <TableHead className="min-w-[350px] text-gray-700 dark:text-gray-300 font-medium">Назва продукту</TableHead>
-                  <TableHead className="w-40 text-gray-700 dark:text-gray-300 font-medium">Коротка назва</TableHead>
-                  <TableHead className="min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">Короткий опис</TableHead>
-                  <TableHead className="min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">Повний опис</TableHead>
-                  <TableHead className="min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">Промо-текст</TableHead>
-                  <TableHead className="min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">Мета-ключові слова</TableHead>
-                  <TableHead className="min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">Мета-опис</TableHead>
-                  <TableHead className="min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">Пошукові слова</TableHead>
-                  <TableHead className="min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">Заголовок сторінки</TableHead>
+      {/* Table with bottom scrollbar */}
+      <div ref={tableScrollRef} onScroll={onBottomScroll} className="overflow-x-auto">
+        <div style={{ minWidth: tableWidth }}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Мова / Тип</TableHead>
+                <TableHead>Продукт</TableHead>
+                <TableHead>Коротка назва</TableHead>
+                <TableHead>Короткий опис</TableHead>
+                <TableHead>Повний опис</TableHead>
+                <TableHead>Промо-текст</TableHead>
+                <TableHead>Мета-ключові слова</TableHead>
+                <TableHead>Мета-опис</TableHead>
+                <TableHead>Пошукові слова</TableHead>
+                <TableHead>Заголовок сторінки</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Завантаження...
+                    </div>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDescriptions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
-                      Немає даних для відображення
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredDescriptions.map((desc, index) => (
-                    <TableRow key={desc.id || desc.site_product || index} className="hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8 text-red-500">
+                    {error}
+                  </TableCell>
+                </TableRow>
+              ) : filteredDescriptions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                    Немає даних для відображення
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredDescriptions.map((desc, index) => {
+                  const rowKey = String(desc.id ?? desc.site_product ?? index);
+                  const checked = selectedRows.has(rowKey);
+                  return (
+                    <TableRow key={rowKey} className="hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">
                       <TableCell className="py-3">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800">
-                          {getLanguageName(desc.site_lang_code) || desc.product_type || '-'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-3">
-                        <div className="font-medium text-sm">{desc.site_product || desc.product_name || '-'}</div>
-                      </TableCell>
-                      <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {desc.site_shortname || '-'}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800">
+                            {getLanguageName(desc.site_lang_code) || desc.product_type || '-'}
+                          </Badge>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_short_description || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="font-medium text-sm">{desc.site_product || desc.product_name || '-'}</div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_full_description || desc.description || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {desc.site_shortname || '-'}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_promo_text || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_short_description || '', 100)}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_meta_keywords || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_full_description || desc.description || '', 100)}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_meta_description || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_promo_text || '', 100)}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_searchwords || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_meta_keywords || '', 100)}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-300">
-                          {truncateText(desc.site_page_title || '', 100)}
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_meta_description || '', 100)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_searchwords || '', 100)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-3">
+                        <div className="flex items-start gap-2">
+                          <Checkbox aria-label="Вибрати рядок" checked={checked} onCheckedChange={() => toggleRow(rowKey)} />
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            {truncateText(desc.site_page_title || '', 100)}
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>
+                Показано {(page - 1) * limit + 1}-{Math.min(page * limit, total)} з {total} записів
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Записів на сторінці</span>
+                <Select value={limit.toString()} onValueChange={(value) => setLimit(Number(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                    <span>
-                      Показано {(page - 1) * limit + 1}-{Math.min(page * limit, total)} з {total} записів
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Записів на сторінці</span>
-                      <Select value={limit.toString()} onValueChange={(value) => setLimit(Number(value))}>
-                        <SelectTrigger className="w-20">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="5">5</SelectItem>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="20">20</SelectItem>
-                          <SelectItem value="50">50</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <Pagination 
-                    currentPage={page} 
-                    totalPages={totalPages} 
-                    onPageChange={(newPage) => setPage(newPage)}
-                  />
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+            <Pagination 
+              currentPage={page} 
+              totalPages={totalPages} 
+              onPageChange={(newPage) => setPage(newPage)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Dialog to show last AI generation result */}
+      <Dialog open={resultOpen} onOpenChange={setResultOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Результат AI-генерації</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto whitespace-pre-wrap text-sm">
+            {lastResult || 'Немає результату'}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

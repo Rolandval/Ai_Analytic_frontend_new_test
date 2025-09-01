@@ -34,8 +34,9 @@ export const fetchContentDescriptions = async <T = any>(
 
 export interface GenerateDescriptionRequest {
   site_product: string;
-  site_full_description?: string;
+  site_full_description: string;
   prompt: string;
+  model_name: string;
 }
 
 export interface GenerateDescriptionResponse {
