@@ -107,7 +107,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -140,7 +140,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10',
                             isHighlightedItem(subItem.title) && 'font-bold text-foreground bg-gradient-to-r from-primary/20 to-transparent border-l-4 border-primary shadow-sm'
                           )}
@@ -171,7 +171,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -204,7 +204,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10'
                           )}
                         >
@@ -233,7 +233,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -266,7 +266,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10',
                             isHighlightedItem(subItem.title) && 'font-bold text-foreground bg-gradient-to-r from-primary/20 to-transparent border-l-4 border-primary shadow-sm'
                           )}
@@ -297,7 +297,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -330,7 +330,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10',
                             isHighlightedItem(subItem.title) && 'font-bold text-foreground bg-gradient-to-r from-primary/20 to-transparent border-l-4 border-primary shadow-sm'
                           )}
@@ -361,7 +361,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -394,7 +394,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10',
                             isHighlightedItem(subItem.title) && 'font-bold text-foreground bg-gradient-to-r from-primary/20 to-transparent border-l-4 border-primary shadow-sm'
                           )}
@@ -425,7 +425,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -458,7 +458,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10',
                             isHighlightedItem(subItem.title) && 'font-bold text-foreground bg-gradient-to-r from-primary/20 to-transparent border-l-4 border-primary shadow-sm'
                           )}
@@ -489,7 +489,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -522,7 +522,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10',
                             isHighlightedItem(subItem.title) && 'font-bold text-foreground bg-gradient-to-r from-primary/20 to-transparent border-l-4 border-primary shadow-sm'
                           )}
@@ -554,7 +554,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                   }
                 }}
                 className={cn(
-                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 transition-colors',
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
                   item.basePath &&
                     location.pathname.startsWith(item.basePath) &&
                     'text-foreground bg-primary/20'
@@ -587,7 +587,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
                         <Link
                           to={subItem.href || '#'}
                           className={cn(
-                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-white hover:bg-secondary/80 transition-colors text-sm w-full',
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
                             location.pathname === subItem.href && 'text-foreground bg-primary/10'
                           )}
                         >

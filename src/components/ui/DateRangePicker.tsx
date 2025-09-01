@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { uk } from 'date-fns/locale';
 import 'react-date-range/dist/styles.css';
 import 'react-date-range/dist/theme/default.css';
+import './DateRangePicker.css';
 
 interface DateRangePickerProps {
   startDate?: string;
@@ -82,28 +83,28 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   return (
     <div className={`relative ${className}`} ref={wrapperRef}>
       <div
-        className="h-8 px-3 py-1 text-sm border border-gray-300 rounded-md cursor-pointer bg-white flex items-center justify-between hover:border-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        className="h-8 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md cursor-pointer bg-white dark:bg-gray-800 flex items-center justify-between hover:border-gray-400 dark:hover:border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className={selection.startDate ? 'text-gray-900' : 'text-gray-500'}>
+        <span className={selection.startDate ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}>
           {getDisplayText()}
         </span>
         <div className="flex items-center gap-1">
           {(selection.startDate || selection.endDate) && (
             <button
               onClick={clearDates}
-              className="text-gray-400 hover:text-gray-600 text-xs"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xs"
               title="Очистити"
             >
               ✕
             </button>
           )}
-          <span className="text-gray-400 text-xs">📅</span>
+          <span className="text-gray-400 dark:text-gray-500 text-xs">📅</span>
         </div>
       </div>
       
       {isOpen && (
-        <div className="absolute top-full left-1/2 transform -translate-x-1/2 z-50 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-w-[95vw] overflow-hidden">
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-w-[95vw] overflow-hidden">
           <ReactDateRangePicker
             ranges={[selection]}
             onChange={handleSelect}

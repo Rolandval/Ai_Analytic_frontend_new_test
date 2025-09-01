@@ -85,7 +85,7 @@ const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }
           {overflow > 0 && (
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:hidden z-0"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:hidden"
             />
           )}
         </div>
@@ -137,14 +137,10 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
     listeners,
     setNodeRef,
     transform,
-    transition,
-    isDragging,
   } = useSortable({ id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
   };
   
 
@@ -153,7 +149,7 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
+        className="absolute -left-2 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="h-4 w-4 text-gray-400" />
       </div>

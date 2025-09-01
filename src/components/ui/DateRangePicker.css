@@ -1,0 +1,123 @@
+/* Custom styles for DateRangePicker in dark mode */
+.dark .rdrCalendarWrapper {
+  background-color: #1f2937;
+  color: #e5e7eb;
+}
+
+.dark .rdrMonthAndYearWrapper {
+  background-color: #1f2937;
+}
+
+.dark .rdrMonthAndYearPickers select {
+  color: #e5e7eb;
+  background-color: #374151;
+}
+
+.dark .rdrMonthAndYearPickers select:hover {
+  background-color: #4b5563;
+}
+
+.dark .rdrNextPrevButton {
+  background-color: #374151;
+}
+
+.dark .rdrNextPrevButton:hover {
+  background-color: #4b5563;
+}
+
+.dark .rdrNextPrevButton i {
+  border-color: #e5e7eb;
+}
+
+.dark .rdrMonthName {
+  color: #9ca3af;
+}
+
+.dark .rdrWeekDay {
+  color: #9ca3af;
+}
+
+.dark .rdrDay {
+  color: #e5e7eb;
+}
+
+.dark .rdrDayNumber span {
+  color: #e5e7eb;
+}
+
+.dark .rdrDayDisabled .rdrDayNumber span {
+  color: #6b7280;
+}
+
+.dark .rdrDayToday .rdrDayNumber span:after {
+  background: #3b82f6;
+}
+
+.dark .rdrDayToday:not(.rdrDayPassive) .rdrInRange ~ .rdrDayNumber span:after,
+.dark .rdrDayToday:not(.rdrDayPassive) .rdrStartEdge ~ .rdrDayNumber span:after,
+.dark .rdrDayToday:not(.rdrDayPassive) .rdrEndEdge ~ .rdrDayNumber span:after,
+.dark .rdrDayToday:not(.rdrDayPassive) .rdrSelected ~ .rdrDayNumber span:after {
+  background: #fff;
+}
+
+.dark .rdrDay:not(.rdrDayPassive) .rdrInRange ~ .rdrDayNumber span,
+.dark .rdrDay:not(.rdrDayPassive) .rdrStartEdge ~ .rdrDayNumber span,
+.dark .rdrDay:not(.rdrDayPassive) .rdrEndEdge ~ .rdrDayNumber span,
+.dark .rdrDay:not(.rdrDayPassive) .rdrSelected ~ .rdrDayNumber span {
+  color: #1f2937;
+}
+
+.dark .rdrDayStartPreview, 
+.dark .rdrDayInPreview, 
+.dark .rdrDayEndPreview {
+  border-color: #4b5563;
+}
+
+.dark .rdrDateRangePickerWrapper {
+  background-color: #1f2937;
+}
+
+.dark .rdrDateDisplayWrapper {
+  background-color: #374151;
+}
+
+.dark .rdrDateDisplayItem {
+  background-color: #4b5563;
+  border-color: #6b7280;
+}
+
+.dark .rdrDateDisplayItem input {
+  color: #e5e7eb;
+}
+
+.dark .rdrDateDisplayItemActive {
+  border-color: #3b82f6;
+}
+
+.dark .rdrDefinedRangesWrapper {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dark .rdrStaticRange {
+  background-color: #1f2937;
+  color: #e5e7eb;
+}
+
+.dark .rdrStaticRange:hover, 
+.dark .rdrStaticRange:focus {
+  background-color: #374151;
+}
+
+.dark .rdrStaticRangeLabel {
+  color: #e5e7eb;
+}
+
+.dark .rdrInputRange {
+  color: #e5e7eb;
+}
+
+.dark .rdrInputRangeInput {
+  color: #e5e7eb;
+  background-color: #374151;
+}

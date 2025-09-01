@@ -54,14 +54,10 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
     listeners,
     setNodeRef,
     transform,
-    transition,
-    isDragging,
   } = useSortable({ id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
   };
 
   return (
@@ -69,7 +65,7 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
+        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
@@ -807,7 +803,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
       {/* Actions */}
       <div className={cn(
-        "flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border z-10 mt-4",
+        "flex gap-2 sm:gap-3 py-2 bg-background/60 backdrop-blur-lg rounded-b-2xl border-t border-border mt-4",
         isExpanded ? "flex" : "hidden md:flex"
       )}>
         

@@ -71,37 +71,32 @@ const saveBatteryFilterOrder = (order: string[]) => {
 interface DraggableFilterItemProps {
   id: string;
   children: React.ReactNode;
-  isDragOverlay?: boolean;
 }
 
 // Draggable filter item component
-const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children, isDragOverlay = false }) => {
+const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children }) => {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
-    transition,
-    isDragging,
   } = useSortable({ id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative group ${isDragOverlay ? 'z-50' : ''}`}
+      className="relative group"
     >
       {/* Drag handle */}
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10 p-1 hover:bg-gray-100 rounded"
+        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 rounded"
         title="Перетягніть для зміни порядку"
       >
         <GripVertical className="w-4 h-4 text-gray-400" />
@@ -779,7 +774,7 @@ const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }
           {overflow > 0 && (
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900 z-0"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-b from-transparent to-white dark:to-gray-900"
             />
           )}
         </div>

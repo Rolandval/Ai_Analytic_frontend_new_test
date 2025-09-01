@@ -9,6 +9,14 @@ import {
   type ProductTemplates,
   type CategoryTemplates,
 } from '@/api/productFillerMock';
+import {
+  fetchAllColumnPrompts,
+  fetchColumnPrompts,
+  updateSiteContentPrompt,
+  SITE_COLUMNS,
+  type SiteColumnName,
+  type SiteContentPrompt,
+} from '@/api/contentPrompts';
 
 type FieldConfig<K extends string> = { key: K; label: string };
 
@@ -41,6 +49,14 @@ export default function AIProductFillerTemplates() {
   const [categoryTpl, setCategoryTpl] = useState<CategoryTemplates | null>(null);
   const [saving, setSaving] = useState(false);
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
+  const [selectedColumn, setSelectedColumn] = useState<'all' | SiteColumnName>('all');
+  const [prompts, setPrompts] = useState<Partial<Record<SiteColumnName, SiteContentPrompt[]>>>({});
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [promptsError, setPromptsError] = useState<string | null>(null);
+  const [savingPromptId, setSavingPromptId] = useState<number | null>(null);
+  const [originalPrompts, setOriginalPrompts] = useState<
+    Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>>
+  >({});
 
   // Load templates
   useEffect(() => {
@@ -48,8 +64,104 @@ export default function AIProductFillerTemplates() {
     setCategoryTpl(getTemplates('category', lang));
   }, [lang]);
 
+  const loadPrompts = async (col: 'all' | SiteColumnName) => {
+    setLoadingPrompts(true);
+    setPromptsError(null);
+    try {
+      if (col === 'all') {
+        const data = await fetchAllColumnPrompts();
+        setPrompts(data);
+        // build originals
+        const orig: Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>> = {};
+        SITE_COLUMNS.forEach(c => {
+          const list = data[c] ?? [];
+          orig[c] = list.reduce((acc, it) => {
+            acc[it.id] = { name: it.name, prompt: it.prompt };
+            return acc;
+          }, {} as Record<number, { name: string; prompt: string }>);
+        });
+        setOriginalPrompts(orig);
+      } else {
+        const data = await fetchColumnPrompts(col);
+        setPrompts(prev => ({ ...prev, [col]: data }));
+        // update originals for this column
+        const map = data.reduce((acc, it) => {
+          acc[it.id] = { name: it.name, prompt: it.prompt };
+          return acc;
+        }, {} as Record<number, { name: string; prompt: string }>);
+        setOriginalPrompts(prev => ({ ...prev, [col]: map }));
+      }
+    } catch (e) {
+      setPromptsError('Не вдалося завантажити підказки');
+    } finally {
+      setLoadingPrompts(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadPrompts(selectedColumn);
+  }, [selectedColumn]);
+
   const vars = useMemo(() => (entity === 'product' ? PRODUCT_VARIABLES : CATEGORY_VARIABLES), [entity]);
   const fields = useMemo(() => (entity === 'product' ? PRODUCT_FIELDS : CATEGORY_FIELDS), [entity]);
+  const columnLabels = useMemo(() => ({
+    product: 'product',
+    shortname: 'shortname',
+    short_description: 'short_description',
+    full_description: 'full_description',
+    meta_keywords: 'meta_keywords',
+    meta_description: 'meta_description',
+    searchwords: 'searchwords',
+    page_title: 'page_title',
+    promo_text: 'promo_text',
+  }), []);
+
+  const handlePromptChange = (
+    column: SiteColumnName,
+    id: number,
+    patch: Partial<Pick<SiteContentPrompt, 'name' | 'prompt'>>
+  ) => {
+    setPrompts(prev => {
+      const list = prev[column] ?? [];
+      const next = list.map(item => (item.id === id ? { ...item, ...patch } : item));
+      return { ...prev, [column]: next };
+    });
+  };
+
+  const savePrompt = async (item: SiteContentPrompt) => {
+    setSavingPromptId(item.id);
+    try {
+      const updated = await updateSiteContentPrompt({
+        id: item.id,
+        name: item.name,
+        prompt: item.prompt,
+        site_column_name: item.site_column_name,
+      });
+      setPrompts(prev => {
+        const list = prev[item.site_column_name] ?? [];
+        const next = list.map(p => (p.id === item.id ? updated : p));
+        return { ...prev, [item.site_column_name]: next };
+      });
+      // update originals baseline
+      setOriginalPrompts(prev => ({
+        ...prev,
+        [item.site_column_name]: {
+          ...(prev[item.site_column_name] ?? {}),
+          [item.id]: { name: updated.name, prompt: updated.prompt },
+        },
+      }));
+    } catch (e) {
+      setPromptsError('Не вдалося зберегти підказку');
+    } finally {
+      setSavingPromptId(null);
+    }
+  };
+
+  const isDirty = (column: SiteColumnName, item: SiteContentPrompt) => {
+    const orig = originalPrompts[column]?.[item.id];
+    if (!orig) return true;
+    return orig.name !== item.name || orig.prompt !== item.prompt;
+  };
 
   const onChangeField = (key: string, value: string) => {
     if (entity === 'product') {
@@ -143,6 +255,125 @@ export default function AIProductFillerTemplates() {
                 </li>
               ))}
             </ul>
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium">Підказки (збережені)</h3>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="text-xs border rounded px-2 py-1 bg-white/70 dark:bg-neutral-900/40"
+                    value={selectedColumn}
+                    onChange={(e) => setSelectedColumn(e.target.value as 'all' | SiteColumnName)}
+                  >
+                    <option value="all">Всі</option>
+                    {SITE_COLUMNS.map(c => (
+                      <option key={c} value={c}>{columnLabels[c]}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => loadPrompts(selectedColumn)}
+                    className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60"
+                  >
+                    Оновити
+                  </button>
+                </div>
+              </div>
+              {promptsError && (
+                <div className="text-red-600 text-xs mb-2">{promptsError}</div>
+              )}
+              {loadingPrompts ? (
+                <div className="text-xs text-muted-foreground">Завантаження…</div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedColumn === 'all' ? (
+                    SITE_COLUMNS.map(c => (
+                      <div key={c}>
+                        <div className="text-xs font-medium text-muted-foreground mb-1">{columnLabels[c]}</div>
+                        <ul className="space-y-2">
+                          {(prompts[c] ?? []).length ? (
+                            (prompts[c] ?? []).map((p) => (
+                              <li key={`${c}-${p.id}`} className="space-y-1">
+                                <input
+                                  className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 px-2 py-1"
+                                  placeholder="Назва"
+                                  value={p.name}
+                                  onChange={(e) => handlePromptChange(c, p.id, { name: e.target.value })}
+                                />
+                                <textarea
+                                  className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 p-2"
+                                  placeholder="Промпт"
+                                  value={p.prompt}
+                                  onChange={(e) => handlePromptChange(c, p.id, { prompt: e.target.value })}
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => copyVar(p.prompt)}
+                                    className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60"
+                                  >
+                                    Копіювати
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => savePrompt(p)}
+                                    className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60 disabled:opacity-50"
+                                    disabled={!isDirty(c, p) || savingPromptId === p.id}
+                                  >
+                                    {savingPromptId === p.id ? 'Збереження…' : 'Оновити промпт'}
+                                  </button>
+                                </div>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-xs text-muted-foreground">Немає підказок</li>
+                          )}
+                        </ul>
+                      </div>
+                    ))
+                  ) : (
+                    <ul className="space-y-2">
+                      {(prompts[selectedColumn] ?? []).length ? (
+                        (prompts[selectedColumn] ?? []).map((p) => (
+                          <li key={`${selectedColumn}-${p.id}`} className="space-y-1">
+                            <input
+                              className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 px-2 py-1"
+                              placeholder="Назва"
+                              value={p.name}
+                              onChange={(e) => handlePromptChange(selectedColumn, p.id, { name: e.target.value })}
+                            />
+                            <textarea
+                              className="w-full text-xs rounded border bg-white/70 dark:bg-neutral-900/40 p-2"
+                              placeholder="Промпт"
+                              value={p.prompt}
+                              onChange={(e) => handlePromptChange(selectedColumn, p.id, { prompt: e.target.value })}
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => copyVar(p.prompt)}
+                                className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60"
+                              >
+                                Копіювати
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => savePrompt(p)}
+                                className="text-xs px-2 py-1 rounded border hover:bg-white/60 dark:hover:bg-neutral-700/60 disabled:opacity-50"
+                                disabled={!isDirty(selectedColumn, p) || savingPromptId === p.id}
+                              >
+                                {savingPromptId === p.id ? 'Збереження…' : 'Оновити промпт'}
+                              </button>
+                            </div>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-xs text-muted-foreground">Немає підказок</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
