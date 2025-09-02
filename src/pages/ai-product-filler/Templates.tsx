@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getTemplates,
   setTemplates,
@@ -44,6 +45,8 @@ const CATEGORY_FIELDS: FieldConfig<keyof CategoryTemplates>[] = [
 ];
 
 export default function AIProductFillerTemplates() {
+  const navigate = useNavigate();
+  const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const [entity, setEntity] = useState<Entity>('product');
   const [lang, setLang] = useState<Lang>('ua');
   const [productTpl, setProductTpl] = useState<ProductTemplates | null>(null);
@@ -82,6 +85,40 @@ export default function AIProductFillerTemplates() {
       console.error('Не вдалося завантажити підказки', e);
     }
   };
+
+  const goToGenerationWithTemplates = () => {
+    const payload = {
+      from: 'templates' as const,
+      entity,
+      lang,
+      prompts,
+      productTpl,
+      categoryTpl,
+    };
+    try {
+      sessionStorage.setItem(STORAGE_KEY_TEMPLATES_STATE, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('[Templates] Failed to write payload to sessionStorage', e);
+    }
+    navigate('/ai-product-filler/generation', { state: payload });
+  };
+
+  // Постійно зберігаємо актуальний payload у sessionStorage як fallback для Generation
+  useEffect(() => {
+    const payload = {
+      from: 'templates' as const,
+      entity,
+      lang,
+      prompts,
+      productTpl,
+      categoryTpl,
+    };
+    try {
+      sessionStorage.setItem(STORAGE_KEY_TEMPLATES_STATE, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('[Templates] Failed to persist payload to sessionStorage', e);
+    }
+  }, [entity, lang, prompts, productTpl, categoryTpl]);
 
   const createPrompt = async (column: SiteColumnName, name: string, prompt: string) => {
     setCreatingColumn(column);
@@ -223,9 +260,18 @@ export default function AIProductFillerTemplates() {
             <h1 className="text-xl md:text-2xl font-semibold">Шаблони контенту</h1>
             <p className="text-sm text-muted-foreground">Налаштуйте шаблони AI для продуктів і категорій</p>
           </div>
-          <button onClick={onSave} className="bg-primary text-white px-4 py-2 rounded-md disabled:opacity-50" disabled={saving}>
-            {saving ? 'Збереження…' : 'Зберегти'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToGenerationWithTemplates}
+              className="px-4 py-2 rounded-md border hover:bg-white/60 dark:hover:bg-neutral-700/60"
+              title="Перейти до генерації з передачею шаблонів"
+            >
+              До генерації з шаблонами
+            </button>
+            <button onClick={onSave} className="bg-primary text-white px-4 py-2 rounded-md disabled:opacity-50" disabled={saving}>
+              {saving ? 'Збереження…' : 'Зберегти'}
+            </button>
+          </div>
         </div>
       </div>
 

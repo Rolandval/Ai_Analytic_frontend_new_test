@@ -67,22 +67,30 @@ function childrenToText(children: React.ReactNode): string {
   return "";
 }
 
+interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
+  noClamp?: boolean;
+  autoHeight?: boolean;
+}
+
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
-  React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, children, title, ...props }, ref) => {
+  TableHeadProps
+>(({ className, children, title, noClamp, autoHeight, ...props }, ref) => {
   const computedTitle = title ?? childrenToText(children);
+  const baseHeader = autoHeight
+    ? "px-2 sm:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0"
+    : "h-10 sm:h-12 px-2 sm:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0";
+  const innerClass = noClamp
+    ? "leading-5 break-words"
+    : "line-clamp-2 leading-5 max-h-[2.5rem] overflow-hidden break-words";
   return (
     <th
       ref={ref}
-      className={cn(
-        "h-10 sm:h-12 px-2 sm:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
-        className
-      )}
+      className={cn(baseHeader, className)}
       title={computedTitle || undefined}
       {...props}
     >
-      <div className="line-clamp-2 leading-5 max-h-[2.5rem] overflow-hidden break-words">
+      <div className={innerClass}>
         {children}
       </div>
     </th>
