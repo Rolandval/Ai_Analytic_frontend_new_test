@@ -911,6 +911,10 @@ export default function AIProductFillerGeneration() {
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
   };
 
+  // Мінширина для порожніх клітинок — 50px, інакше 140px
+  const isEmptyStr = (v?: string) => !v || v.trim().length === 0;
+  const minWClass = (v?: string) => (isEmptyStr(v) ? 'min-w-[50px]' : 'min-w-[140px]');
+
   // Інлайн-редактор тексту клітинки, відкривається по кліку
   type EditableTextCellProps = {
     rowKey: string;
@@ -927,6 +931,7 @@ export default function AIProductFillerGeneration() {
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
     // Запам'ятовуємо значення на старті редагування, щоб уникнути перезапису зовнішніх оновлень (напр., генерації)
     const valueAtEditStartRef = useRef<string>(value);
+    const wrapperRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
       if (editing && inputRef.current) {
@@ -938,6 +943,20 @@ export default function AIProductFillerGeneration() {
     useEffect(() => {
       if (!editing) setDraft(value);
     }, [value, editing]);
+
+    // Під час редагування: закривати лише при кліку поза клітинкою
+    useEffect(() => {
+      if (!editing) return;
+      const onDocMouseDown = (e: MouseEvent) => {
+        if (!wrapperRef.current) return;
+        const target = e.target as Node;
+        if (!wrapperRef.current.contains(target)) {
+          setEditing(false);
+        }
+      };
+      document.addEventListener('mousedown', onDocMouseDown, true);
+      return () => document.removeEventListener('mousedown', onDocMouseDown, true);
+    }, [editing]);
 
     // save/cancel більше не потрібні — редагування застосовується миттєво в onChange,
     // а Escape відновлює початкове значення
@@ -956,7 +975,7 @@ export default function AIProductFillerGeneration() {
     }
 
     return (
-      <div onClick={(e) => e.stopPropagation()} className="w-full flex-1">
+      <div ref={wrapperRef} onClick={(e) => e.stopPropagation()} className="w-full flex-1">
         {long ? (
           <textarea
             ref={inputRef as any}
@@ -983,8 +1002,32 @@ export default function AIProductFillerGeneration() {
                 return next;
               });
             }}
-            onBlur={() => setEditing(false)}
             rows={2}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                const original = valueAtEditStartRef.current ?? '';
+                const field = mapSiteColumnToContentField[col];
+                setDescriptions(prev => {
+                  const targetId = (desc as any).product_id ?? desc.id ?? null;
+                  const targetLang = desc.site_lang_code ?? '';
+                  const targetName = desc.site_product || desc.product_name || '';
+                  const idx = prev.findIndex(it => {
+                    const candidateId = (it as any).product_id ?? it.id ?? null;
+                    if (targetId != null && candidateId != null) return candidateId === targetId;
+                    const itLang = it.site_lang_code ?? '';
+                    const itName = it.site_product || it.product_name || '';
+                    return itLang === targetLang && itName === targetName;
+                  });
+                  if (idx === -1) return prev;
+                  const next = [...prev];
+                  next[idx] = { ...next[idx], [field]: original } as ContentDescription;
+                  return next;
+                });
+                setDraft(original);
+                setEditing(false);
+              }
+            }}
           />
         ) : (
           <Input
@@ -1596,7 +1639,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[140px]" title={desc.site_product || desc.product_name || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_product || desc.product_name || '')}`} title={desc.site_product || desc.product_name || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'product')}
@@ -1614,7 +1657,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[140px]">
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_shortname || '')}`}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'shortname')}
@@ -1632,7 +1675,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_shortname || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_short_description || '')}`} title={desc.site_shortname || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'short_description')}
@@ -1650,7 +1693,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_full_description || desc.description || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_full_description || desc.description || '')}`} title={desc.site_full_description || desc.description || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'full_description')}
@@ -1668,7 +1711,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_promo_text || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_promo_text || '')}`} title={desc.site_promo_text || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'promo_text')}
@@ -1686,7 +1729,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_meta_keywords || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_keywords || '')}`} title={desc.site_meta_keywords || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'meta_keywords')}
@@ -1704,7 +1747,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_meta_description || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_description || '')}`} title={desc.site_meta_description || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'meta_description')}
@@ -1722,7 +1765,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_searchwords || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_searchwords || '')}`} title={desc.site_searchwords || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'searchwords')}
@@ -1740,7 +1783,7 @@ export default function AIProductFillerGeneration() {
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_page_title || ''}>
+                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_page_title || '')}`} title={desc.site_page_title || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'page_title')}
