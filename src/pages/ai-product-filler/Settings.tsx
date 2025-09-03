@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/Label';
 import { Card } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Textarea';
 import gptLogo from './img/ChatGPT_logo.svg.png';
+import AIProductFillerLayout from './components/AIProductFillerLayout';
 
 export default function AIProductFillerSettings() {
   const [apiKey, setApiKey] = useState('sk-None-vhQ3gPR22u5wqQWg3');
@@ -27,10 +28,11 @@ export default function AIProductFillerSettings() {
   };
 
   return (
-    <div className="container mx-auto px-6 py-6 max-w-6xl">
+    <AIProductFillerLayout>
+    <div className="w-full px-5 py-5">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">ChatGPT AI Generator</h1>
-        <Button onClick={handleSave} className="bg-blue-500 hover:bg-blue-600 text-white">
+        <Button onClick={handleSave} className="bg-emerald-400 hover:bg-blue-600 text-white">
           Зберегти
         </Button>
       </div>
@@ -174,5 +176,6 @@ export default function AIProductFillerSettings() {
         </div>
       </Card>
     </div>
+    </AIProductFillerLayout>
   );
 }

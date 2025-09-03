@@ -5,7 +5,6 @@ import { useThemeStore } from '@/store/themeStore';
 import { ArrowLeft, ChevronLeft, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from './ThemeToggle';
-import { ServerStatusPanel } from './ServerStatusPanel';
 
 export const MainLayout = () => {
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -14,6 +13,7 @@ export const MainLayout = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
+  const hideGlobalSidebar = location.pathname.startsWith('/ai-product-filler');
   
   // Мобільна перевірка як окрема функція для можливості повторного виклику
   const checkMobile = useCallback(() => {
@@ -64,32 +64,34 @@ export const MainLayout = () => {
       {/* Градієнтний оверлей тільки для світлої теми */}
       <div className="absolute top-0 left-0 -z-10 h-full w-full bg-hero-gradient dark:hidden"></div>
       
-      {/* Фіксований хедер для мобільних пристроїв */}
-      <header 
-        className={`
-          lg:hidden fixed top-0 left-0 right-0 z-50 
-          py-3 px-4 flex items-center justify-between
-          transition-all duration-200
-          ${isScrolled ? 'bg-background/80 backdrop-blur-md shadow-sm' : 'bg-transparent'}
-        `}
-      >
-        <Button 
-          variant="outline" 
-          size="icon" 
-          className="h-10 w-10 rounded-full bg-white/80 backdrop-blur-sm dark:bg-neutral-900/80"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
+      {/* Фіксований хедер для мобільних пристроїв (приховати на сторінках AI Product Filler) */}
+      {!hideGlobalSidebar && (
+        <header 
+          className={`
+            lg:hidden fixed top-0 left-0 right-0 z-50 
+            py-3 px-4 flex items-center justify-between
+            transition-all duration-200
+            ${isScrolled ? 'bg-background/80 backdrop-blur-md shadow-sm' : 'bg-transparent'}
+          `}
         >
-          {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-        </Button>
-        
-        <div className="flex items-center gap-2">
-          <ThemeToggle className="h-8 w-8" />
-        </div>
-      </header>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-10 w-10 rounded-full bg-white/80 backdrop-blur-sm dark:bg-neutral-900/80"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            <ThemeToggle className="h-8 w-8" />
+          </div>
+        </header>
+      )}
       
       <div className="relative flex h-screen">
         {/* Sidebar з анімацією - відображається тільки в розгорнутому стані або на мобільних */}
-        {(sidebarOpen || isMobile) && (
+        {!hideGlobalSidebar && (sidebarOpen || isMobile) && (
           <aside 
             className={`
               fixed lg:relative z-40 h-screen
@@ -117,7 +119,7 @@ export const MainLayout = () => {
         )}
         
         {/* Кнопка розгортання панелі - відображається тільки на десктопі, коли панель згорнута */}
-        {!sidebarOpen && !isMobile && (
+        {!hideGlobalSidebar && !sidebarOpen && !isMobile && (
           <div className="fixed left-6 top-1/2 -translate-y-1/2 z-40">
             <Button 
               variant="outline" 
@@ -132,7 +134,7 @@ export const MainLayout = () => {
         )}
         
         {/* Overlay для мобільних при відкритій бічній панелі */}
-        {sidebarOpen && isMobile && (
+        {!hideGlobalSidebar && sidebarOpen && isMobile && (
           <div 
             className="fixed inset-0 bg-black/50 z-30 lg:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -144,8 +146,8 @@ export const MainLayout = () => {
           className={`
             flex-1 overflow-auto h-screen scrollbar-thin scrollbar-thumb-primary/10 hover:scrollbar-thumb-primary/20 scrollbar-track-transparent
             transition-all duration-300
-            p-4 sm:p-6 md:p-8 bg-background dark:bg-black/95
-            pt-16 lg:pt-8 // Додатковий відступ зверху для мобільних (для кнопки меню)
+            ${hideGlobalSidebar ? 'px-0 py-0' : 'p-4 sm:p-6 md:p-8'} bg-background dark:bg-black/95
+            ${hideGlobalSidebar ? 'pt-0' : 'pt-16 lg:pt-8'} // Додатковий відступ зверху для мобільних (для кнопки меню)
           `}
         >
           {/* Навігаційний індикатор для мобільних пристроїв */}

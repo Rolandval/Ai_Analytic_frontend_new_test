@@ -4,18 +4,21 @@ import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import { Search, Loader2, Plus, X, Save } from 'lucide-react';
+import { Search, Loader2, Plus, X, Save, ArrowUpDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { fetchContentDescriptions, ProductType } from '@/api/contentDescriptions';
 import { fetchAllColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
 import { getTemplates } from '@/api/productFillerMock';
 import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
 import { generateAiDescription } from '@/api/generateAiDescription';
+import { chatApi } from '@/api/chatApi';
 import { updateSiteDescriptions } from '@/api/updateSiteDescriptions';
 import { toast } from '@/hooks/use-toast';
 import { Pagination } from '@/components/ui/Pagination';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { useLocation } from 'react-router-dom';
+import bgImage from './img/photo_2025-09-02_23-21-26.jpg';
+import AIProductFillerLayout from './components/AIProductFillerLayout';
 
 interface ContentDescription {
   id?: number;
@@ -38,6 +41,15 @@ interface ContentDescription {
   site_promo_text?: string | null;
 }
 
+// Модель чату для вибору моделі генерації
+interface ChatModel {
+  id: number;
+  name: string;
+  icon: string;
+  input_tokens_price?: number;
+  output_tokens_price?: number;
+}
+
 interface CustomFilter {
   id: string;
   name: string;
@@ -46,15 +58,7 @@ interface CustomFilter {
   active: boolean;
 }
 
-// Мапа мовних кодів для відображення
-const languageLabels: Record<string, string> = {
-  'en': 'Англійська',
-  'uk': 'Українська',
-  'ru': 'Російська',
-  'de': 'Німецька',
-  'fr': 'Французька',
-  'es': 'Іспанська'
-};
+// Колонку мови видалено — мапа назв мов більше не потрібна
 
 export default function AIProductFillerGeneration() {
   const location = useLocation();
@@ -67,20 +71,33 @@ export default function AIProductFillerGeneration() {
   const [selectedProductType, setSelectedProductType] = useState<ProductType | 'all'>('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [total, setTotal] = useState(0);
   const [customFilters, setCustomFilters] = useState<CustomFilter[]>([]);
   const [newFilter, setNewFilter] = useState<Omit<CustomFilter, 'id' | 'active'>>({ name: '', field: 'site_product', value: '' });
+  // Фільтр мови (ua/en/ru), за замовчуванням "ua"
+  const [selectedLang, setSelectedLang] = useState<'ua' | 'en' | 'ru'>('ua');
+  // Моделі чату для вибору моделі генерації
+  const [chatModels, setChatModels] = useState<ChatModel[]>([]);
+  const [selectedChatModel, setSelectedChatModel] = useState<string>('');
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  // Сортування: колонки і напрям
+  const [sortBy, setSortBy] = useState<SiteColumnName | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   // refs для синхронізації горизонтальних скролбарів
   const topScrollRef = useRef<HTMLDivElement | null>(null);
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const isScrollingRef = useRef(false);
-  const [tableWidth, setTableWidth] = useState(1500);
   // Вибір окремих клітинок
   const [selectedCells, setSelectedCells] = useState<Record<string, boolean>>({});
+  // Рядки, у яких відбулась AI‑генерація в цій сесії (для селективного збереження)
+  const [generatedRows, setGeneratedRows] = useState<Record<string, boolean>>({});
   const [templatesState, setTemplatesState] = useState<TemplatesState>(null);
   // Масова генерація
   const [massGenerating, setMassGenerating] = useState(false);
   const [massProgress, setMassProgress] = useState<string>('');
+  // Генерація для вибраних клітинок
+  const [selectedGenerating, setSelectedGenerating] = useState(false);
+  const [selectedProgress, setSelectedProgress] = useState<string>('');
   // Масова генерація по колонці
   const [colGenerating, setColGenerating] = useState<SiteColumnName | null>(null);
   const [colProgress, setColProgress] = useState<string>('');
@@ -93,6 +110,7 @@ export default function AIProductFillerGeneration() {
     prompts?: Partial<Record<SiteColumnName, SiteContentPrompt[]>>;
     productTpl?: ProductTemplates | null;
     categoryTpl?: CategoryTemplates | null;
+    enabled?: Partial<Record<SiteColumnName, boolean>>;
   } | null;
   const incomingTemplates = (location.state ?? null) as TemplatesState;
   useEffect(() => {
@@ -143,14 +161,46 @@ export default function AIProductFillerGeneration() {
       }
     })();
   }, [incomingTemplates]);
+  
+  // Завантаження списку моделей для генерації
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setModelsLoading(true);
+        setModelsError(null);
+        const models = await chatApi.getModels();
+        if (!mounted) return;
+        setChatModels(models as any);
+        // Встановлюємо модель за замовчуванням, якщо ще не обрана
+        if (!selectedChatModel && models && models.length > 0) {
+          setSelectedChatModel(models[0].name);
+        }
+      } catch (e: any) {
+        if (!mounted) return;
+        setModelsError(e?.message || 'Не вдалося завантажити моделі');
+      } finally {
+        if (mounted) setModelsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
   const getRowKey = (desc: ContentDescription, index: number) =>
     String(
       desc.id ??
         `${desc.site_lang_code ?? '-'}|${desc.site_product ?? desc.product_name ?? '-'}|${index}`
     );
   const isCellChecked = (rowKey: string, col: string) => !!selectedCells[`${rowKey}:${col}`];
-  const isGeneratableColumn = (col: string): col is SiteColumnName =>
-    (SITE_COLUMNS as string[]).includes(col);
+
+  // Стабільний ключ рядка для маркування генерації/збереження: product_id або lang|product
+  const getStableKey = (d: ContentDescription) =>
+    String((d as any).product_id ?? `${d.site_lang_code ?? ''}|${d.site_product ?? d.product_name ?? ''}`);
+
+  // Позначка, що для рядка було виконано хоча б одну AI‑генерацію
+  const markRowGenerated = (desc: ContentDescription) => {
+    const key = getStableKey(desc);
+    setGeneratedRows(prev => ({ ...prev, [key]: true }));
+  };
 
   const mapSiteColumnToProductTplKey: Record<SiteColumnName, keyof ProductTemplates> = {
     product: 'name',
@@ -179,6 +229,8 @@ export default function AIProductFillerGeneration() {
 
   const resolvePromptForColumn = (col: SiteColumnName): string | null => {
     const st = templatesState as any;
+    // Якщо користувач вимкнув цю колонку у Templates — пропускаємо генерацію
+    if (st?.enabled && st.enabled[col] === false) return null;
     // 1) намагаємось збережені prompts (перший елемент у колонці)
     const list = st?.prompts?.[col] as Array<{ prompt: string }> | undefined;
     const fromPrompts = list?.[0]?.prompt;
@@ -235,8 +287,7 @@ export default function AIProductFillerGeneration() {
 
   const handleGenerateForCell = async (
     col: SiteColumnName,
-    desc: ContentDescription,
-    rowKey: string
+    desc: ContentDescription
   ) => {
     if (!templatesState) {
       toast({ title: 'Шаблони ще завантажуються', description: 'Спробуйте ще раз за мить' });
@@ -254,17 +305,30 @@ export default function AIProductFillerGeneration() {
       return;
     }
     try {
-      const payload = { site_product, site_full_description, prompt, model_name: 'GPT-4o-mini' } as const;
+      const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
       const res = await generateAiDescription(payload);
       console.log('[GenerateAI] Request:', payload, 'Response:', res);
       const generated = extractGeneratedText(res);
       if (generated && typeof generated === 'string') {
         const field = mapSiteColumnToContentField[col];
-        setDescriptions(prev => prev.map((it, idx) => {
-          const key = getRowKey(it, idx);
-          if (key !== rowKey) return it;
-          return { ...it, [field]: generated } as ContentDescription;
-        }));
+        setDescriptions(prev => {
+          const targetId = (desc as any).product_id ?? desc.id ?? null;
+          const targetLang = desc.site_lang_code ?? '';
+          const targetName = desc.site_product || desc.product_name || '';
+          const idx = prev.findIndex(it => {
+            const candidateId = (it as any).product_id ?? it.id ?? null;
+            if (targetId != null && candidateId != null) return candidateId === targetId;
+            const itLang = it.site_lang_code ?? '';
+            const itName = it.site_product || it.product_name || '';
+            return itLang === targetLang && itName === targetName;
+          });
+          if (idx === -1) return prev;
+          const next = [...prev];
+          next[idx] = { ...next[idx], [field]: generated } as ContentDescription;
+          return next;
+        });
+        // Маркуємо рядок як згенерований
+        markRowGenerated(desc);
       } else {
         console.warn('[GenerateAI] Не вдалось прочитати результат для', col, res);
       }
@@ -284,8 +348,129 @@ export default function AIProductFillerGeneration() {
       site_full_description: desc.site_full_description || desc.description || '-',
       cell: col,
     });
-    if (checked === true && isGeneratableColumn(col)) {
-      void handleGenerateForCell(col as SiteColumnName, desc, rowKey);
+    // Тільки перемикаємо вибір. Генерація виконується кнопкою "Заповнити вибрані".
+  };
+
+  // Рядкові хелпери для комбінованої колонки №/Генерувати (лише стан чекбоксів)
+  const ROW_GENERATABLE_COLUMNS: SiteColumnName[] = SITE_COLUMNS as SiteColumnName[];
+  const isRowAllChecked = (rowKey: string, desc: ContentDescription) => {
+    const emptyCols = ROW_GENERATABLE_COLUMNS.filter(col => {
+      const field = mapSiteColumnToContentField[col];
+      const v = (desc as any)[field] as string | null | undefined;
+      return !v || String(v).trim() === '';
+    });
+    if (emptyCols.length === 0) return false;
+    return emptyCols.every(col => isCellChecked(rowKey, col));
+  };
+  const onRowGenerateCheckedChange = (
+    rowKey: string,
+    desc: ContentDescription,
+    checked: boolean | 'indeterminate'
+  ) => {
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      if (checked === true) {
+        // Позначаємо лише порожні клітинки рядка
+        ROW_GENERATABLE_COLUMNS.forEach(col => {
+          const field = mapSiteColumnToContentField[col];
+          const v = (desc as any)[field] as string | null | undefined;
+          const isEmpty = !v || String(v).trim() === '';
+          next[`${rowKey}:${col}`] = isEmpty;
+        });
+      } else {
+        // Зняття — очищаємо вибір по всьому рядку
+        ROW_GENERATABLE_COLUMNS.forEach(col => {
+          next[`${rowKey}:${col}`] = false;
+        });
+      }
+      return next;
+    });
+  };
+
+  // Генерація для вибраних клітинок на поточній сторінці
+  const handleGenerateSelected = async () => {
+    if (!templatesState) {
+      console.warn('[GenerateSelected] Шаблони ще не готові');
+      return;
+    }
+    setSelectedGenerating(true);
+    setSelectedProgress('');
+    try {
+      const cols = SITE_COLUMNS as SiteColumnName[];
+      type Job = { globalIdx: number; row: ContentDescription; rowKey: string; col: SiteColumnName };
+      const jobs: Job[] = [];
+      // Виконуємо тільки для поточної сторінки
+      pagedDescriptions.forEach((desc, idx) => {
+        const rowKey = getRowKey(desc, idx);
+        // Переважно використовуємо стабільне співпадіння за посиланням
+        let globalIdx = descriptions.indexOf(desc as any);
+        if (globalIdx === -1) {
+          // Фолбек: пошук за id або композитним ключем мова+назва
+          const targetId = (desc as any).product_id ?? desc.id ?? null;
+          const targetLang = desc.site_lang_code ?? '';
+          const targetName = desc.site_product || desc.product_name || '';
+          globalIdx = descriptions.findIndex(it => {
+            const candidateId = (it as any).product_id ?? it.id ?? null;
+            if (targetId != null && candidateId != null) return candidateId === targetId;
+            const itLang = it.site_lang_code ?? '';
+            const itName = it.site_product || it.product_name || '';
+            return itLang === targetLang && itName === targetName;
+          });
+        }
+        // Генеруємо лише для реально вибраних клітинок
+        cols.forEach((col) => {
+          if (selectedCells[`${rowKey}:${col}`]) {
+            jobs.push({ globalIdx, row: desc, rowKey, col });
+          }
+        });
+      });
+      if (jobs.length === 0) {
+        setSelectedProgress('Нічого не вибрано');
+        return;
+      }
+      // Генерування для product виконуємо останнім, щоб не змінювати ідентифікатор рядка до заповнення інших колонок
+      jobs.sort((a, b) => (a.col === 'product' ? 1 : 0) - (b.col === 'product' ? 1 : 0));
+      let done = 0;
+      for (const job of jobs) {
+        try {
+          const desc = job.row;
+          const site_product = desc.site_product || desc.product_name || '';
+          const site_full_description = desc.site_full_description || desc.description || '';
+          // Дозволяємо генерувати 'product' навіть якщо назва порожня; інші колонки вимагають назву
+          if (job.col !== 'product' && !site_product) { done++; setSelectedProgress(`${done}/${jobs.length}`); continue; }
+          const prompt = resolvePromptForColumn(job.col);
+          if (!prompt) { done++; setSelectedProgress(`${done}/${jobs.length}`); continue; }
+          const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
+          const res = await generateAiDescription(payload);
+          const generated = extractGeneratedText(res);
+          if (generated && typeof generated === 'string') {
+            const field = mapSiteColumnToContentField[job.col];
+            setDescriptions(prev => {
+              // Якщо під час батчу масив не змінювався структурно, globalIdx залишиться правильним
+              const idx = job.globalIdx;
+              if (idx == null || idx < 0 || idx >= prev.length) return prev;
+              const next = [...prev];
+              next[idx] = { ...next[idx], [field]: generated } as ContentDescription;
+              return next;
+            });
+            // Знімаємо позначку з цієї клітинки після успішної генерації
+            setSelectedCells(prev => {
+              const next = { ...prev };
+              next[`${job.rowKey}:${job.col}`] = false;
+              return next;
+            });
+            // Маркуємо рядок як згенерований
+            markRowGenerated(job.row);
+          }
+        } catch (e) {
+          console.error('[GenerateSelected] Помилка', e);
+        } finally {
+          done++;
+          setSelectedProgress(`${done}/${jobs.length}`);
+        }
+      }
+    } finally {
+      setSelectedGenerating(false);
     }
   };
 
@@ -299,15 +484,15 @@ export default function AIProductFillerGeneration() {
     setMassProgress('');
     try {
       const cols = SITE_COLUMNS as SiteColumnName[];
-      type Job = { rowIdx: number; row: ContentDescription; rowKey: string; col: SiteColumnName };
+      type Job = { row: ContentDescription; col: SiteColumnName; rowKey: string };
       const jobs: Job[] = [];
-      descriptions.forEach((desc, idx) => {
-        const rowKey = getRowKey(desc, idx);
+      // Лише поточна сторінка
+      pagedDescriptions.forEach((desc, index) => {
         cols.forEach((col) => {
           const field = mapSiteColumnToContentField[col];
           const currentVal = (desc as any)[field] as string | null | undefined;
           if (!currentVal || String(currentVal).trim() === '') {
-            jobs.push({ rowIdx: idx, row: desc, rowKey, col });
+            jobs.push({ row: desc, col, rowKey: getRowKey(desc, index) });
           }
         });
       });
@@ -324,16 +509,31 @@ export default function AIProductFillerGeneration() {
         const prompt = resolvePromptForColumn(job.col);
         if (!prompt) { done++; setMassProgress(`${done}/${jobs.length}`); continue; }
         try {
-          const payload = { site_product, site_full_description, prompt, model_name: 'GPT-4o-mini' } as const;
+          const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
           const res = await generateAiDescription(payload);
           const generated = extractGeneratedText(res);
           if (generated && typeof generated === 'string') {
             const field = mapSiteColumnToContentField[job.col];
-            setDescriptions(prev => prev.map((it, idx) =>
-              idx === job.rowIdx ? ({ ...it, [field]: generated } as ContentDescription) : it
-            ));
-          } else {
-            console.warn('[MassGenerate] Порожній результат для', job.col);
+            setDescriptions(prev => {
+              const targetId = (desc as any).product_id ?? desc.id ?? null;
+              const targetLang = desc.site_lang_code ?? '';
+              const targetName = desc.site_product || desc.product_name || '';
+              const idx = prev.findIndex(it => {
+                const candidateId = (it as any).product_id ?? it.id ?? null;
+                if (targetId != null && candidateId != null) return candidateId === targetId;
+                const itLang = it.site_lang_code ?? '';
+                const itName = it.site_product || it.product_name || '';
+                return itLang === targetLang && itName === targetName;
+              });
+              if (idx === -1) return prev;
+              const next = [...prev];
+              next[idx] = { ...next[idx], [field]: generated } as ContentDescription;
+              return next;
+            });
+            // Знімаємо позначку з клітинки після успішної генерації
+            setSelectedCells(prev => ({ ...prev, [`${job.rowKey}:${job.col}`]: false }));
+            // Маркуємо рядок як згенерований
+            markRowGenerated(desc);
           }
         } catch (e) {
           console.error('[MassGenerate] Помилка', e);
@@ -342,11 +542,13 @@ export default function AIProductFillerGeneration() {
           setMassProgress(`${done}/${jobs.length}`);
         }
       }
+    } catch (e) {
+      console.error('[MassGenerate] Failed', e);
     } finally {
       setMassGenerating(false);
     }
   };
-  
+
   // Масова генерація лише для однієї колонки (порожні клітинки на поточній сторінці)
   const handleMassGenerateColumn = async (col: SiteColumnName) => {
     if (!templatesState) {
@@ -357,8 +559,8 @@ export default function AIProductFillerGeneration() {
     setColProgress('');
     try {
       const field = mapSiteColumnToContentField[col];
-      const jobs = descriptions
-        .map((desc, idx) => ({ desc, idx }))
+      const jobs = pagedDescriptions
+        .map((desc, index) => ({ desc, rowKey: getRowKey(desc, index) }))
         .filter(({ desc }) => {
           const v = (desc as any)[field] as string | null | undefined;
           return !v || String(v).trim() === '';
@@ -379,13 +581,30 @@ export default function AIProductFillerGeneration() {
         const site_full_description = desc.site_full_description || desc.description || '';
         if (!site_product) { done++; setColProgress(`${done}/${jobs.length}`); continue; }
         try {
-          const payload = { site_product, site_full_description, prompt, model_name: 'GPT-4o-mini' } as const;
+          const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
           const res = await generateAiDescription(payload);
           const generated = extractGeneratedText(res);
           if (generated && typeof generated === 'string') {
-            setDescriptions(prev => prev.map((it, idx) => (
-              idx === job.idx ? ({ ...it, [field]: generated } as ContentDescription) : it
-            )));
+            setDescriptions(prev => {
+              const targetId = (desc as any).product_id ?? desc.id ?? null;
+              const targetLang = desc.site_lang_code ?? '';
+              const targetName = desc.site_product || desc.product_name || '';
+              const idx = prev.findIndex(it => {
+                const candidateId = (it as any).product_id ?? it.id ?? null;
+                if (targetId != null && candidateId != null) return candidateId === targetId;
+                const itLang = it.site_lang_code ?? '';
+                const itName = it.site_product || it.product_name || '';
+                return itLang === targetLang && itName === targetName;
+              });
+              if (idx === -1) return prev;
+              const next = [...prev];
+              next[idx] = { ...next[idx], [field]: generated } as ContentDescription;
+              return next;
+            });
+            // Знімаємо позначку з клітинки після успішної генерації
+            setSelectedCells(prev => ({ ...prev, [`${job.rowKey}:${col}`]: false }));
+            // Маркуємо рядок як згенерований
+            markRowGenerated(desc);
           } else {
             console.warn('[MassGenerateColumn] Порожній результат для', col);
           }
@@ -430,6 +649,9 @@ export default function AIProductFillerGeneration() {
       ];
 
       descriptions.forEach((curr) => {
+        // Зберігаємо лише ті рядки, де під час цієї сесії була AI‑генерація
+        const wasGenerated = !!generatedRows[getStableKey(curr)];
+        if (!wasGenerated) return;
         // Знаходимо базовий рядок: спершу за product_id, інакше за композитним ключем
         const base = typeof curr.product_id === 'number'
           ? initialById.get(curr.product_id)
@@ -497,13 +719,16 @@ export default function AIProductFillerGeneration() {
       }
 
       await updateSiteDescriptions({ descriptions: payload });
-      const extra = skippedNoProductId > 0 ? ` (пропущено без product_id: ${skippedNoProductId})` : '';
-      toast({ title: 'Збережено', description: `Оновлено рядків: ${payload.length}${extra}` });
+      // Показуємо лише статус без кількості змін
+      toast({ title: 'Успішно' });
       // Оновлюємо базову копію після успішного збереження
       setInitialDescriptions(descriptions.map(it => ({ ...it })));
+      // Скидаємо маркери згенерованих рядків після успішного збереження
+      setGeneratedRows({});
     } catch (e) {
       console.error('[SaveChanges] Failed', e);
-      toast({ title: 'Помилка збереження', description: 'Спробуйте ще раз пізніше', variant: 'destructive' });
+      // Показуємо лише статус без деталей
+      toast({ title: 'Не успішно', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -515,15 +740,24 @@ export default function AIProductFillerGeneration() {
     try {
       const request = {
         product_type: selectedProductType === 'all' ? undefined : selectedProductType,
-        page,
-        limit
+        page: 1,
+        // Забираємо більше елементів за раз, далі фільтруємо і пагінуємо на клієнті
+        limit: 1000,
       };
+      console.log('[Generation] fetchContentDescriptions request (client-side lang filter):', request);
       
       const response = await fetchContentDescriptions<ContentDescription>(request);
+      console.log('[Generation] fetchContentDescriptions response:', {
+        itemsCount: response.items?.length ?? 0,
+        total: response.total,
+        page: response.page,
+        limit: response.limit,
+        sampleLangs: (response.items || []).slice(0, 5).map((x: any) => x?.site_lang_code)
+      });
       setDescriptions(response.items);
       // Зберігаємо базовий стан для виявлення змін
       setInitialDescriptions(response.items.map(it => ({ ...it })));
-      setTotal(response.total);
+      // total рахуємо після клієнтської фільтрації
     } catch (err) {
       setError('Помилка при завантаженні даних. Спробуйте пізніше.');
       console.error('Error fetching content descriptions:', err);
@@ -534,57 +768,28 @@ export default function AIProductFillerGeneration() {
   
   useEffect(() => {
     fetchData();
-  }, [selectedProductType, page, limit]);
+  }, [selectedProductType]);
 
   // При зміні пошуку або користувацьких фільтрів переходимо на першу сторінку
   useEffect(() => {
     setPage(1);
   }, [searchQuery, customFilters]);
 
-  // Очищення вибору клітинок при зміні джерела даних (page/filters/search/limit/productType)
+  // При зміні мови переходимо на першу сторінку, щоб коректно відображати пагінацію
+  useEffect(() => {
+    console.log('[Generation] selectedLang changed:', selectedLang);
+    setPage(1);
+  }, [selectedLang]);
+
+  // Очищення вибору клітинок при зміні джерела даних (page/filters/search/limit/productType/lang)
   useEffect(() => {
     setSelectedCells({});
-  }, [selectedProductType, page, limit, searchQuery, customFilters]);
+    setGeneratedRows({});
+  }, [selectedProductType, page, limit, searchQuery, customFilters, selectedLang]);
 
-  // Вимірювання ширини таблиці та визначення, чи потрібні скролбари
-  useEffect(() => {
-    const measure = () => {
-      // Використовуємо контейнер таблиці
-      const el = tableScrollRef.current;
-      if (!el) return;
-      // Затримка для коректного вимірювання після рендеру
-      requestAnimationFrame(() => {
-        const contentWidth = el.scrollWidth;
-        setTableWidth(contentWidth > 0 ? contentWidth : 1500);
-      });
-    };
-
-    measure();
-    window.addEventListener('resize', measure);
-    // Спостерігач за зміною розмірів вмісту для точного оновлення ширини
-    let ro: ResizeObserver | null = null;
-    if ('ResizeObserver' in window) {
-      ro = new ResizeObserver(() => measure());
-      if (tableScrollRef.current) ro.observe(tableScrollRef.current);
-    }
-    return () => {
-      window.removeEventListener('resize', measure);
-      if (ro) ro.disconnect();
-    };
-  }, [descriptions, selectedProductType, limit]);
+  // Прибрано вимірювання ширини таблиці — покладаємось на overflow-x-auto
 
   // Синхронізація прокрутки між верхнім і нижнім скролбарами
-  const onTopScroll = () => {
-    if (isScrollingRef.current) return;
-    isScrollingRef.current = true;
-    const top = topScrollRef.current;
-    const bottom = tableScrollRef.current;
-    if (top && bottom) bottom.scrollLeft = top.scrollLeft;
-    requestAnimationFrame(() => {
-      isScrollingRef.current = false;
-    });
-  };
-
   const onBottomScroll = () => {
     if (isScrollingRef.current) return;
     isScrollingRef.current = true;
@@ -635,19 +840,70 @@ export default function AIProductFillerGeneration() {
              searchWords?.toLowerCase().includes(searchLower);
     }
     
+    // Фільтр за мовою (клієнтський) — 'ua' вважаємо еквівалентним до 'uk'
+    const lang = (desc.site_lang_code || '').toLowerCase();
+    const langMatch = selectedLang === 'ua'
+      ? (lang === 'ua' || lang === 'uk')
+      : lang === selectedLang;
+
     // Перевірка за користувацькими фільтрами
     // Застосовуємо тільки активні фільтри
     const activeFilters = customFilters.filter(filter => filter.active);
-    if (activeFilters.length === 0) return matchesSearch;
-    
-    return matchesSearch && activeFilters.every(filter => {
+    if (activeFilters.length === 0) return matchesSearch && langMatch;
+
+    return matchesSearch && langMatch && activeFilters.every(filter => {
       const fieldValue = desc[filter.field as keyof ContentDescription];
       if (fieldValue === undefined || fieldValue === null) return false;
       return String(fieldValue).toLowerCase().includes(filter.value.toLowerCase());
     });
   });
   
-  const totalPages = Math.ceil(total / limit);
+  // Хелпери сортування
+  const toggleSort = (col: SiteColumnName) => {
+    if (sortBy !== col) { setSortBy(col); setSortDir('asc'); }
+    else if (sortDir === 'asc') { setSortDir('desc'); }
+    else { setSortBy(null); }
+    setPage(1);
+  };
+
+  const getSortValue = (d: any, col: SiteColumnName): string => {
+    switch (col) {
+      case 'product':
+        return (d.site_product || d.product_name || '').toString();
+      case 'shortname':
+        return (d.site_shortname || '').toString();
+      case 'short_description':
+        return (d.site_short_description || '').toString();
+      case 'full_description':
+        return (d.site_full_description || d.description || '').toString();
+      case 'promo_text':
+        return (d.site_promo_text || '').toString();
+      case 'meta_keywords':
+        return (d.site_meta_keywords || '').toString();
+      case 'meta_description':
+        return (d.site_meta_description || '').toString();
+      case 'searchwords':
+        return (d.site_searchwords || '').toString();
+      case 'page_title':
+        return (d.site_page_title || '').toString();
+      default:
+        return '';
+    }
+  };
+
+  // Сортування після фільтрації
+  const sortedDescriptions = sortBy
+    ? [...filteredDescriptions].sort((a, b) => {
+        const aVal = getSortValue(a, sortBy);
+        const bVal = getSortValue(b, sortBy);
+        const cmp = aVal.localeCompare(bVal, undefined, { sensitivity: 'base' });
+        return sortDir === 'asc' ? cmp : -cmp;
+      })
+    : filteredDescriptions;
+  // Пагінація після фільтрації та сортування
+  const totalFiltered = filteredDescriptions.length;
+  const pagedDescriptions = sortedDescriptions.slice((page - 1) * limit, page * limit);
+  const totalPages = Math.ceil(totalFiltered / limit);
   
   // Function to truncate text with ellipsis
   const truncateText = (text: string | undefined, maxLength: number) => {
@@ -660,14 +916,17 @@ export default function AIProductFillerGeneration() {
     rowKey: string;
     col: SiteColumnName;
     value: string;
+    desc: ContentDescription;
     long?: boolean;
     placeholder?: string;
     truncate?: number; // якщо 0/undefined — без скорочення
   };
-  const EditableTextCell = ({ rowKey, col, value, long = false, placeholder = '-', truncate = 0 }: EditableTextCellProps) => {
+  const EditableTextCell = ({ rowKey, col, value, desc, long = false, placeholder = '-', truncate = 0 }: EditableTextCellProps) => {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<string>(value);
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    // Запам'ятовуємо значення на старті редагування, щоб уникнути перезапису зовнішніх оновлень (напр., генерації)
+    const valueAtEditStartRef = useRef<string>(value);
 
     useEffect(() => {
       if (editing && inputRef.current) {
@@ -680,28 +939,15 @@ export default function AIProductFillerGeneration() {
       if (!editing) setDraft(value);
     }, [value, editing]);
 
-    const save = () => {
-      const field = mapSiteColumnToContentField[col];
-      const newVal = draft;
-      setDescriptions(prev => prev.map((it, idx) => {
-        const key = getRowKey(it, idx);
-        if (key !== rowKey) return it;
-        return { ...it, [field]: newVal } as ContentDescription;
-      }));
-      setEditing(false);
-    };
-
-    const cancel = () => {
-      setEditing(false);
-      setDraft(value);
-    };
+    // save/cancel більше не потрібні — редагування застосовується миттєво в onChange,
+    // а Escape відновлює початкове значення
 
     if (!editing) {
       const shown = truncate ? truncateText(value, truncate) : value;
       return (
         <div
-          className="w-full flex-1 text-sm text-gray-700 dark:text-gray-300 cursor-text hover:bg-gray-50 dark:hover:bg-gray-700 rounded px-1 line-clamp-4 whitespace-normal break-words"
-          onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+          className="w-full flex-1 min-h-[2px] text-xs leading-none text-gray-700 dark:text-gray-300 cursor-text hover:bg-gray-50 dark:hover:bg-gray-700 px-0.5 line-clamp-1 whitespace-normal break-words"
+          onClick={(e) => { e.stopPropagation(); valueAtEditStartRef.current = value; setEditing(true); }}
           title={value || placeholder}
         >
           {shown || placeholder}
@@ -714,22 +960,84 @@ export default function AIProductFillerGeneration() {
         {long ? (
           <textarea
             ref={inputRef as any}
-            className="w-full text-sm bg-transparent border border-gray-300 dark:border-gray-600 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-20 text-xs leading-none bg-transparent border border-gray-300 dark:border-gray-600 rounded p-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={save}
-            rows={4}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDraft(v);
+              const field = mapSiteColumnToContentField[col];
+              setDescriptions(prev => {
+                const targetId = (desc as any).product_id ?? desc.id ?? null;
+                const targetLang = desc.site_lang_code ?? '';
+                const targetName = desc.site_product || desc.product_name || '';
+                const idx = prev.findIndex(it => {
+                  const candidateId = (it as any).product_id ?? it.id ?? null;
+                  if (targetId != null && candidateId != null) return candidateId === targetId;
+                  const itLang = it.site_lang_code ?? '';
+                  const itName = it.site_product || it.product_name || '';
+                  return itLang === targetLang && itName === targetName;
+                });
+                if (idx === -1) return prev;
+                const next = [...prev];
+                next[idx] = { ...next[idx], [field]: v } as ContentDescription;
+                return next;
+              });
+            }}
+            onBlur={() => setEditing(false)}
+            rows={2}
           />
         ) : (
           <Input
             ref={inputRef as any}
-            className="w-full text-sm bg-transparent border border-gray-300 dark:border-gray-600 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-5 min-h-[2px] text-xs leading-none bg-transparent border border-gray-300 dark:border-gray-600 rounded p-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={save}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDraft(v);
+              const field = mapSiteColumnToContentField[col];
+              setDescriptions(prev => {
+                const targetId = (desc as any).product_id ?? desc.id ?? null;
+                const targetLang = desc.site_lang_code ?? '';
+                const targetName = desc.site_product || desc.product_name || '';
+                const idx = prev.findIndex(it => {
+                  const candidateId = (it as any).product_id ?? it.id ?? null;
+                  if (targetId != null && candidateId != null) return candidateId === targetId;
+                  const itLang = it.site_lang_code ?? '';
+                  const itName = it.site_product || it.product_name || '';
+                  return itLang === targetLang && itName === targetName;
+                });
+                if (idx === -1) return prev;
+                const next = [...prev];
+                next[idx] = { ...next[idx], [field]: v } as ContentDescription;
+                return next;
+              });
+            }}
+            onBlur={() => setEditing(false)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); save(); }
-              if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+              if (e.key === 'Enter') { e.preventDefault(); setEditing(false); }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                const original = valueAtEditStartRef.current ?? '';
+                const field = mapSiteColumnToContentField[col];
+                setDescriptions(prev => {
+                  const targetId = (desc as any).product_id ?? desc.id ?? null;
+                  const targetLang = desc.site_lang_code ?? '';
+                  const targetName = desc.site_product || desc.product_name || '';
+                  const idx = prev.findIndex(it => {
+                    const candidateId = (it as any).product_id ?? it.id ?? null;
+                    if (targetId != null && candidateId != null) return candidateId === targetId;
+                    const itLang = it.site_lang_code ?? '';
+                    const itName = it.site_product || it.product_name || '';
+                    return itLang === targetLang && itName === targetName;
+                  });
+                  if (idx === -1) return prev;
+                  const next = [...prev];
+                  next[idx] = { ...next[idx], [field]: original } as ContentDescription;
+                  return next;
+                });
+                setDraft(original);
+                setEditing(false);
+              }
             }}
           />
         )}
@@ -737,14 +1045,21 @@ export default function AIProductFillerGeneration() {
     );
   };
   
-  // Функція для отримання назви мови
-  const getLanguageName = (langCode: string | undefined) => {
-    if (!langCode) return '-';
-    return languageLabels[langCode] || langCode;
-  };
+  // Прибрано map для назв мов — колонку мови видалено
 
   return (
-    <div className="container mx-auto px-4 py-6 overflow-x-hidden">
+    <AIProductFillerLayout>
+    <div
+      className="relative min-h-[calc(100vh-64px)] overflow-hidden"
+      style={{
+        backgroundImage: `url(${bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <div className="absolute inset-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-[1.5px] pointer-events-none" />
+      <div className="relative z-10 w-full px-0 py-0 overflow-x-hidden">
       {/* Header */}
       <div className="mb-6">
         <div className="p-4 space-y-4">
@@ -832,7 +1147,8 @@ export default function AIProductFillerGeneration() {
               </Popover>
               <div className="flex items-center flex-wrap gap-2">
                 {customFilters.length > 0 && (
-                  <div className='w-auto min-w-[200px] h-10 flex items-center space-x-1 p-1 bg-black rounded-md border border-[#333]'>
+                  <div className='w-auto min-w-[200px] h-10 flex items-center space-x-1 p-1
+                   bg-black rounded-md border border-[#333]'>
                     {customFilters.map(filter => (
                       <Badge 
                         key={filter.id}
@@ -856,7 +1172,19 @@ export default function AIProductFillerGeneration() {
                 )}
               </div>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+              {/* Фільтр мови */}
+              <Select value={selectedLang} onValueChange={(value) => setSelectedLang(value as 'ua' | 'en' | 'ru')}>
+                <SelectTrigger className="w-[120px]" title="Мова">
+                  <SelectValue placeholder="Мова" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ua">ua</SelectItem>
+                  <SelectItem value="en">en</SelectItem>
+                  <SelectItem value="ru">ru</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Тип продукту */}
               <Select value={selectedProductType} onValueChange={(value) => setSelectedProductType(value as ProductType | 'all')}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Все типы" />
@@ -868,6 +1196,29 @@ export default function AIProductFillerGeneration() {
                   <SelectItem value="inverters">Інвертори</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Модель AI */}
+              <Select value={selectedChatModel} onValueChange={(value) => setSelectedChatModel(value)}>
+                <SelectTrigger className="w-[240px]" title="AI Модель">
+                  <SelectValue placeholder={modelsLoading ? 'Завантаження моделей…' : 'Виберіть модель'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {chatModels.map((m) => (
+                    <SelectItem key={m.id} value={m.name} className="flex items-center">
+                      <div className="flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={m.icon} alt="icon" className="w-4 h-4 rounded-sm" />
+                        <span>{m.name}</span>
+                        {typeof m.input_tokens_price === 'number' && typeof m.output_tokens_price === 'number' && (
+                          <span className="text-xs text-gray-500">({m.input_tokens_price}/{m.output_tokens_price})</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {modelsError && (
+                <span className="text-xs text-red-500" title={modelsError}>Помилка завантаження моделей</span>
+              )}
             </div>
             
             {/* Відображення активних фільтрів */}
@@ -875,6 +1226,15 @@ export default function AIProductFillerGeneration() {
             
             {/* Кнопки та опції */}
             <div className="flex flex-wrap items-center gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleGenerateSelected}
+                disabled={selectedGenerating || !templatesState}
+                title="Згенерувати AI-контент для вибраних клітинок поточної сторінки"
+              >
+                {selectedGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Заповнити вибрані{selectedGenerating && selectedProgress ? ` (${selectedProgress})` : ''}
+              </Button>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={handleSaveChanges}
@@ -915,7 +1275,8 @@ export default function AIProductFillerGeneration() {
       )}*/}
 
       {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border shadow-sm overflow-x-hidden">
+      <div className="p-8 rounded-2xl m-5 bg-white/95 shadow-xl ring-1 ring-black/5">
+      <div className="bg-white/95   dark:bg-slate-800/90 rounded-2xl shadow-xl ring-1 ring-black/5 overflow-x-hidden backdrop-blur-sm">
         {loading ? (
           <div className="flex justify-center items-center p-8">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -931,17 +1292,32 @@ export default function AIProductFillerGeneration() {
               onScroll={onBottomScroll}
               className="overflow-x-auto"
             >
-              <div style={{ width: tableWidth, minWidth: "100%" }}>
+              <div className="rounded-t-xl overflow-hidden" style={{ minWidth: "100%" }}>
               <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50 dark:bg-gray-900">
-                  <TableHead className="h-16 sm:h-20 w-24 text-gray-700 dark:text-gray-300 font-medium">Мова</TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[350px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Назва продукту</div>
+              <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900">
+                <TableRow>
+                  <TableHead noClamp className="h-10 sm:h-12 w-28 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex items-center justify-center gap-2">
+                      <span>#</span>
+                      <span className="text-[11px] text-gray-600 dark:text-gray-400">Генерувати</span>
+                    </div>
+                  </TableHead>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[350px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Назва продукту</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати за назвою (${sortBy === 'product' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('product')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('product')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Назва продукту'"
@@ -956,12 +1332,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 w-40 text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Коротка назва</div>
+                  <TableHead noClamp className="h-10 sm:h-12 w-40 text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Коротка назва</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'shortname' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('shortname')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('shortname')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Коротка назва'"
@@ -976,12 +1362,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Короткий опис</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Короткий опис</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'short_description' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('short_description')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('short_description')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Короткий опис'"
@@ -996,12 +1392,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Повний опис</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Повний опис</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'full_description' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('full_description')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('full_description')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Повний опис'"
@@ -1016,12 +1422,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Промо-текст</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Промо-текст</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'promo_text' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('promo_text')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('promo_text')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Промо-текст'"
@@ -1036,12 +1452,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Мета-ключові слова</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Мета-ключові слова</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'meta_keywords' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('meta_keywords')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('meta_keywords')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Мета-ключові слова'"
@@ -1056,12 +1482,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Мета-опис</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Мета-опис</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'meta_description' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('meta_description')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('meta_description')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Мета-опис'"
@@ -1076,12 +1512,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Пошукові слова</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Пошукові слова</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'searchwords' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('searchwords')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('searchwords')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Пошукові слова'"
@@ -1096,12 +1542,22 @@ export default function AIProductFillerGeneration() {
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-16 sm:h-20 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-1 items-start justify-center h-full">
-                      <div>Заголовок сторінки</div>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl">
+                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
+                      <div className="flex items-center gap-1">
+                        <span>Заголовок сторінки</span>
+                        <Button
+                          variant="outline"
+                          className="h-5 w-5 p-0 ml-1"
+                          title={`Сортувати (${sortBy === 'page_title' ? sortDir : 'off'})`}
+                          onClick={() => toggleSort('page_title')}
+                        >
+                          <ArrowUpDown className="h-3 w-3" />
+                        </Button>
+                      </div>
                       <Button
                         variant="outline"
-                        className="h-6 px-2 py-0 text-xs"
+                        className="h-5 px-1.5 py-0 text-[11px]"
                         onClick={() => handleMassGenerateColumn('page_title')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
                         title="Заповнити порожні клітинки у колонці 'Заголовок сторінки'"
@@ -1126,163 +1582,180 @@ export default function AIProductFillerGeneration() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredDescriptions.map((desc, index) => {
+                  pagedDescriptions.map((desc, index) => {
                     const rowKey = getRowKey(desc, index);
                     return (
-                      <TableRow key={desc.id || desc.site_product || index} className="hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700">
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2">
+                      <TableRow key={getStableKey(desc)} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                        <TableCell className="py-0 sm:py-2 sm:px-2 text-center w-28">
+                          <div className="flex items-center justify-center gap-2 text-gray-700 dark:text-gray-300">
+                            <span className="w-6 text-right text-gray-500">{(page - 1) * limit + index + 1}</span>
                             <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'lang')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'lang', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800">
-                              {getLanguageName(desc.site_lang_code) || desc.product_type || '-'}
-                            </Badge>
+                              aria-label="Генерувати"
+                              checked={isRowAllChecked(rowKey, desc)}
+                              onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, desc, checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-4 w-4"
+                            />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_product || desc.product_name || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'product')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'product', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="product"
                               value={desc.site_product || desc.product_name || ''}
+                              desc={desc}
                               long={true}
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0">
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'shortname')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'shortname', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="shortname"
                               value={desc.site_shortname || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_shortname || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'short_description')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'short_description', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="short_description"
                               value={desc.site_short_description || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_full_description || desc.description || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'full_description')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'full_description', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="full_description"
                               value={desc.site_full_description || desc.description || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_promo_text || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'promo_text')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'promo_text', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="promo_text"
                               value={desc.site_promo_text || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_meta_keywords || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'meta_keywords')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_keywords', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="meta_keywords"
                               value={desc.site_meta_keywords || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_meta_description || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'meta_description')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_description', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="meta_description"
                               value={desc.site_meta_description || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_searchwords || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'searchwords')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'searchwords', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="searchwords"
                               value={desc.site_searchwords || ''}
+                              desc={desc}
                               long
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-start gap-2 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_page_title || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'page_title')}
                             onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'page_title', desc, checked)}
                             onClick={(e) => e.stopPropagation()}
+                            className="h-3 w-3"
                           />
                             <EditableTextCell
                               rowKey={rowKey}
                               col="page_title"
                               value={desc.site_page_title || ''}
+                              desc={desc}
                               long
                             />
                           </div>
@@ -1295,12 +1768,49 @@ export default function AIProductFillerGeneration() {
               </Table>
               </div>
             </div>
+            {/* Нижня панель дій (дублікат верхньої) */}
+            <div className="flex flex-wrap items-center gap-2 justify-end px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={handleGenerateSelected}
+                disabled={selectedGenerating || !templatesState}
+                title="Згенерувати AI-контент для вибраних клітинок поточної сторінки"
+              >
+                {selectedGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Заповнити вибрані{selectedGenerating && selectedProgress ? ` (${selectedProgress})` : ''}
+              </Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleSaveChanges}
+                disabled={saving}
+                title="Надіслати лише змінені рядки до бекенду"
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Save className="mr-2 h-4 w-4" />
+                Зберегти зміни
+              </Button>
+              <Button
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={handleMassGenerate}
+                disabled={massGenerating || !templatesState}
+              >
+                {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
+              </Button>
+              <Button variant="outline" onClick={fetchData}>
+                Оновити
+              </Button>
+            </div>
             {totalPages > 1 && (
               <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                     <span>
-                      Показано {(page - 1) * limit + 1}-{Math.min(page * limit, total)} з {total} записів
+                      {(() => {
+                        const start = totalFiltered > 0 ? (page - 1) * limit + 1 : 0;
+                        const end = Math.min(page * limit, totalFiltered);
+                        return `Показано ${start}-${end} з ${totalFiltered} записів`;
+                      })()}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Записів на сторінці</span>
@@ -1328,6 +1838,9 @@ export default function AIProductFillerGeneration() {
           </>
         )}
       </div>
+      </div>
+      </div>
     </div>
+    </AIProductFillerLayout>
   );
 }

@@ -6,6 +6,7 @@ export interface ContentDescriptionsRequest {
   product_type?: ProductType;
   page?: number; // 1-based
   limit?: number; // page size
+  lang?: string; // language filter (e.g., 'ua' | 'en' | 'ru')
 }
 
 export interface ContentDescriptionsResponse<T = any> {
@@ -22,6 +23,7 @@ export const fetchContentDescriptions = async <T = any>(
     product_type: req.product_type,
     page: req.page ?? 1,
     limit: req.limit ?? 50,
+    lang: req.lang,
   });
   const data = response.data || {};
   // Normalize possible shapes: { items, total, page, limit } OR { result, page, limit }

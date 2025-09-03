@@ -1,9 +1,11 @@
 import { Zap, Building2, HelpCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import AIProductFillerLayout from './components/AIProductFillerLayout';
 
 export default function AIProductFillerHome() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <AIProductFillerLayout>
+    <div className="w-full py-0">
       {/* Заголовок і опис */}
       <div className="flex items-center gap-4 mb-8">
         <div className="bg-primary/10 rounded-full p-4">
@@ -71,5 +73,6 @@ export default function AIProductFillerHome() {
       {/* Розділювач */}
       <div className="border-t border-gray-200 my-16"></div>
     </div>
+    </AIProductFillerLayout>
   );
 }
