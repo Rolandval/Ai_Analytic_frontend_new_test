@@ -261,18 +261,46 @@ export default function AIProductFillerTemplates() {
     setSaving(true);
     try {
       if (entity === 'product') {
-        // Save changed prompts for mapped columns (first item per column)
+        // Save or create prompts for mapped columns (first item per column)
         const tasks: Promise<unknown>[] = [];
         PRODUCT_FIELDS.forEach((f) => {
           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
           if (!column) return;
-          const item = (prompts[column] ?? [])[0];
-          if (!item) return;
-          if (isDirty(column, item)) {
-            tasks.push(savePrompt(item));
+          const list = prompts[column] ?? [];
+          const first = list[0] as SiteContentPrompt | undefined;
+          // Determine current prompt text exactly as textarea shows
+          const currentPrompt = first
+            ? first.prompt
+            : ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? '');
+          const currentName = first ? first.name : column;
+
+          if (first) {
+            if (isDirty(column, first)) {
+              tasks.push(savePrompt(first));
+            }
+          } else {
+            // No item yet: create one if user entered some text
+            if (currentPrompt && currentPrompt.trim().length > 0) {
+              tasks.push(createPrompt(column, currentName, currentPrompt));
+            }
           }
         });
         await Promise.allSettled(tasks);
+
+        // Persist non-mapped product fields (e.g. age_warning_message, unit_name) to localStorage
+        if (productTpl) {
+          const toPersist = PRODUCT_FIELDS.reduce((acc, f) => {
+            const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+            if (!column) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (acc as any)[f.key] = productTpl[f.key as keyof ProductTemplates] as any;
+            }
+            return acc;
+          }, {} as Partial<ProductTemplates>);
+          if (Object.keys(toPersist).length > 0) {
+            setTemplates('product', lang, toPersist as unknown as ProductTemplates);
+          }
+        }
       }
       if (entity === 'category' && categoryTpl) setTemplates('category', lang, categoryTpl);
     } finally {

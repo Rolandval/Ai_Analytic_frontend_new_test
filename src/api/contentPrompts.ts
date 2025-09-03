@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import type { ProductTemplates } from './productFillerMock';
+import type { ProductTemplates, Lang } from './productFillerMock';
 
 // Columns supported by backend endpoint `/content/get_site_content_prompts/{site_column_name}`
 // Note: backend uses `product` for product name and `searchwords` without underscore.
@@ -111,16 +111,32 @@ const normalizePromptItems = (
 };
 
 export const fetchColumnPrompts = async (
-  column: SiteColumnName
+  column: SiteColumnName,
+  langCode: Lang = 'ua'
 ): Promise<SiteContentPrompt[]> => {
-  const res = await apiClient.get(`/content/get_site_content_prompts/${column}`);
-  return normalizePromptItems(res?.data, column);
+  try {
+    const res = await apiClient.get(`/content/get_site_content_prompts/${column}/${langCode}`);
+    return normalizePromptItems(res?.data, column);
+  } catch (err: any) {
+    // Fallback: try old endpoint without lang in path (backend may not support lang yet for some columns)
+    try {
+      // eslint-disable-next-line no-console
+      console.warn('[fetchColumnPrompts] Falling back without lang for column', column, 'status:', err?.response?.status);
+      const res2 = await apiClient.get(`/content/get_site_content_prompts/${column}`);
+      return normalizePromptItems(res2?.data, column);
+    } catch (err2) {
+      // eslint-disable-next-line no-console
+      console.error('[fetchColumnPrompts] Failed with and without lang for column', column, err2);
+      return [];
+    }
+  }
 };
 
 export const fetchAllColumnPrompts = async (
-  columns: SiteColumnName[] = SITE_COLUMNS
+  columns: SiteColumnName[] = SITE_COLUMNS,
+  langCode: Lang = 'ua'
 ): Promise<Record<SiteColumnName, SiteContentPrompt[]>> => {
-  const settled = await Promise.allSettled(columns.map((c) => fetchColumnPrompts(c)));
+  const settled = await Promise.allSettled(columns.map((c) => fetchColumnPrompts(c, langCode)));
   const out = {} as Record<SiteColumnName, SiteContentPrompt[]>;
   columns.forEach((c, idx) => {
     const s = settled[idx];
