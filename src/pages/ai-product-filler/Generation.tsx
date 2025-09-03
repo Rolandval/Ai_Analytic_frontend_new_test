@@ -946,7 +946,7 @@ export default function AIProductFillerGeneration() {
       const shown = truncate ? truncateText(value, truncate) : value;
       return (
         <div
-          className="w-full flex-1 min-h-[2px] text-xs leading-none text-gray-700 dark:text-gray-300 cursor-text hover:bg-gray-50 dark:hover:bg-gray-700 px-0.5 line-clamp-1 whitespace-normal break-words"
+          className={`w-full flex-1 min-h-[2px] text-xs leading-none text-gray-700 dark:text-gray-300 cursor-text hover:bg-gray-50 dark:hover:bg-gray-700 px-0.5 line-clamp-1 whitespace-normal break-words`}
           onClick={(e) => { e.stopPropagation(); valueAtEditStartRef.current = value; setEditing(true); }}
           title={value || placeholder}
         >
@@ -1294,18 +1294,17 @@ export default function AIProductFillerGeneration() {
             >
               <div className="rounded-t-xl overflow-hidden" style={{ minWidth: "100%" }}>
               <Table>
-              <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900">
+              <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
                 <TableRow>
-                  <TableHead noClamp className="h-10 sm:h-12 w-28 text-center text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex items-center justify-center gap-2">
-                      <span>#</span>
-                      <span className="text-[11px] text-gray-600 dark:text-gray-400">Генерувати</span>
+                  <TableHead noClamp className="h-10 sm:h-12 w-24 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex items-center justify-center">
+                      <span>№</span>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[350px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Назва продукту</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium min-w-[140px]">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Назва</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1317,25 +1316,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('product')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Назва продукту'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'product' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 w-40 text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Коротка назва</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium min-w-[140px]">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Коротка</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1347,25 +1346,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('shortname')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Коротка назва'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'shortname' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Короткий опис</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Опис</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1377,25 +1376,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('short_description')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Короткий опис'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'short_description' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Повний опис</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Повний</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1407,25 +1406,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('full_description')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Повний опис'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'full_description' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[200px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Промо-текст</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Промо</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1437,25 +1436,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('promo_text')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Промо-текст'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'promo_text' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Мета-ключові слова</span>
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Мета</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1467,25 +1466,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('meta_keywords')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Мета-ключові слова'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'meta_keywords' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Мета-опис</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Мета-опис</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1497,25 +1496,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('meta_description')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Мета-опис'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'meta_description' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Пошукові слова</span>
+                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Пошукові слова</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1527,25 +1526,25 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('searchwords')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Пошукові слова'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'searchwords' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl">
-                    <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1">
-                        <span>Заголовок сторінки</span>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl">
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        <span className="whitespace-nowrap">Заголовок</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1557,17 +1556,17 @@ export default function AIProductFillerGeneration() {
                       </div>
                       <Button
                         variant="outline"
-                        className="h-5 px-1.5 py-0 text-[11px]"
+                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
                         onClick={() => handleMassGenerateColumn('page_title')}
                         disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити порожні клітинки у колонці 'Заголовок сторінки'"
+                        title="Заповнити рядок"
                       >
                         {colGenerating === 'page_title' ? (
                           <>
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
                           </>
                         ) : (
-                          'Заповнити порожні'
+                          'Запов...'
                         )}
                       </Button>
                     </div>
@@ -1586,20 +1585,18 @@ export default function AIProductFillerGeneration() {
                     const rowKey = getRowKey(desc, index);
                     return (
                       <TableRow key={getStableKey(desc)} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 text-center w-28">
-                          <div className="flex items-center justify-center gap-2 text-gray-700 dark:text-gray-300">
+                        <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
+                          <div className="flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300">
                             <span className="w-6 text-right text-gray-500">{(page - 1) * limit + index + 1}</span>
                             <Checkbox
-                              aria-label="Генерувати"
-                              checked={isRowAllChecked(rowKey, desc)}
                               onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, desc, checked)}
                               onClick={(e) => e.stopPropagation()}
                               className="h-4 w-4"
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_product || desc.product_name || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[140px]" title={desc.site_product || desc.product_name || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'product')}
@@ -1616,8 +1613,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[140px]">
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'shortname')}
@@ -1634,8 +1631,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_shortname || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_shortname || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'short_description')}
@@ -1652,8 +1649,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_full_description || desc.description || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_full_description || desc.description || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'full_description')}
@@ -1670,8 +1667,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_promo_text || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_promo_text || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'promo_text')}
@@ -1688,8 +1685,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_meta_keywords || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_meta_keywords || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'meta_keywords')}
@@ -1706,8 +1703,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_meta_description || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_meta_description || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'meta_description')}
@@ -1724,8 +1721,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_searchwords || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_searchwords || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'searchwords')}
@@ -1742,8 +1739,8 @@ export default function AIProductFillerGeneration() {
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-2 sm:px-2 min-h-[2px]">
-                          <div className="flex items-center gap-0.5 w-full min-w-0" title={desc.site_page_title || ''}>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                          <div className="flex items-center gap-0.5 min-w-[20px]" title={desc.site_page_title || ''}>
                             <Checkbox
                             aria-label="Вибрати клітинку"
                             checked={isCellChecked(rowKey, 'page_title')}

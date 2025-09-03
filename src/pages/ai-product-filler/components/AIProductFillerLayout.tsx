@@ -40,6 +40,8 @@ export default function AIProductFillerLayout({ children }: Props) {
                   'transition-opacity',
                   'whitespace-nowrap overflow-hidden',
                   'max-w-0 group-[.open]:max-w-[160px] group-hover:max-w-[160px] transition-[max-width]',
+                  // У згорнутому стані повністю ігноруємо події миші, щоб уникнути випадкових ховерів
+                  'pointer-events-none group-[.open]:pointer-events-auto group-hover:pointer-events-auto',
                 ].join(' ')}
               >
                 AI Product Filler
@@ -72,6 +74,8 @@ export default function AIProductFillerLayout({ children }: Props) {
                           hovered ? 'duration-300' : 'duration-150',
                           'transition-opacity',
                           'max-w-0 group-[.open]:max-w-[160px] group-hover:max-w-[160px] transition-[max-width]',
+                          // Не перехоплюємо події у згорнутому стані
+                          'pointer-events-none group-[.open]:pointer-events-auto group-hover:pointer-events-auto',
                         ].join(' ')}
                       >
                         {label}
