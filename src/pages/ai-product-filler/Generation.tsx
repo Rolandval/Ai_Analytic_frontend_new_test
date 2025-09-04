@@ -98,10 +98,12 @@ export default function AIProductFillerGeneration() {
   // Генерація для вибраних клітинок
   const [selectedGenerating, setSelectedGenerating] = useState(false);
   const [selectedProgress, setSelectedProgress] = useState<string>('');
-  // Масова генерація по колонці
-  const [colGenerating, setColGenerating] = useState<SiteColumnName | null>(null);
-  const [colProgress, setColProgress] = useState<string>('');
+  // Масова генерація по колонці — видалено (замість кнопок у хедері використовуються чекбокси вибору колонки)
   const [saving, setSaving] = useState(false);
+  // Незалежний візуальний стан чекбокса рядка, щоб вибір стовпця не впливав на нього
+  const [rowCheckedRows, setRowCheckedRows] = useState<Record<string, boolean>>({});
+  // Незалежний стан для чекбоксів у заголовках колонок (щоб вибір рядків їх не змінював)
+  const [columnHeaderChecked, setColumnHeaderChecked] = useState<Partial<Record<SiteColumnName, boolean>>>({});
   // Прийом шаблонів із сторінки Templates через router state і логування
   type TemplatesState = {
     from?: 'templates' | 'generation-fallback';
@@ -284,58 +286,8 @@ export default function AIProductFillerGeneration() {
     }
     return null;
   };
-
-  const handleGenerateForCell = async (
-    col: SiteColumnName,
-    desc: ContentDescription
-  ) => {
-    if (!templatesState) {
-      toast({ title: 'Шаблони ще завантажуються', description: 'Спробуйте ще раз за мить' });
-      return;
-    }
-    const site_product = desc.site_product || desc.product_name || '';
-    const site_full_description = desc.site_full_description || desc.description || '';
-    if (!site_product) {
-      toast({ title: 'Немає назви продукту', description: 'Поле site_product порожнє', variant: 'destructive' });
-      return;
-    }
-    const prompt = resolvePromptForColumn(col);
-    if (!prompt) {
-      toast({ title: 'Не знайдено промпт', description: `Колонка: ${col}`, variant: 'destructive' });
-      return;
-    }
-    try {
-      const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
-      const res = await generateAiDescription(payload);
-      console.log('[GenerateAI] Request:', payload, 'Response:', res);
-      const generated = extractGeneratedText(res);
-      if (generated && typeof generated === 'string') {
-        const field = mapSiteColumnToContentField[col];
-        setDescriptions(prev => {
-          const targetId = (desc as any).product_id ?? desc.id ?? null;
-          const targetLang = desc.site_lang_code ?? '';
-          const targetName = desc.site_product || desc.product_name || '';
-          const idx = prev.findIndex(it => {
-            const candidateId = (it as any).product_id ?? it.id ?? null;
-            if (targetId != null && candidateId != null) return candidateId === targetId;
-            const itLang = it.site_lang_code ?? '';
-            const itName = it.site_product || it.product_name || '';
-            return itLang === targetLang && itName === targetName;
-          });
-          if (idx === -1) return prev;
-          const next = [...prev];
-          next[idx] = { ...next[idx], [field]: generated } as ContentDescription;
-          return next;
-        });
-        // Маркуємо рядок як згенерований
-        markRowGenerated(desc);
-      } else {
-        console.warn('[GenerateAI] Не вдалось прочитати результат для', col, res);
-      }
-    } catch (e) {
-      console.error('[GenerateAI] Failed', e);
-    }
-  };
+  
+  
   const onCellCheckedChangeWithLog = (
     rowKey: string,
     col: string,
@@ -351,38 +303,59 @@ export default function AIProductFillerGeneration() {
     // Тільки перемикаємо вибір. Генерація виконується кнопкою "Заповнити вибрані".
   };
 
-  // Рядкові хелпери для комбінованої колонки №/Генерувати (лише стан чекбоксів)
+  // Рядкові хелпери для комбінованої колонки №/Генерувати
   const ROW_GENERATABLE_COLUMNS: SiteColumnName[] = SITE_COLUMNS as SiteColumnName[];
-  const isRowAllChecked = (rowKey: string, desc: ContentDescription) => {
-    const emptyCols = ROW_GENERATABLE_COLUMNS.filter(col => {
-      const field = mapSiteColumnToContentField[col];
-      const v = (desc as any)[field] as string | null | undefined;
-      return !v || String(v).trim() === '';
-    });
-    if (emptyCols.length === 0) return false;
-    return emptyCols.every(col => isCellChecked(rowKey, col));
+  // Хелпер: визначити, чи значення клітинки вважається порожнім (у т.ч. плейсхолдер '-')
+  const isEmptyCellValue = (v: string | null | undefined): boolean => {
+    if (v === null || v === undefined) return true;
+    const s = String(v).trim();
+    if (s.length === 0) return true;
+    return s === '-' || s === '—' || s === '–';
   };
-  const onRowGenerateCheckedChange = (
-    rowKey: string,
-    desc: ContentDescription,
-    checked: boolean | 'indeterminate'
-  ) => {
+  // Стан чекбокса рядка — тільки з незалежного стану, не змінюється від вибору колонок
+  const getRowCheckedState = (rowKey: string): boolean | 'indeterminate' => {
+    return !!rowCheckedRows[rowKey];
+  };
+  // Візуальний стан чекбокса стовпця — повністю контрольований і незалежний від selectedCells
+  const getColumnCheckedState = (col: SiteColumnName): boolean | 'indeterminate' => {
+    return !!columnHeaderChecked[col];
+  };
+
+  // Встановити/зняти вибір для всіх клітинок стовпця на поточній сторінці
+  const onColumnCheckedChange = (col: SiteColumnName, checked: boolean | 'indeterminate') => {
+    const value = checked === true;
+    setColumnHeaderChecked(prev => ({ ...prev, [col]: value }));
     setSelectedCells(prev => {
       const next = { ...prev };
-      if (checked === true) {
-        // Позначаємо лише порожні клітинки рядка
-        ROW_GENERATABLE_COLUMNS.forEach(col => {
-          const field = mapSiteColumnToContentField[col];
-          const v = (desc as any)[field] as string | null | undefined;
-          const isEmpty = !v || String(v).trim() === '';
-          next[`${rowKey}:${col}`] = isEmpty;
-        });
-      } else {
-        // Зняття — очищаємо вибір по всьому рядку
-        ROW_GENERATABLE_COLUMNS.forEach(col => {
-          next[`${rowKey}:${col}`] = false;
-        });
-      }
+      // Застосовуємо тільки до порожніх клітинок цієї колонки на поточній сторінці
+      const field = mapSiteColumnToContentField[col];
+      pagedDescriptions.forEach((desc, idx) => {
+        const v = (desc as any)[field] as string | null | undefined;
+        if (!isEmptyCellValue(v)) return;
+        const rowKey = getRowKey(desc, idx);
+        next[`${rowKey}:${col}`] = value;
+      });
+      return next;
+    });
+  };
+  // Керування вибором усього рядка: впливає тільки на порожні клітинки, і фіксує незалежний стан чекбокса рядка
+  const onRowGenerateCheckedChange = (
+    rowKey: string,
+    checked: boolean | 'indeterminate'
+  ) => {
+    const value = checked === true;
+    setRowCheckedRows(prev => ({ ...prev, [rowKey]: value }));
+    // Знайти опис рядка за ключем
+    const rowDesc = pagedDescriptions.find((d, idx) => getRowKey(d, idx) === rowKey);
+    if (!rowDesc) return;
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      ROW_GENERATABLE_COLUMNS.forEach(col => {
+        const field = mapSiteColumnToContentField[col];
+        const v = (rowDesc as any)[field] as string | null | undefined;
+        if (!isEmptyCellValue(v)) return;
+        next[`${rowKey}:${col}`] = value;
+      });
       return next;
     });
   };
@@ -471,6 +444,10 @@ export default function AIProductFillerGeneration() {
       }
     } finally {
       setSelectedGenerating(false);
+      // Після генерації очищаємо вибір, щоб прибрати галочки у № та хедерах колонок
+      setSelectedCells({});
+      setRowCheckedRows({});
+      setColumnHeaderChecked({});
     }
   };
 
@@ -546,77 +523,6 @@ export default function AIProductFillerGeneration() {
       console.error('[MassGenerate] Failed', e);
     } finally {
       setMassGenerating(false);
-    }
-  };
-
-  // Масова генерація лише для однієї колонки (порожні клітинки на поточній сторінці)
-  const handleMassGenerateColumn = async (col: SiteColumnName) => {
-    if (!templatesState) {
-      console.warn('[MassGenerateColumn] Шаблони ще не готові');
-      return;
-    }
-    setColGenerating(col);
-    setColProgress('');
-    try {
-      const field = mapSiteColumnToContentField[col];
-      const jobs = pagedDescriptions
-        .map((desc, index) => ({ desc, rowKey: getRowKey(desc, index) }))
-        .filter(({ desc }) => {
-          const v = (desc as any)[field] as string | null | undefined;
-          return !v || String(v).trim() === '';
-        });
-      if (jobs.length === 0) {
-        setColProgress('Немає порожніх полів');
-        return;
-      }
-      const prompt = resolvePromptForColumn(col);
-      if (!prompt) {
-        console.warn('[MassGenerateColumn] Не знайдено промпт для', col);
-        return;
-      }
-      let done = 0;
-      for (const job of jobs) {
-        const desc = job.desc;
-        const site_product = desc.site_product || desc.product_name || '';
-        const site_full_description = desc.site_full_description || desc.description || '';
-        if (!site_product) { done++; setColProgress(`${done}/${jobs.length}`); continue; }
-        try {
-          const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
-          const res = await generateAiDescription(payload);
-          const generated = extractGeneratedText(res);
-          if (generated && typeof generated === 'string') {
-            setDescriptions(prev => {
-              const targetId = (desc as any).product_id ?? desc.id ?? null;
-              const targetLang = desc.site_lang_code ?? '';
-              const targetName = desc.site_product || desc.product_name || '';
-              const idx = prev.findIndex(it => {
-                const candidateId = (it as any).product_id ?? it.id ?? null;
-                if (targetId != null && candidateId != null) return candidateId === targetId;
-                const itLang = it.site_lang_code ?? '';
-                const itName = it.site_product || it.product_name || '';
-                return itLang === targetLang && itName === targetName;
-              });
-              if (idx === -1) return prev;
-              const next = [...prev];
-              next[idx] = { ...next[idx], [field]: generated } as ContentDescription;
-              return next;
-            });
-            // Знімаємо позначку з клітинки після успішної генерації
-            setSelectedCells(prev => ({ ...prev, [`${job.rowKey}:${col}`]: false }));
-            // Маркуємо рядок як згенерований
-            markRowGenerated(desc);
-          } else {
-            console.warn('[MassGenerateColumn] Порожній результат для', col);
-          }
-        } catch (e) {
-          console.error('[MassGenerateColumn] Помилка', e);
-        } finally {
-          done++;
-          setColProgress(`${done}/${jobs.length}`);
-        }
-      }
-    } finally {
-      setColGenerating(null);
     }
   };
 
@@ -785,6 +691,8 @@ export default function AIProductFillerGeneration() {
   useEffect(() => {
     setSelectedCells({});
     setGeneratedRows({});
+    setRowCheckedRows({});
+    setColumnHeaderChecked({});
   }, [selectedProductType, page, limit, searchQuery, customFilters, selectedLang]);
 
   // Прибрано вимірювання ширини таблиці — покладаємось на overflow-x-auto
@@ -911,9 +819,8 @@ export default function AIProductFillerGeneration() {
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
   };
 
-  // Мінширина для порожніх клітинок — 50px, інакше 140px
-  const isEmptyStr = (v?: string) => !v || v.trim().length === 0;
-  const minWClass = (v?: string) => (isEmptyStr(v) ? 'min-w-[50px]' : 'min-w-[140px]');
+  // Дозволяємо колонкам стискатися: мінімальна ширина 0 для всіх клітинок, щоб уникнути горизонтального скролу
+  const minWClass = (_v?: string) => 'min-w-0';
 
   // Інлайн-редактор тексту клітинки, відкривається по кліку
   type EditableTextCellProps = {
@@ -925,7 +832,7 @@ export default function AIProductFillerGeneration() {
     placeholder?: string;
     truncate?: number; // якщо 0/undefined — без скорочення
   };
-  const EditableTextCell = ({ rowKey, col, value, desc, long = false, placeholder = '-', truncate = 0 }: EditableTextCellProps) => {
+  const EditableTextCell = ({ rowKey: _rowKey, col, value, desc, long = false, placeholder = '-', truncate = 0 }: EditableTextCellProps) => {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<string>(value);
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -965,7 +872,7 @@ export default function AIProductFillerGeneration() {
       const shown = truncate ? truncateText(value, truncate) : value;
       return (
         <div
-          className={`w-full flex-1 min-h-[2px] text-xs leading-none text-gray-700 dark:text-gray-300 cursor-text hover:bg-gray-50 dark:hover:bg-gray-700 px-0.5 line-clamp-1 whitespace-normal break-words`}
+          className={`w-full flex-1 min-h-[2px] text-xs leading-none text-gray-700 dark:text-gray-300 cursor-text hover:bg-gray-50 dark:hover:bg-gray-700 px-0.5 truncate whitespace-nowrap`}
           onClick={(e) => { e.stopPropagation(); valueAtEditStartRef.current = value; setEditing(true); }}
           title={value || placeholder}
         >
@@ -1333,10 +1240,10 @@ export default function AIProductFillerGeneration() {
             <div
               ref={tableScrollRef}
               onScroll={onBottomScroll}
-              className="overflow-x-auto"
+              className="overflow-x-hidden"
             >
               <div className="rounded-t-xl overflow-hidden" style={{ minWidth: "100%" }}>
-              <Table>
+              <Table className="table-fixed w-full">
               <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
                 <TableRow>
                   <TableHead noClamp className="h-10 sm:h-12 w-24 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1344,10 +1251,10 @@ export default function AIProductFillerGeneration() {
                       <span>№</span>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium min-w-[140px]">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Назва</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Назва">Назва</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1357,27 +1264,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('product')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'product' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Назва"
+                          checked={getColumnCheckedState('product')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('product', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium min-w-[140px]">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Коротка</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Коротка">Коротка</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1387,27 +1288,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('shortname')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'shortname' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Коротка"
+                          checked={getColumnCheckedState('shortname')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('shortname', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Опис</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Опис">Опис</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1417,27 +1312,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('short_description')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'short_description' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Опис"
+                          checked={getColumnCheckedState('short_description')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('short_description', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Повний</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Повний">Повний</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1447,27 +1336,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('full_description')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'full_description' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Повний"
+                          checked={getColumnCheckedState('full_description')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('full_description', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Промо</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Промо">Промо</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1477,27 +1360,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('promo_text')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'promo_text' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Промо"
+                          checked={getColumnCheckedState('promo_text')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('promo_text', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-start justify-center h-full">
-                      <div className="flex items-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Мета</span>
+                      <div className="flex items-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Мета">Мета</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1507,27 +1384,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('meta_keywords')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'meta_keywords' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Мета"
+                          checked={getColumnCheckedState('meta_keywords')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('meta_keywords', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Мета-опис</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Мета-опис">Мета-опис</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1537,27 +1408,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('meta_description')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'meta_description' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Мета-опис"
+                          checked={getColumnCheckedState('meta_description')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('meta_description', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 min-w-[150px] text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Пошукові слова</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Пошукові слова">Пошукові слова</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1567,27 +1432,21 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('searchwords')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'searchwords' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Пошукові слова"
+                          checked={getColumnCheckedState('searchwords')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('searchwords', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl">
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-                      <div className="flex items-center justify-center gap-1 whitespace-nowrap">
-                        <span className="whitespace-nowrap">Заголовок</span>
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Заголовок">Заголовок</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -1597,21 +1456,15 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        className="h-5 px-1 py-0 text-[10px] rounded-sm"
-                        onClick={() => handleMassGenerateColumn('page_title')}
-                        disabled={!!colGenerating || massGenerating || !templatesState}
-                        title="Заповнити рядок"
-                      >
-                        {colGenerating === 'page_title' ? (
-                          <>
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Генерація{colProgress ? ` (${colProgress})` : ''}
-                          </>
-                        ) : (
-                          'Запов...'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Заголовок"
+                          checked={getColumnCheckedState('page_title')}
+                          onCheckedChange={(checked) => onColumnCheckedChange('page_title', checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                 </TableRow>
@@ -1632,7 +1485,9 @@ export default function AIProductFillerGeneration() {
                           <div className="flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300">
                             <span className="w-6 text-right text-gray-500">{(page - 1) * limit + index + 1}</span>
                             <Checkbox
-                              onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, desc, checked)}
+                              aria-label="Вибрати весь рядок"
+                              checked={getRowCheckedState(rowKey)}
+                              onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, checked)}
                               onClick={(e) => e.stopPropagation()}
                               className="h-4 w-4"
                             />

@@ -35,9 +35,8 @@ export default function AIProductFillerSettings() {
         <Button onClick={handleSave} className="bg-emerald-400 hover:bg-blue-600 text-white">
           Зберегти
         </Button>
-      </div>
-
-      {/* API Key Section */}
+      </div> 
+      
       <Card className="p-6 mb-6 bg-gray-50 dark:bg-gray-800">
         <div className="flex flex-col space-y-3">
           <Label htmlFor="api-key" className="text-lg font-semibold">API-ключ</Label>
@@ -51,9 +50,7 @@ export default function AIProductFillerSettings() {
             Ключ до API платформи ChatGPT можна отримати тут: https://platform.openai.com/account/api-keys
           </p>
         </div>
-      </Card>
-
-      {/* Advanced Settings Section */}
+      </Card> 
       <h2 className="text-2xl font-semibold mb-4">Розширені налаштування</h2>
       <Card className="p-6 mb-6 bg-gray-50 dark:bg-gray-800">
         <div className="space-y-6">
