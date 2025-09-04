@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Wand2, Layers, Settings } from 'lucide-react';
+import { Home, Wand2, Layers, Settings, Languages } from 'lucide-react';
 
 interface Props {
   children: React.ReactNode;
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/ai-product-filler', label: 'Загальне', icon: Home },
   { to: '/ai-product-filler/generation', label: 'Генерація', icon: Wand2 },
   { to: '/ai-product-filler/templates', label: 'Шаблони', icon: Layers },
+  { to: '/ai-product-filler/translator', label: 'Перекладач', icon: Languages },
   { to: '/ai-product-filler/settings', label: 'Налаштування', icon: Settings },
 ];
 

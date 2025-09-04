@@ -1,10 +1,11 @@
 import type React from 'react';
+
 import { useEffect, useMemo, useState } from 'react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useNavigate } from 'react-router-dom';
-import {
-  getTemplates,
-  setTemplates,
+
+import { getTemplates,
+ setTemplates,
   PRODUCT_VARIABLES,
   CATEGORY_VARIABLES,
   type Lang,
@@ -12,6 +13,7 @@ import {
   type ProductTemplates,
   type CategoryTemplates,
 } from '@/api/productFillerMock';
+
 import {
   fetchAllColumnPrompts,
   fetchColumnPrompts,
@@ -105,7 +107,7 @@ export default function AIProductFillerTemplates() {
 
   const loadAllPrompts = async () => {
     try {
-      const data = await fetchAllColumnPrompts();
+      const data = await fetchAllColumnPrompts(undefined as unknown as any, lang);
       setPrompts(data);
       // build originals baseline map for all returned columns
       const orig: Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>> = {};
@@ -161,11 +163,11 @@ export default function AIProductFillerTemplates() {
   const createPrompt = async (column: SiteColumnName, name: string, prompt: string) => {
     setCreatingColumn(column);
     try {
-      const payload = { name, prompt, site_column_name: column } as const;
+      const payload = { name, prompt, site_column_name: column, lang_code: lang } as const;
       console.log('[CreateSiteContentPrompt] Payload:', payload);
       await createSiteContentPrompt(payload);
       // After create, reload this column to get real ID from backend
-      const list = await fetchColumnPrompts(column);
+      const list = await fetchColumnPrompts(column, lang);
       console.log('[CreateSiteContentPrompt] Reloaded column list:', column, list);
       setPrompts(prev => ({ ...prev, [column]: list }));
       const orig = list.reduce((acc, it) => {
@@ -182,7 +184,7 @@ export default function AIProductFillerTemplates() {
 
   useEffect(() => {
     void loadAllPrompts();
-  }, []);
+  }, [lang]);
 
   const vars = useMemo(() => (entity === 'product' ? PRODUCT_VARIABLES : CATEGORY_VARIABLES), [entity]);
   const fields = useMemo(() => (entity === 'product' ? PRODUCT_FIELDS : CATEGORY_FIELDS), [entity]);
@@ -203,20 +205,56 @@ export default function AIProductFillerTemplates() {
   const savePrompt = async (item: SiteContentPrompt) => {
     setSavingPromptId(item.id);
     try {
+      const orig = originalPrompts[item.site_column_name]?.[item.id];
+      const wasChanged = !orig ? true : (orig.name !== item.name || orig.prompt !== item.prompt);
+      console.log('[UpdateSiteContentPrompt] Changed before save:', {
+        column: item.site_column_name,
+        id: item.id,
+        wasChanged,
+        original: orig ?? null,
+        current: { name: item.name, prompt: item.prompt },
+      });
       const payload = {
         id: item.id,
         name: item.name,
         prompt: item.prompt,
         site_column_name: item.site_column_name,
+        lang_code: lang,
       };
       console.log('[UpdateSiteContentPrompt] Payload:', payload);
       const updated = await updateSiteContentPrompt(payload);
       console.log('[UpdateSiteContentPrompt] Response:', updated);
+      const backendAppliedChange = !orig ? true : (orig.name !== updated.name || orig.prompt !== updated.prompt);
+      const clientDiff = orig
+        ? {
+            name: { from: orig.name, to: updated.name },
+            prompt: { from: orig.prompt, to: updated.prompt },
+          }
+        : {
+            name: { from: null as unknown as string, to: updated.name },
+            prompt: { from: null as unknown as string, to: updated.prompt },
+          };
+      console.log('[UpdateSiteContentPrompt] Changed after save:', {
+        column: item.site_column_name,
+        id: item.id,
+        backendAppliedChange,
+        diff: clientDiff,
+      });
       setPrompts(prev => {
         const list = prev[item.site_column_name] ?? [];
         const next = list.map(p => (p.id === item.id ? updated : p));
         return { ...prev, [item.site_column_name]: next };
       });
+      // Also persist to localStorage as a fallback cache for product fields
+      if (entity === 'product') {
+        const prodField = PRODUCT_FIELDS.find(
+          f => mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates) === item.site_column_name
+        );
+        if (prodField) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setTemplates('product', lang, { [prodField.key]: updated.prompt } as any);
+        }
+      }
       // update originals baseline
       setOriginalPrompts(prev => ({
         ...prev,
@@ -350,7 +388,7 @@ export default function AIProductFillerTemplates() {
           ))}
         </div>
           <div className="inline-flex rounded-md border overflow-hidden">
-          {(['ua', 'ru'] as Lang[]).map(l => (
+          {(['ua', 'ru', 'en'] as Lang[]).map(l => (
             <button
               key={l}
               className={`px-3 py-1.5 text-sm ${
@@ -411,6 +449,8 @@ export default function AIProductFillerTemplates() {
                           <span className={lang === 'ua' ? 'font-semibold' : ''}>UA</span>
                           <span>/</span>
                           <span className={lang === 'ru' ? 'font-semibold' : ''}>RU</span>
+                          <span>/</span>
+                          <span className={lang === 'en' ? 'font-semibold' : ''}>EN</span>
                         </div>
                         {entity === 'product' && (() => {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);

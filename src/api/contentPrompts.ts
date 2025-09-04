@@ -149,12 +149,17 @@ export interface CreateSiteContentPromptRequest {
   name: string;
   prompt: string;
   site_column_name: SiteColumnName;
+  // optional to avoid breaking existing callers; defaulted to 'ua' when sending
+  lang_code?: Lang;
 }
 
 export const createSiteContentPrompt = async (
   body: CreateSiteContentPromptRequest
 ): Promise<SiteContentPrompt> => {
-  const res = await apiClient.post('/content/create_site_content_prompt', body);
+  const res = await apiClient.post('/content/create_site_content_prompt', {
+    ...body,
+    lang_code: body.lang_code ?? 'ua',
+  });
   const data = res?.data;
   if (data && typeof data === 'object') {
     const items = normalizePromptItems(data, body.site_column_name);
@@ -169,12 +174,17 @@ export interface UpdateSiteContentPromptRequest {
   name: string;
   prompt: string;
   site_column_name: SiteColumnName;
+  // optional to avoid breaking existing callers; defaulted to 'ua' when sending
+  lang_code?: Lang;
 }
 
 export const updateSiteContentPrompt = async (
   body: UpdateSiteContentPromptRequest
 ): Promise<SiteContentPrompt> => {
-  const res = await apiClient.post('/content/update_site_content_prompt', body);
+  const res = await apiClient.post('/content/update_site_content_prompt', {
+    ...body,
+    lang_code: body.lang_code ?? 'ua',
+  });
   const data = res?.data;
   // If backend returns an object/array with updated item(s), normalize and use it.
   if (data && typeof data === 'object') {

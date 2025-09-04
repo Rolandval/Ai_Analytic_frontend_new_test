@@ -27,6 +27,7 @@ import AIProductFillerHome from './pages/ai-product-filler/Home';
 import AIProductFillerGeneration from './pages/ai-product-filler/Generation';
 import Settings from './pages/ai-product-filler/Settings';
 import AIProductFillerTemplates from './pages/ai-product-filler/Templates';
+import AIProductFillerTranslator from './pages/ai-product-filler/Translator';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -177,6 +178,7 @@ function App() {
           <Route path="/ai-product-filler" element={<AIProductFillerHome />} />
           <Route path="/ai-product-filler/generation" element={<AIProductFillerGeneration />} />
           <Route path="/ai-product-filler/templates" element={<AIProductFillerTemplates />} />
+          <Route path="/ai-product-filler/translator" element={<AIProductFillerTranslator />} />
           <Route path="/ai-product-filler/settings" element={<Settings/>} />
 
           {/* AI Supply Manager */}

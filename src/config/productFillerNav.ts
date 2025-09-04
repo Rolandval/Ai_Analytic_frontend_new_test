@@ -20,6 +20,10 @@ export const productFillerNavItems: NavItem[] = [
         title: 'Шаблони',
         href: '/ai-product-filler/templates',
       },
+      {
+        title: 'Перекладач',
+        href: '/ai-product-filler/translator',
+      },
     ],
   },
   {

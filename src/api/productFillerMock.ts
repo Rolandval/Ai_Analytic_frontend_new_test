@@ -1,6 +1,6 @@
 // Mock storage for AI Product Filler templates using localStorage
 
-export type Lang = 'ua' | 'ru';
+export type Lang = 'ua' | 'ru' | 'en';
 export type Entity = 'product' | 'category';
 
 export type ProductFieldKey =
@@ -62,6 +62,20 @@ const DEFAULTS: TemplatesStore = {
       age_warning_message: '[age_warning_message]',
       promo_text: '[promo_text]',
       unit_name: '[unit_name]'
+    },
+    en: {
+      name: '[product] — smart product name',
+      shortname: '[shortname]',
+      short_description:
+        '[product]. Generate a clear and engaging product description of about 500 characters. Maximize the use of product characteristics. Provide only the result.',
+      full_description: '[full_description]',
+      meta_keywords: '[meta_keywords]',
+      meta_description: '[meta_description]',
+      search_words: '[search_words]',
+      page_title: '[page_title]',
+      age_warning_message: '[age_warning_message]',
+      promo_text: '[promo_text]',
+      unit_name: '[unit_name]'
     }
   },
   category: {
@@ -78,6 +92,13 @@ const DEFAULTS: TemplatesStore = {
       meta_description: 'Мета описание для категории [category] — до 160 символов.',
       description: 'Описание категории [category].',
       meta_keywords: 'ключевые слова для [category]'
+    },
+    en: {
+      age_warning_message: '[age_warning_message]',
+      meta_title: 'Meta: [category] — title',
+      meta_description: 'Meta description for category [category] — up to 160 characters.',
+      description: 'Category description for [category].',
+      meta_keywords: 'keywords for [category]'
     }
   }
 };

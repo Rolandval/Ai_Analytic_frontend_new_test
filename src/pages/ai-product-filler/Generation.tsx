@@ -11,6 +11,7 @@ import { fetchAllColumnPrompts, type SiteColumnName, type SiteContentPrompt, SIT
 import { getTemplates } from '@/api/productFillerMock';
 import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
 import { generateAiDescription } from '@/api/generateAiDescription';
+import { translateSiteDescriptions, type TranslateDescriptionItem } from '@/api/translateSiteDescriptions';
 import { chatApi } from '@/api/chatApi';
 import { updateSiteDescriptions } from '@/api/updateSiteDescriptions';
 import { toast } from '@/hooks/use-toast';
@@ -60,7 +61,7 @@ interface CustomFilter {
 
 // Колонку мови видалено — мапа назв мов більше не потрібна
 
-export default function AIProductFillerGeneration() {
+export default function AIProductFillerGeneration({ title = 'AI генерація', mode = 'generation' }: { title?: string; mode?: 'generation' | 'translation' }) {
   const location = useLocation();
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const [descriptions, setDescriptions] = useState<ContentDescription[]>([]);
@@ -75,6 +76,8 @@ export default function AIProductFillerGeneration() {
   const [newFilter, setNewFilter] = useState<Omit<CustomFilter, 'id' | 'active'>>({ name: '', field: 'site_product', value: '' });
   // Фільтр мови (ua/en/ru), за замовчуванням "ua"
   const [selectedLang, setSelectedLang] = useState<'ua' | 'en' | 'ru'>('ua');
+  // Мова перекладу (цільова), використовується лише в режимі перекладу
+  const [targetLang, setTargetLang] = useState<'ua' | 'en' | 'ru'>('ru');
   // Моделі чату для вибору моделі генерації
   const [chatModels, setChatModels] = useState<ChatModel[]>([]);
   const [selectedChatModel, setSelectedChatModel] = useState<string>('');
@@ -98,6 +101,9 @@ export default function AIProductFillerGeneration() {
   // Генерація для вибраних клітинок
   const [selectedGenerating, setSelectedGenerating] = useState(false);
   const [selectedProgress, setSelectedProgress] = useState<string>('');
+  // Стан для перекладу вибраних
+  const [translating, setTranslating] = useState(false);
+  const [translateProgress, setTranslateProgress] = useState<string>('');
   // Масова генерація по колонці — видалено (замість кнопок у хедері використовуються чекбокси вибору колонки)
   const [saving, setSaving] = useState(false);
   // Незалежний візуальний стан чекбокса рядка, щоб вибір стовпця не впливав на нього
@@ -164,11 +170,13 @@ export default function AIProductFillerGeneration() {
     })();
   }, [incomingTemplates]);
   
+  const isTranslateMode = mode === 'translation';
   // Завантаження списку моделей для генерації
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
+        if (isTranslateMode) return; // у режимі перекладу моделі не потрібні
         setModelsLoading(true);
         setModelsError(null);
         const models = await chatApi.getModels();
@@ -182,16 +190,26 @@ export default function AIProductFillerGeneration() {
         if (!mounted) return;
         setModelsError(e?.message || 'Не вдалося завантажити моделі');
       } finally {
-        if (mounted) setModelsLoading(false);
+        if (mounted && !isTranslateMode) setModelsLoading(false);
       }
     })();
     return () => { mounted = false; };
-  }, []);
-  const getRowKey = (desc: ContentDescription, index: number) =>
-    String(
-      desc.id ??
-        `${desc.site_lang_code ?? '-'}|${desc.site_product ?? desc.product_name ?? '-'}|${index}`
-    );
+  }, [isTranslateMode, selectedChatModel]);
+  // Стабільні ключі рядків
+  // 1) Перевага product_id, далі id
+  // 2) Якщо немає — фолбек: символ-властивість на об'єкті, яка копіюється спредом і зберігає UID
+  const ROW_UID = useRef(Symbol('row_uid')).current as symbol;
+  const stableIdCounterRef = useRef(0);
+  const getRowKey = (desc: ContentDescription, _index: number) => {
+    const anyDesc = desc as any;
+    const pid = anyDesc.product_id;
+    if (pid != null) return String(pid);
+    if (desc.id != null) return String(desc.id);
+    if (!anyDesc[ROW_UID]) {
+      anyDesc[ROW_UID] = `${desc.site_lang_code ?? ''}|uid${++stableIdCounterRef.current}`;
+    }
+    return String(anyDesc[ROW_UID]);
+  };
   const isCellChecked = (rowKey: string, col: string) => !!selectedCells[`${rowKey}:${col}`];
 
   // Стабільний ключ рядка для маркування генерації/збереження: product_id або lang|product
@@ -202,6 +220,13 @@ export default function AIProductFillerGeneration() {
   const markRowGenerated = (desc: ContentDescription) => {
     const key = getStableKey(desc);
     setGeneratedRows(prev => ({ ...prev, [key]: true }));
+  };
+
+  // Дефолтний промо-текст, якщо поле порожнє, коли перекладаємо
+  const getDefaultPromoText = (lang: 'ua' | 'en' | 'ru') => {
+    if (lang === 'ru') return 'Выгодное предложение: отличная цена и доставка по Украине.';
+    if (lang === 'en') return 'Special offer: best price and delivery across Ukraine.';
+    return 'Вигідна пропозиція: найкраща ціна та доставка по Україні.';
   };
 
   const mapSiteColumnToProductTplKey: Record<SiteColumnName, keyof ProductTemplates> = {
@@ -227,6 +252,110 @@ export default function AIProductFillerGeneration() {
     meta_description: 'site_meta_description',
     searchwords: 'site_searchwords',
     page_title: 'site_page_title',
+  };
+
+  // Переклад для вибраних клітинок на поточній сторінці
+  const handleTranslateSelected = async () => {
+    setTranslating(true);
+    setTranslateProgress('');
+    try {
+      const cols = SITE_COLUMNS as SiteColumnName[];
+      // Збираємо по рядках об'єкти для перекладу
+      const payloadItems: TranslateDescriptionItem[] = [];
+      pagedDescriptions.forEach((desc, idx) => {
+        const rowKey = getRowKey(desc, idx);
+        const selectedCols = cols.filter(col => selectedCells[`${rowKey}:${col}`]);
+        if (selectedCols.length === 0) return;
+        const product_id = (desc as any).product_id as number | undefined;
+        if (typeof product_id !== 'number') return; // пропускаємо без product_id
+        const item: TranslateDescriptionItem = {
+          product_id,
+          lang_code: targetLang,
+          // Базові поля ініціалізуємо null — бек має оновити лише надіслані значення
+          site_product: null,
+          site_shortname: null,
+          site_short_description: null,
+          site_full_description: null,
+          site_meta_keywords: null,
+          site_meta_description: null,
+          site_searchwords: null,
+          site_page_title: null,
+          site_promo_text: null,
+        };
+        selectedCols.forEach(col => {
+          const field = mapSiteColumnToContentField[col];
+          const current = (desc as any)[field] as string | null | undefined;
+          if (field === 'site_promo_text' && (!current || String(current).trim() === '')) {
+            // Якщо promo_text порожній — ставимо дефолт
+            (item as any)[field] = getDefaultPromoText(targetLang);
+          } else {
+            (item as any)[field] = current ?? '';
+          }
+        });
+        // Додаємо назву продукту для контексту перекладу, навіть якщо її не вибрано
+        if (!selectedCols.includes('product')) {
+          const baseName = desc.site_product || desc.product_name || '';
+          if (baseName) item.site_product = baseName;
+        }
+        payloadItems.push(item);
+      });
+
+      if (payloadItems.length === 0) {
+        setTranslateProgress('Нічого не вибрано');
+        return;
+      }
+
+      const res = await translateSiteDescriptions({ lang_code: targetLang, descriptions: payloadItems });
+      const list: any[] = Array.isArray(res)
+        ? res
+        : (Array.isArray((res as any)?.descriptions)
+            ? (res as any).descriptions
+            : (Array.isArray((res as any)?.items)
+              ? (res as any).items
+              : (Array.isArray((res as any)?.result) ? (res as any).result : [])));
+
+      // Оновлюємо локальний стейт перекладеними значеннями
+      let done = 0;
+      list.forEach((it) => {
+        const pid = (it as any).product_id;
+        if (typeof pid !== 'number') return;
+        setDescriptions(prev => {
+          const respLang = ((it as any).site_lang_code ?? (it as any).lang_code ?? targetLang) as string | undefined;
+          const findByLang = (arr: typeof prev) => {
+            if (!respLang) return -1;
+            const norm = (s: string) => (s || '').toLowerCase();
+            const want = norm(respLang);
+            return arr.findIndex(x => (x as any).product_id === pid && norm((x as any).site_lang_code ?? '') === want);
+          };
+          const idx = findByLang(prev);
+          if (idx === -1) return prev; // не оновлюємо іншу мову
+          const next = [...prev];
+          const curr = { ...next[idx] } as any;
+          // Копіюємо лише відомі поля, якщо вони присутні у відповіді
+          (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
+            .forEach((k) => {
+              if (it[k] != null) curr[k] = it[k];
+            });
+          next[idx] = curr;
+          return next as any;
+        });
+        // Позначаємо рядок як змінений/згенерований для подальшого збереження
+        // Використовуємо product_id як стабільний ключ
+        markRowGenerated({ product_id: pid } as any);
+        done++;
+      });
+      setTranslateProgress(`${done}/${payloadItems.length}`);
+
+      // Після успішного перекладу очищаємо вибір і стани чекбоксів,
+      // щоб синхронізувати UI так само, як після генерації
+      setSelectedCells({});
+      setRowCheckedRows({});
+      setColumnHeaderChecked({});
+    } catch (e) {
+      console.error('[TranslateSelected] Помилка', e);
+    } finally {
+      setTranslating(false);
+    }
   };
 
   const resolvePromptForColumn = (col: SiteColumnName): string | null => {
@@ -353,8 +482,62 @@ export default function AIProductFillerGeneration() {
       ROW_GENERATABLE_COLUMNS.forEach(col => {
         const field = mapSiteColumnToContentField[col];
         const v = (rowDesc as any)[field] as string | null | undefined;
-        if (!isEmptyCellValue(v)) return;
+        // У режимі перекладу вибираємо всі колонки рядка; у режимі генерації — лише порожні
+        if (!isTranslateMode && !isEmptyCellValue(v)) return;
         next[`${rowKey}:${col}`] = value;
+      });
+      return next;
+    });
+  };
+
+  // Майстер‑чекбокс: керує вибором усіх доступних клітинок на поточній сторінці
+  const getMasterCheckedState = (): boolean | 'indeterminate' => {
+    let total = 0;
+    let selected = 0;
+    pagedDescriptions.forEach((desc, idx) => {
+      const rowKey = getRowKey(desc, idx);
+      ROW_GENERATABLE_COLUMNS.forEach((col) => {
+        const field = mapSiteColumnToContentField[col];
+        const v = (desc as any)[field] as string | null | undefined;
+        // У генерації враховуємо лише порожні клітинки; у перекладі — всі
+        if (!isTranslateMode && !isEmptyCellValue(v)) return;
+        total++;
+        if (selectedCells[`${rowKey}:${col}`]) selected++;
+      });
+    });
+    if (total === 0) return false;
+    if (selected === 0) return false;
+    if (selected === total) return true;
+    return 'indeterminate';
+  };
+
+  const onMasterCheckedChange = (checked: boolean | 'indeterminate') => {
+    const value = checked === true;
+    // Оновлюємо незалежні візуальні стани для рядків та заголовків колонок
+    setRowCheckedRows(prev => {
+      const next: Record<string, boolean> = { ...prev };
+      pagedDescriptions.forEach((desc, idx) => {
+        const rowKey = getRowKey(desc, idx);
+        next[rowKey] = value;
+      });
+      return next;
+    });
+    setColumnHeaderChecked(prev => {
+      const next: Partial<Record<SiteColumnName, boolean>> = { ...prev };
+      (SITE_COLUMNS as SiteColumnName[]).forEach(col => { next[col] = value; });
+      return next;
+    });
+    // Власне вибір клітинок
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      pagedDescriptions.forEach((desc, idx) => {
+        const rowKey = getRowKey(desc, idx);
+        ROW_GENERATABLE_COLUMNS.forEach((col) => {
+          const field = mapSiteColumnToContentField[col];
+          const v = (desc as any)[field] as string | null | undefined;
+          if (!isTranslateMode && !isEmptyCellValue(v)) return;
+          next[`${rowKey}:${col}`] = value;
+        });
       });
       return next;
     });
@@ -851,19 +1034,43 @@ export default function AIProductFillerGeneration() {
       if (!editing) setDraft(value);
     }, [value, editing]);
 
-    // Під час редагування: закривати лише при кліку поза клітинкою
+    // Коміт змін у модель
+    const commitDraft = () => {
+      const v = draft ?? '';
+      const field = mapSiteColumnToContentField[col];
+      setDescriptions(prev => {
+        const targetId = (desc as any).product_id ?? desc.id ?? null;
+        const targetLang = desc.site_lang_code ?? '';
+        const targetName = desc.site_product || desc.product_name || '';
+        const idx = prev.findIndex(it => {
+          const candidateId = (it as any).product_id ?? it.id ?? null;
+          if (targetId != null && candidateId != null) return candidateId === targetId;
+          const itLang = it.site_lang_code ?? '';
+          const itName = it.site_product || it.product_name || '';
+          return itLang === targetLang && itName === targetName;
+        });
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], [field]: v } as ContentDescription;
+        return next;
+      });
+    };
+
+    // Під час редагування: закривати лише при кліку поза клітинкою (з комітом)
     useEffect(() => {
       if (!editing) return;
       const onDocMouseDown = (e: MouseEvent) => {
         if (!wrapperRef.current) return;
         const target = e.target as Node;
         if (!wrapperRef.current.contains(target)) {
+          commitDraft();
           setEditing(false);
         }
       };
-      document.addEventListener('mousedown', onDocMouseDown, true);
-      return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-    }, [editing]);
+      // Використовуємо фазу спливання, щоб подія всередині інпуту не закривала редактор завчасно
+      document.addEventListener('mousedown', onDocMouseDown, false);
+      return () => document.removeEventListener('mousedown', onDocMouseDown, false);
+    }, [editing, draft]);
 
     // save/cancel більше не потрібні — редагування застосовується миттєво в onChange,
     // а Escape відновлює початкове значення
@@ -882,7 +1089,7 @@ export default function AIProductFillerGeneration() {
     }
 
     return (
-      <div ref={wrapperRef} onClick={(e) => e.stopPropagation()} className="w-full flex-1">
+      <div ref={wrapperRef} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} className="w-full flex-1">
         {long ? (
           <textarea
             ref={inputRef as any}
@@ -891,23 +1098,6 @@ export default function AIProductFillerGeneration() {
             onChange={(e) => {
               const v = e.target.value;
               setDraft(v);
-              const field = mapSiteColumnToContentField[col];
-              setDescriptions(prev => {
-                const targetId = (desc as any).product_id ?? desc.id ?? null;
-                const targetLang = desc.site_lang_code ?? '';
-                const targetName = desc.site_product || desc.product_name || '';
-                const idx = prev.findIndex(it => {
-                  const candidateId = (it as any).product_id ?? it.id ?? null;
-                  if (targetId != null && candidateId != null) return candidateId === targetId;
-                  const itLang = it.site_lang_code ?? '';
-                  const itName = it.site_product || it.product_name || '';
-                  return itLang === targetLang && itName === targetName;
-                });
-                if (idx === -1) return prev;
-                const next = [...prev];
-                next[idx] = { ...next[idx], [field]: v } as ContentDescription;
-                return next;
-              });
             }}
             rows={2}
             onKeyDown={(e) => {
@@ -934,6 +1124,11 @@ export default function AIProductFillerGeneration() {
                 setDraft(original);
                 setEditing(false);
               }
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                commitDraft();
+                setEditing(false);
+              }
             }}
           />
         ) : (
@@ -944,27 +1139,9 @@ export default function AIProductFillerGeneration() {
             onChange={(e) => {
               const v = e.target.value;
               setDraft(v);
-              const field = mapSiteColumnToContentField[col];
-              setDescriptions(prev => {
-                const targetId = (desc as any).product_id ?? desc.id ?? null;
-                const targetLang = desc.site_lang_code ?? '';
-                const targetName = desc.site_product || desc.product_name || '';
-                const idx = prev.findIndex(it => {
-                  const candidateId = (it as any).product_id ?? it.id ?? null;
-                  if (targetId != null && candidateId != null) return candidateId === targetId;
-                  const itLang = it.site_lang_code ?? '';
-                  const itName = it.site_product || it.product_name || '';
-                  return itLang === targetLang && itName === targetName;
-                });
-                if (idx === -1) return prev;
-                const next = [...prev];
-                next[idx] = { ...next[idx], [field]: v } as ContentDescription;
-                return next;
-              });
             }}
-            onBlur={() => setEditing(false)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); setEditing(false); }
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitDraft(); setEditing(false); }
               if (e.key === 'Escape') {
                 e.preventDefault();
                 const original = valueAtEditStartRef.current ?? '';
@@ -1014,7 +1191,7 @@ export default function AIProductFillerGeneration() {
       <div className="mb-6">
         <div className="p-4 space-y-4">
           <div className="flex flex-col gap-4">
-            <h1 className="text-2xl font-bold"> AI генерація</h1>
+            <h1 className="text-2xl font-bold">{title}</h1>
             
             {/* Рядок з пошуком та фільтрами */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -1146,28 +1323,43 @@ export default function AIProductFillerGeneration() {
                   <SelectItem value="inverters">Інвертори</SelectItem>
                 </SelectContent>
               </Select>
-              {/* Модель AI */}
-              <Select value={selectedChatModel} onValueChange={(value) => setSelectedChatModel(value)}>
-                <SelectTrigger className="w-[240px]" title="AI Модель">
-                  <SelectValue placeholder={modelsLoading ? 'Завантаження моделей…' : 'Виберіть модель'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {chatModels.map((m) => (
-                    <SelectItem key={m.id} value={m.name} className="flex items-center">
-                      <div className="flex items-center gap-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={m.icon} alt="icon" className="w-4 h-4 rounded-sm" />
-                        <span>{m.name}</span>
-                        {typeof m.input_tokens_price === 'number' && typeof m.output_tokens_price === 'number' && (
-                          <span className="text-xs text-gray-500">({m.input_tokens_price}/{m.output_tokens_price})</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {modelsError && (
-                <span className="text-xs text-red-500" title={modelsError}>Помилка завантаження моделей</span>
+              {/* Модель AI (лише у режимі генерації) або цільова мова (у режимі перекладу) */}
+              {!isTranslateMode ? (
+                <>
+                  <Select value={selectedChatModel} onValueChange={(value) => setSelectedChatModel(value)}>
+                    <SelectTrigger className="w-[240px]" title="AI Модель">
+                      <SelectValue placeholder={modelsLoading ? 'Завантаження моделей…' : 'Виберіть модель'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chatModels.map((m) => (
+                        <SelectItem key={m.id} value={m.name} className="flex items-center">
+                          <div className="flex items-center gap-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={m.icon} alt="icon" className="w-4 h-4 rounded-sm" />
+                            <span>{m.name}</span>
+                            {typeof m.input_tokens_price === 'number' && typeof m.output_tokens_price === 'number' && (
+                              <span className="text-xs text-gray-500">({m.input_tokens_price}/{m.output_tokens_price})</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {modelsError && (
+                    <span className="text-xs text-red-500" title={modelsError}>Помилка завантаження моделей</span>
+                  )}
+                </>
+              ) : (
+                <Select value={targetLang} onValueChange={(value) => setTargetLang(value as 'ua' | 'en' | 'ru')}>
+                  <SelectTrigger className="w-[180px]" title="Цільова мова перекладу">
+                    <SelectValue placeholder="Мова перекладу" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ua">ua</SelectItem>
+                    <SelectItem value="en">en</SelectItem>
+                    <SelectItem value="ru">ru</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
             </div>
             
@@ -1178,12 +1370,15 @@ export default function AIProductFillerGeneration() {
             <div className="flex flex-wrap items-center gap-2 justify-end">
               <Button
                 variant="outline"
-                onClick={handleGenerateSelected}
-                disabled={selectedGenerating || !templatesState}
-                title="Згенерувати AI-контент для вибраних клітинок поточної сторінки"
+                onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
+                disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
+                title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
               >
-                {selectedGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Заповнити вибрані{selectedGenerating && selectedProgress ? ` (${selectedProgress})` : ''}
+                {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isTranslateMode
+                  ? `Перекласти вибрані${translateProgress ? ` (${translateProgress})` : ''}`
+                  : `Заповнити вибрані${selectedProgress ? ` (${selectedProgress})` : ''}`}
               </Button>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1195,14 +1390,16 @@ export default function AIProductFillerGeneration() {
                 <Save className="mr-2 h-4 w-4" />
                 Зберегти зміни
               </Button>
-              <Button
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                onClick={handleMassGenerate}
-                disabled={massGenerating || !templatesState}
-              >
-                {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
-              </Button>
+              {!isTranslateMode && (
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  onClick={handleMassGenerate}
+                  disabled={massGenerating || !templatesState}
+                >
+                  {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
+                </Button>
+              )}
               <Button variant="outline" onClick={fetchData}>
                 Оновити
               </Button>
@@ -1247,8 +1444,17 @@ export default function AIProductFillerGeneration() {
               <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
                 <TableRow>
                   <TableHead noClamp className="h-10 sm:h-12 w-24 text-center text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center gap-1">
                       <span>№</span>
+                      {!isTranslateMode && (
+                        <Checkbox
+                          aria-label="Вибрати всі колонки на сторінці"
+                          checked={getMasterCheckedState()}
+                          onCheckedChange={(checked) => onMasterCheckedChange(checked)}
+                          className="h-4 w-4"
+                          disabled={massGenerating || translating}
+                        />
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1264,15 +1470,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Назва"
-                          checked={getColumnCheckedState('product')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('product', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Назва"
+                            checked={getColumnCheckedState('product')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('product', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1288,15 +1496,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Коротка"
-                          checked={getColumnCheckedState('shortname')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('shortname', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Коротка"
+                            checked={getColumnCheckedState('shortname')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('shortname', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1312,15 +1522,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Опис"
-                          checked={getColumnCheckedState('short_description')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('short_description', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Опис"
+                            checked={getColumnCheckedState('short_description')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('short_description', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1336,15 +1548,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Повний"
-                          checked={getColumnCheckedState('full_description')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('full_description', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Повний"
+                            checked={getColumnCheckedState('full_description')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('full_description', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1360,15 +1574,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Промо"
-                          checked={getColumnCheckedState('promo_text')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('promo_text', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Промо"
+                            checked={getColumnCheckedState('promo_text')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('promo_text', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-gray-700 dark:text-gray-300 font-medium">
@@ -1384,15 +1600,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Мета"
-                          checked={getColumnCheckedState('meta_keywords')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('meta_keywords', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Мета"
+                            checked={getColumnCheckedState('meta_keywords')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('meta_keywords', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1408,15 +1626,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Мета-опис"
-                          checked={getColumnCheckedState('meta_description')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('meta_description', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Мета-опис"
+                            checked={getColumnCheckedState('meta_description')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('meta_description', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
@@ -1432,15 +1652,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Пошукові слова"
-                          checked={getColumnCheckedState('searchwords')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('searchwords', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Пошукові слова"
+                            checked={getColumnCheckedState('searchwords')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('searchwords', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl">
@@ -1456,15 +1678,17 @@ export default function AIProductFillerGeneration() {
                           <ArrowUpDown className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-                        <Checkbox
-                          aria-label="Вибрати колонку Заголовок"
-                          checked={getColumnCheckedState('page_title')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('page_title', checked)}
-                          className="h-4 w-4"
-                          disabled={massGenerating}
-                        />
-                      </div>
+                      {!isTranslateMode && (
+                        <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                          <Checkbox
+                            aria-label="Вибрати колонку Заголовок"
+                            checked={getColumnCheckedState('page_title')}
+                            onCheckedChange={(checked) => onColumnCheckedChange('page_title', checked)}
+                            className="h-4 w-4"
+                            disabled={massGenerating}
+                          />
+                        </div>
+                      )}
                     </div>
                   </TableHead>
                 </TableRow>
@@ -1480,7 +1704,7 @@ export default function AIProductFillerGeneration() {
                   pagedDescriptions.map((desc, index) => {
                     const rowKey = getRowKey(desc, index);
                     return (
-                      <TableRow key={getStableKey(desc)} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                      <TableRow key={rowKey} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
                         <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
                           <div className="flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300">
                             <span className="w-6 text-right text-gray-500">{(page - 1) * limit + index + 1}</span>
@@ -1495,13 +1719,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_product || desc.product_name || '')}`} title={desc.site_product || desc.product_name || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'product')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'product', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'product')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'product', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="product"
@@ -1513,13 +1739,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_shortname || '')}`}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'shortname')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'shortname', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'shortname')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'shortname', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="shortname"
@@ -1531,13 +1759,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_short_description || '')}`} title={desc.site_shortname || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'short_description')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'short_description', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'short_description')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'short_description', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="short_description"
@@ -1549,13 +1779,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_full_description || desc.description || '')}`} title={desc.site_full_description || desc.description || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'full_description')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'full_description', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'full_description')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'full_description', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="full_description"
@@ -1567,13 +1799,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_promo_text || '')}`} title={desc.site_promo_text || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'promo_text')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'promo_text', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'promo_text')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'promo_text', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="promo_text"
@@ -1585,13 +1819,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_keywords || '')}`} title={desc.site_meta_keywords || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'meta_keywords')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_keywords', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'meta_keywords')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_keywords', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="meta_keywords"
@@ -1603,13 +1839,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_description || '')}`} title={desc.site_meta_description || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'meta_description')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_description', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'meta_description')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_description', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="meta_description"
@@ -1621,13 +1859,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_searchwords || '')}`} title={desc.site_searchwords || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'searchwords')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'searchwords', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'searchwords')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'searchwords', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="searchwords"
@@ -1639,13 +1879,15 @@ export default function AIProductFillerGeneration() {
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_page_title || '')}`} title={desc.site_page_title || ''}>
-                            <Checkbox
-                            aria-label="Вибрати клітинку"
-                            checked={isCellChecked(rowKey, 'page_title')}
-                            onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'page_title', desc, checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            className="h-3 w-3"
-                          />
+                            {!isTranslateMode && (
+                              <Checkbox
+                                aria-label="Вибрати клітинку"
+                                checked={isCellChecked(rowKey, 'page_title')}
+                                onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'page_title', desc, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-3 w-3"
+                              />
+                            )}
                             <EditableTextCell
                               rowKey={rowKey}
                               col="page_title"
@@ -1667,12 +1909,15 @@ export default function AIProductFillerGeneration() {
             <div className="flex flex-wrap items-center gap-2 justify-end px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <Button
                 variant="outline"
-                onClick={handleGenerateSelected}
-                disabled={selectedGenerating || !templatesState}
-                title="Згенерувати AI-контент для вибраних клітинок поточної сторінки"
+                onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
+                disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
+                title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
               >
-                {selectedGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Заповнити вибрані{selectedGenerating && selectedProgress ? ` (${selectedProgress})` : ''}
+                {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isTranslateMode
+                  ? `Перекласти вибрані${translateProgress ? ` (${translateProgress})` : ''}`
+                  : `Заповнити вибрані${selectedProgress ? ` (${selectedProgress})` : ''}`}
               </Button>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -1684,14 +1929,16 @@ export default function AIProductFillerGeneration() {
                 <Save className="mr-2 h-4 w-4" />
                 Зберегти зміни
               </Button>
-              <Button
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                onClick={handleMassGenerate}
-                disabled={massGenerating || !templatesState}
-              >
-                {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
-              </Button>
+              {!isTranslateMode && (
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  onClick={handleMassGenerate}
+                  disabled={massGenerating || !templatesState}
+                >
+                  {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
+                </Button>
+              )}
               <Button variant="outline" onClick={fetchData}>
                 Оновити
               </Button>
