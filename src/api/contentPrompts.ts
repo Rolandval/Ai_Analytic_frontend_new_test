@@ -32,6 +32,8 @@ export interface SiteContentPrompt {
   name: string;
   prompt: string;
   site_column_name: SiteColumnName;
+  lang_code?: Lang;
+  is_active?: boolean;
 }
 
 // Map UI product template field keys to backend site column names
@@ -77,15 +79,29 @@ const normalizePromptItems = (
   if (Array.isArray(data) && data.every((x) => typeof x === 'object' && x !== null)) {
     return (data as any[])
       .map((obj, idx) => {
-        const id = typeof obj?.id === 'number' ? obj.id : idx;
+        const id = typeof obj?.id === 'number' ? obj.id : (typeof obj?.id === 'string' && /^\d+$/.test(obj.id) ? Number(obj.id) : idx);
         const name = typeof obj?.name === 'string' ? obj.name : '';
         const prompt = typeof obj?.prompt === 'string'
           ? obj.prompt
           : (typeof obj?.text === 'string' ? obj.text : (typeof obj?.value === 'string' ? obj.value : (typeof obj?.content === 'string' ? obj.content : '')));
         const site_column_name: SiteColumnName | undefined = obj?.site_column_name ?? column;
+        const lang_code: Lang | undefined = (obj?.lang_code ?? obj?.language ?? obj?.lang) as Lang | undefined;
+        // Coerce various possible shapes for active flag: boolean/number/string and alternate keys
+        const rawActive = (obj?.is_active ?? obj?.active ?? obj?.isActive) as unknown;
+        let is_active: boolean | undefined;
+        if (typeof rawActive === 'boolean') {
+          is_active = rawActive;
+        } else if (typeof rawActive === 'number') {
+          is_active = rawActive === 1;
+        } else if (typeof rawActive === 'string') {
+          const s = rawActive.trim().toLowerCase();
+          is_active = s === '1' || s === 'true' || s === 'yes' || s === 'active';
+        } else {
+          is_active = undefined;
+        }
         if (!prompt) return null;
         if (!site_column_name) return null;
-        return { id, name, prompt, site_column_name } as SiteContentPrompt;
+        return { id, name, prompt, site_column_name, lang_code, is_active } as SiteContentPrompt;
       })
       .filter(Boolean) as SiteContentPrompt[];
   }
@@ -115,18 +131,32 @@ export const fetchColumnPrompts = async (
   langCode: Lang = 'ua'
 ): Promise<SiteContentPrompt[]> => {
   try {
+    // eslint-disable-next-line no-console
+    console.debug('[API] GET /content/get_site_content_prompts', { column, langCode });
     const res = await apiClient.get(`/content/get_site_content_prompts/${column}/${langCode}`);
-    return normalizePromptItems(res?.data, column);
+    const items = normalizePromptItems(res?.data, column);
+    try {
+      const summary = items.map(it => ({ id: it.id, name: it.name, is_active: it.is_active, lang_code: it.lang_code })).slice(0, 10);
+      // eslint-disable-next-line no-console
+      console.debug('[API] <- prompts', { column, langCode, count: items.length, sample: summary });
+    } catch {}
+    return items;
   } catch (err: any) {
     // Fallback: try old endpoint without lang in path (backend may not support lang yet for some columns)
     try {
       // eslint-disable-next-line no-console
-      console.warn('[fetchColumnPrompts] Falling back without lang for column', column, 'status:', err?.response?.status);
+      console.warn('[API] [fetchColumnPrompts] Falling back without lang for column', column, 'status:', err?.response?.status);
       const res2 = await apiClient.get(`/content/get_site_content_prompts/${column}`);
-      return normalizePromptItems(res2?.data, column);
+      const items = normalizePromptItems(res2?.data, column);
+      try {
+        const summary = items.map(it => ({ id: it.id, name: it.name, is_active: it.is_active, lang_code: it.lang_code })).slice(0, 10);
+        // eslint-disable-next-line no-console
+        console.debug('[API] <- prompts (fallback no-lang)', { column, count: items.length, sample: summary });
+      } catch {}
+      return items;
     } catch (err2) {
       // eslint-disable-next-line no-console
-      console.error('[fetchColumnPrompts] Failed with and without lang for column', column, err2);
+      console.error('[API] [fetchColumnPrompts] Failed with and without lang for column', column, err2);
       return [];
     }
   }
@@ -136,12 +166,22 @@ export const fetchAllColumnPrompts = async (
   columns: SiteColumnName[] = SITE_COLUMNS,
   langCode: Lang = 'ua'
 ): Promise<Record<SiteColumnName, SiteContentPrompt[]>> => {
+  // eslint-disable-next-line no-console
+  console.debug('[API] fetchAllColumnPrompts start', { columns, langCode });
   const settled = await Promise.allSettled(columns.map((c) => fetchColumnPrompts(c, langCode)));
   const out = {} as Record<SiteColumnName, SiteContentPrompt[]>;
   columns.forEach((c, idx) => {
     const s = settled[idx];
     out[c] = s.status === 'fulfilled' ? s.value : [];
+    try {
+      const arr = out[c] || [];
+      const act = arr.find(x => x.is_active);
+      // eslint-disable-next-line no-console
+      console.debug('[API] fetchAllColumnPrompts item', { column: c, count: arr.length, activeId: act?.id, activeName: act?.name });
+    } catch {}
   });
+  // eslint-disable-next-line no-console
+  console.debug('[API] fetchAllColumnPrompts done');
   return out;
 };
 
@@ -151,6 +191,8 @@ export interface CreateSiteContentPromptRequest {
   site_column_name: SiteColumnName;
   // optional to avoid breaking existing callers; defaulted to 'ua' when sending
   lang_code?: Lang;
+  // backend requires this field; default to false when not provided
+  is_active?: boolean;
 }
 
 export const createSiteContentPrompt = async (
@@ -159,6 +201,7 @@ export const createSiteContentPrompt = async (
   const res = await apiClient.post('/content/create_site_content_prompt', {
     ...body,
     lang_code: body.lang_code ?? 'ua',
+    is_active: body.is_active ?? false,
   });
   const data = res?.data;
   if (data && typeof data === 'object') {
@@ -176,6 +219,8 @@ export interface UpdateSiteContentPromptRequest {
   site_column_name: SiteColumnName;
   // optional to avoid breaking existing callers; defaulted to 'ua' when sending
   lang_code?: Lang;
+  // backend requires this field; send current value or false
+  is_active?: boolean;
 }
 
 export const updateSiteContentPrompt = async (
@@ -184,6 +229,7 @@ export const updateSiteContentPrompt = async (
   const res = await apiClient.post('/content/update_site_content_prompt', {
     ...body,
     lang_code: body.lang_code ?? 'ua',
+    is_active: body.is_active ?? false,
   });
   const data = res?.data;
   // If backend returns an object/array with updated item(s), normalize and use it.
@@ -193,4 +239,17 @@ export const updateSiteContentPrompt = async (
   }
   // Some backends return plain 'OK'/true/1 on success. In that case, echo back the sent body.
   return { ...body };
+};
+
+// Activate a prompt by id (backend marks it active among the column/lang group)
+export const activateSiteContentPrompt = async (id: number): Promise<boolean> => {
+  try {
+    const res = await apiClient.get(`/content/activate_site_content_prompt/${id}`);
+    // consider any 2xx a success
+    return !!res;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[activateSiteContentPrompt] failed', e);
+    return false;
+  }
 };

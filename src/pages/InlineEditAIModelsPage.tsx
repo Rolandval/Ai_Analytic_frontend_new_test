@@ -9,8 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { ChatModel, ChatModelCreatePayload } from '@/types/chatModels';
 import { getChatModels, createChatModel, updateChatModel, deleteChatModel } from '@/services/chatModelsService';
-
-// Тип для рядка, що редагується або є новим
+ 
 type EditableRow = {
   id?: number;
   name: string;
@@ -29,8 +28,8 @@ export const AIModelsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
-  
-  // Стани для inline-редагування
+   
+
   const [editableRows, setEditableRows] = useState<Record<string, EditableRow>>({});
   const [newRow, setNewRow] = useState<EditableRow | null>(null);
   
@@ -59,7 +58,7 @@ export const AIModelsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   useEffect(() => {
     fetchModels();

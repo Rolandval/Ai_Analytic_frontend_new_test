@@ -4,8 +4,8 @@ import path from "path"
 
 const BACKEND_ORIGIN = "http://185.233.44.234:8002";
 const MCP_ORIGIN = "http://185.233.44.234:8080";
+const Upload = 'http://185.233.44.234:8003' 
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -28,15 +28,15 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/batteries/upload': {
-        target: BACKEND_ORIGIN,
+        target: Upload,
         changeOrigin: true,
       },
       '/inverters/upload': {
-        target: BACKEND_ORIGIN,
+        target: Upload,
         changeOrigin: true,
       },
       '/solar_panels/upload': {
-        target: BACKEND_ORIGIN,
+        target: Upload,
         changeOrigin: true,
       },
       '/batteries/analytics': {

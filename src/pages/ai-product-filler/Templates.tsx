@@ -17,8 +17,8 @@ import { getTemplates,
 import {
   fetchAllColumnPrompts,
   fetchColumnPrompts,
-  updateSiteContentPrompt,
   createSiteContentPrompt,
+  activateSiteContentPrompt,
   mapProductFieldKeyToSiteColumnName,
   type SiteColumnName,
   type SiteContentPrompt,
@@ -59,7 +59,6 @@ export default function AIProductFillerTemplates() {
   const [saving, setSaving] = useState(false);
   const [copiedVar, setCopiedVar] = useState<string | null>(null);
   const [prompts, setPrompts] = useState<Partial<Record<SiteColumnName, SiteContentPrompt[]>>>({});
-  const [savingPromptId, setSavingPromptId] = useState<number | null>(null);
   const [creatingColumn, setCreatingColumn] = useState<SiteColumnName | null>(null);
   const [originalPrompts, setOriginalPrompts] = useState<
     Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>>
@@ -95,6 +94,35 @@ export default function AIProductFillerTemplates() {
       window.localStorage.setItem(ENABLED_STORAGE_KEY, JSON.stringify(all));
     } catch {
       // ignore
+    }
+  };
+
+  // Сповіщення інших екранів (Generation) про зміну промптів
+  const notifyPromptsChanged = (column?: SiteColumnName) => {
+    try {
+      const detail = { column: column ?? null, lang };
+      window.dispatchEvent(new CustomEvent('ai_pf_prompts_changed', { detail }));
+      console.debug('[Templates] Dispatched ai_pf_prompts_changed', detail);
+    } catch (e) {
+      console.warn('[Templates] Failed to dispatch prompts changed event', e);
+    }
+  };
+
+  const activatePrompt = async (column: SiteColumnName, id: number) => {
+    try {
+      await activateSiteContentPrompt(id);
+      // reload this column to reflect new active state
+      const list = await fetchColumnPrompts(column, lang);
+      setPrompts(prev => ({ ...prev, [column]: list }));
+      const orig = list.reduce((acc, it) => {
+        acc[it.id] = { name: it.name, prompt: it.prompt };
+        return acc;
+      }, {} as Record<number, { name: string; prompt: string }>);
+      setOriginalPrompts(prev => ({ ...prev, [column]: orig }));
+      // сповістити генерацію, що активний промпт змінився
+      notifyPromptsChanged(column);
+    } catch (e) {
+      console.error('Не вдалося активувати підказку', e);
     }
   };
 
@@ -163,7 +191,7 @@ export default function AIProductFillerTemplates() {
   const createPrompt = async (column: SiteColumnName, name: string, prompt: string) => {
     setCreatingColumn(column);
     try {
-      const payload = { name, prompt, site_column_name: column, lang_code: lang } as const;
+      const payload = { name, prompt, site_column_name: column, lang_code: lang, is_active: false } as const;
       console.log('[CreateSiteContentPrompt] Payload:', payload);
       await createSiteContentPrompt(payload);
       // After create, reload this column to get real ID from backend
@@ -175,6 +203,7 @@ export default function AIProductFillerTemplates() {
         return acc;
       }, {} as Record<number, { name: string; prompt: string }>);
       setOriginalPrompts(prev => ({ ...prev, [column]: orig }));
+      notifyPromptsChanged(column);
     } catch (e) {
       console.error('Не вдалося створити підказку', e);
     } finally {
@@ -202,73 +231,7 @@ export default function AIProductFillerTemplates() {
     });
   };
 
-  const savePrompt = async (item: SiteContentPrompt) => {
-    setSavingPromptId(item.id);
-    try {
-      const orig = originalPrompts[item.site_column_name]?.[item.id];
-      const wasChanged = !orig ? true : (orig.name !== item.name || orig.prompt !== item.prompt);
-      console.log('[UpdateSiteContentPrompt] Changed before save:', {
-        column: item.site_column_name,
-        id: item.id,
-        wasChanged,
-        original: orig ?? null,
-        current: { name: item.name, prompt: item.prompt },
-      });
-      const payload = {
-        id: item.id,
-        name: item.name,
-        prompt: item.prompt,
-        site_column_name: item.site_column_name,
-        lang_code: lang,
-      };
-      console.log('[UpdateSiteContentPrompt] Payload:', payload);
-      const updated = await updateSiteContentPrompt(payload);
-      console.log('[UpdateSiteContentPrompt] Response:', updated);
-      const backendAppliedChange = !orig ? true : (orig.name !== updated.name || orig.prompt !== updated.prompt);
-      const clientDiff = orig
-        ? {
-            name: { from: orig.name, to: updated.name },
-            prompt: { from: orig.prompt, to: updated.prompt },
-          }
-        : {
-            name: { from: null as unknown as string, to: updated.name },
-            prompt: { from: null as unknown as string, to: updated.prompt },
-          };
-      console.log('[UpdateSiteContentPrompt] Changed after save:', {
-        column: item.site_column_name,
-        id: item.id,
-        backendAppliedChange,
-        diff: clientDiff,
-      });
-      setPrompts(prev => {
-        const list = prev[item.site_column_name] ?? [];
-        const next = list.map(p => (p.id === item.id ? updated : p));
-        return { ...prev, [item.site_column_name]: next };
-      });
-      // Also persist to localStorage as a fallback cache for product fields
-      if (entity === 'product') {
-        const prodField = PRODUCT_FIELDS.find(
-          f => mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates) === item.site_column_name
-        );
-        if (prodField) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setTemplates('product', lang, { [prodField.key]: updated.prompt } as any);
-        }
-      }
-      // update originals baseline
-      setOriginalPrompts(prev => ({
-        ...prev,
-        [item.site_column_name]: {
-          ...(prev[item.site_column_name] ?? {}),
-          [item.id]: { name: updated.name, prompt: updated.prompt },
-        },
-      }));
-    } catch (e) {
-      console.error('Не вдалося зберегти підказку', e);
-    } finally {
-      setSavingPromptId(null);
-    }
-  };
+  // Updating existing prompt is disabled by product decision; we create a new prompt instead (new id)
 
   const isDirty = (column: SiteColumnName, item: SiteContentPrompt) => {
     const orig = originalPrompts[column]?.[item.id];
@@ -314,7 +277,7 @@ export default function AIProductFillerTemplates() {
 
           if (first) {
             if (isDirty(column, first)) {
-              tasks.push(savePrompt(first));
+              tasks.push(createPrompt(column, currentName, currentPrompt));
             }
           } else {
             // No item yet: create one if user entered some text
@@ -516,26 +479,22 @@ export default function AIProductFillerTemplates() {
                             if (first) return first.prompt;
                             return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
                           })();
-                          const loading = first
-                            ? savingPromptId === first.id
-                            : creatingColumn === column;
+                          const loading = creatingColumn === column;
                           return first ? (
                             <button
                               type="button"
                               onClick={() => {
-                                console.log('[UI] Click update for column', column, 'with item:', {
-                                  id: first.id,
-                                  name: first.name,
-                                  prompt: first.prompt,
-                                  site_column_name: first.site_column_name,
+                                console.log('[UI] Click create new version for column', column, 'with values:', {
+                                  name: column,
+                                  prompt: currentPrompt,
                                 });
-                                savePrompt(first);
+                                void createPrompt(column, column, currentPrompt);
                               }}
                               className="text-xs px-2.5 py-1.5 rounded-md border border-emerald-300 text-emerald-800 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30 disabled:opacity-50"
                               disabled={loading}
-                              title={'Оновити промпт у БД'}
+                              title={'Створити нову версію промпта'}
                             >
-                              {loading ? 'Збереження…' : 'Оновити промпт'}
+                              {loading ? 'Створення…' : 'Створити нову версію'}
                             </button>
                           ) : (
                             <button
@@ -557,6 +516,41 @@ export default function AIProductFillerTemplates() {
                         })()}
                       </div>
                     </div>
+                    {/* Список збережених промптів цієї колонки */}
+                    {entity === 'product' && (() => {
+                      const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                      if (!column) return null;
+                      const list = prompts[column] ?? [];
+                      return (
+                        <div className="mt-2 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-2">
+                          <div className="text-xs font-medium mb-1">Збережені промпти ({list.length})</div>
+                          <div className="space-y-1 max-h-40 overflow-auto">
+                            {list.length === 0 && (
+                              <div className="text-xs text-neutral-500">Немає промптів</div>
+                            )}
+                            {list.map((p) => (
+                              <div key={p.id} className="flex items-center gap-2 text-xs">
+                                {p.is_active && (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">active</span>
+                                )}
+                                <span className="truncate" title={p.name || p.prompt}>{p.name || `${column} #${p.id}`}</span>
+                                <span className="text-neutral-400">—</span>
+                                <span className="truncate" title={p.prompt}>{p.prompt.slice(0, 80)}</span>
+                                <button
+                                  type="button"
+                                  className="ml-auto text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-800 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                                  onClick={() => activatePrompt(column, p.id)}
+                                  disabled={!!p.is_active}
+                                  title={p.is_active ? 'Вже активний' : 'Зробити активним'}
+                                >
+                                  Активувати
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

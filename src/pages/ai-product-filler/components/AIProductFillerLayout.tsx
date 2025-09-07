@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Wand2, Layers, Settings, Languages } from 'lucide-react';
+import { FillerThemeSwitcher } from './FillerThemeSwitcher';
+import { ServiceDropdown } from '@/components/layout/ServiceDropdown';
 
 interface Props {
   children: React.ReactNode;
@@ -28,11 +30,20 @@ export default function AIProductFillerLayout({ children }: Props) {
             className={`group relative overflow-hidden dark:bg-neutral-900/70 ring-1 ring-black/5 backdrop-blur transition-[width] ${hovered ? 'duration-300 ease-out' : 'duration-150 ease-in'} ${hovered ? 'w-[220px] open' : 'w-10'} hover:w-[220px]`}
           >
             {/* Header */}
-            <div className="h-12 flex items-center border-b px-3 min-w-0">
+            <div className="h-12 flex items-center border-b px-2 min-w-0">
               <div className="h-6 w-6 rounded-sm bg-[#F5F5DC] ring-1 ring-black/5 flex items-center justify-center mr-2 shrink-0">
-                <div className="h-3.5 w-3.5 rounded-sm bg-emerald-500/80" aria-hidden />
+              <div className="rounded-2xl p-2 bg-primary/15">
+              <div className=" ">
+                <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L4 8V16L12 22L20 16V8L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 22V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M20 8L12 16L4 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M4 16L12 8L20 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 2V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
-              {/* Title: avoid wrap and width jump using max-width animation */}
+            </div>              </div>
+              {/* Animated title (like before) */}
               <span
                 className={[
                   'text-sm font-semibold text-neutral-700 dark:text-neutral-200',
@@ -41,15 +52,19 @@ export default function AIProductFillerLayout({ children }: Props) {
                   'transition-opacity',
                   'whitespace-nowrap overflow-hidden',
                   'max-w-0 group-[.open]:max-w-[160px] group-hover:max-w-[160px] transition-[max-width]',
-                  // У згорнутому стані повністю ігноруємо події миші, щоб уникнути випадкових ховерів
                   'pointer-events-none group-[.open]:pointer-events-auto group-hover:pointer-events-auto',
                 ].join(' ')}
               >
                 AI Product Filler
               </span>
+              {/* Services dropdown placed outside overflow-hidden to avoid clipping */}
+              <div className="ml-1">
+                <ServiceDropdown />
+              </div>
             </div>
 
             {/* Nav unified rows */}
+            <div className='flex h-screen flex-col justify-between'>
             <nav>
               <ul className="py-1">
                 {navItems.map(({ to, label, icon: Icon }) => (
@@ -86,10 +101,15 @@ export default function AIProductFillerLayout({ children }: Props) {
                 ))}
               </ul>
             </nav>
-          </aside>
+            <div className='mb-12'> 
+            <FillerThemeSwitcher sidebarOpen={hovered} />
+            </div>
+            </div>
 
+          </aside>
           {/* Main content */}
           <main className="min-w-0 relative">
+        
             {children}
           </main>
         </div>

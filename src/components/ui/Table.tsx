@@ -70,12 +70,16 @@ function childrenToText(children: React.ReactNode): string {
 interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   noClamp?: boolean;
   autoHeight?: boolean;
+  // Optional resizing support: when true, a right-edge resize handle is shown
+  resizable?: boolean;
+  onResizeStart?: (e: React.MouseEvent) => void;
+  resizerClassName?: string;
 }
 
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   TableHeadProps
->(({ className, children, title, noClamp, autoHeight, ...props }, ref) => {
+>(({ className, children, title, noClamp, autoHeight, resizable, onResizeStart, resizerClassName, ...props }, ref) => {
   const computedTitle = title ?? childrenToText(children);
   const baseHeader = autoHeight
     ? "px-2 sm:px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0"
@@ -86,13 +90,23 @@ const TableHead = React.forwardRef<
   return (
     <th
       ref={ref}
-      className={cn(baseHeader, className)}
+      className={cn(baseHeader, resizable && "relative group", className)}
       title={computedTitle || undefined}
       {...props}
     >
       <div className={innerClass}>
         {children}
       </div>
+      {resizable && (
+        <span
+          className={cn(
+            "absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none",
+            "bg-transparent group-hover:bg-primary/20",
+            resizerClassName
+          )}
+          onMouseDown={onResizeStart}
+        />
+      )}
     </th>
   );
 });

@@ -82,13 +82,12 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
               AI
             </div>
           </Link>
+          {/* Випадаюче меню сервісів поруч з логотипом (завжди видиме) */}
+          <ServiceDropdown />
           {!collapsed && (
-            <div className="flex items-center">
-              <Link to={getCurrentService().path}>
-                <h1 className="text-xl font-bold text-foreground">{getCurrentService().name.replace('Ai - ', '')}</h1>
-              </Link>
-              <ServiceDropdown />
-            </div>
+            <Link to={getCurrentService().path}>
+              <h1 className="text-xl font-bold text-foreground">{getCurrentService().name.replace('Ai - ', '')}</h1>
+            </Link>
           )}
         </div>
         {/* Кнопка згортання прибрана, оскільки цим керує MainLayout */}

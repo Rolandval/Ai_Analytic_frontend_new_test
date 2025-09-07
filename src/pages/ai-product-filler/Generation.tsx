@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import { Search, Loader2, Plus, X, Save, ArrowUpDown } from 'lucide-react';
+import { Search, Loader2, Plus, X, Save, ArrowUpDown, ChevronDown, ChevronRight } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { fetchContentDescriptions, ProductType } from '@/api/contentDescriptions';
-import { fetchAllColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
+import { fetchAllColumnPrompts, fetchColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
 import { getTemplates } from '@/api/productFillerMock';
 import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
 import { generateAiDescription } from '@/api/generateAiDescription';
@@ -64,6 +66,7 @@ interface CustomFilter {
 export default function AIProductFillerGeneration({ title = 'AI генерація', mode = 'generation' }: { title?: string; mode?: 'generation' | 'translation' }) {
   const location = useLocation();
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
+  const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const [descriptions, setDescriptions] = useState<ContentDescription[]>([]);
   const [initialDescriptions, setInitialDescriptions] = useState<ContentDescription[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,6 +113,155 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const [rowCheckedRows, setRowCheckedRows] = useState<Record<string, boolean>>({});
   // Незалежний стан для чекбоксів у заголовках колонок (щоб вибір рядків їх не змінював)
   const [columnHeaderChecked, setColumnHeaderChecked] = useState<Partial<Record<SiteColumnName, boolean>>>({});
+  // Стан розгортання рядків (незалежний від вибору/чекбоксів)
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Record<string, boolean>>({});
+  const toggleRowExpanded = (rowKey: string) => setExpandedRowKeys(prev => ({ ...prev, [rowKey]: !prev[rowKey] }));
+  // Ресайз колонок: ширини у px, за замовчуванням не задані (поведінка як зараз)
+  const [columnWidths, setColumnWidths] = useState<Partial<Record<SiteColumnName, number>>>({});
+  const resizingRef = useRef<{ col: SiteColumnName; startX: number; startWidth: number } | null>(null);
+  // Промпти керуються на сторінці Templates; тут використовуємо активний з бекенду
+  // Restore saved column widths
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_COLUMN_WIDTHS);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        // sanitize to numbers only
+        const restored = Object.fromEntries(
+          Object.entries(parsed).filter(([k, v]) => typeof v === 'number')
+        ) as Partial<Record<SiteColumnName, number>>;
+        setColumnWidths(restored);
+      }
+    } catch (e) {
+      // noop
+    }
+  }, []);
+  // Persist column widths when changed
+  useEffect(() => {
+    try {
+      if (!columnWidths || Object.keys(columnWidths).length === 0) return;
+      localStorage.setItem(STORAGE_KEY_COLUMN_WIDTHS, JSON.stringify(columnWidths));
+    } catch (e) {
+      // noop
+    }
+  }, [columnWidths]);
+
+  const onHeaderResizeMove = useCallback((e: MouseEvent) => {
+    const ctx = resizingRef.current;
+    if (!ctx) return;
+    const delta = e.clientX - ctx.startX;
+    const next = Math.max(120, ctx.startWidth + delta);
+    setColumnWidths(prev => ({ ...prev, [ctx.col]: next }));
+  }, []);
+  const onHeaderResizeEnd = useCallback(() => {
+    if (!resizingRef.current) return;
+    resizingRef.current = null;
+    document.removeEventListener('mousemove', onHeaderResizeMove);
+    document.removeEventListener('mouseup', onHeaderResizeEnd);
+  }, [onHeaderResizeMove]);
+  const onResizeStart = (col: SiteColumnName) => (e: React.MouseEvent) => {
+    const th = (e.currentTarget as HTMLElement).closest('th') as HTMLTableCellElement | null;
+    const startWidth = th?.offsetWidth ?? 0;
+    resizingRef.current = { col, startX: e.clientX, startWidth };
+    document.addEventListener('mousemove', onHeaderResizeMove);
+    document.addEventListener('mouseup', onHeaderResizeEnd);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  // Прапорець: після збереження потрібно взяти чисті серверні дані (без мерджу з локальними)
+  const preferServerOnceRef = useRef(false);
+
+  // Канонізація мовних кодів: 'ua' -> 'uk'
+  const canonicalLang = (s: string | undefined | null) => {
+    const v = (s || '').toLowerCase();
+    if (v === 'ua' || v === 'uk') return 'uk';
+    if (v === 'ru') return 'ru';
+    if (v === 'en') return 'en';
+    return v;
+  };
+
+  // Те саме, але з явним джерелом prompts (уникнути гонок setState під час генерації)
+  const resolvePromptForColumnFrom = (
+    promptsByCol: Record<SiteColumnName, SiteContentPrompt[]>,
+    col: SiteColumnName
+  ): string | null => {
+    const st = templatesState as any;
+    if (st?.enabled && st.enabled[col] === false) {
+      console.info('[resolvePromptForColumnFrom] disabled by Templates', { col });
+      return null;
+    }
+    const list = (promptsByCol?.[col] as SiteContentPrompt[] | undefined) || [];
+    const norm = (s?: string) => (s || '').toLowerCase();
+    const want = norm(selectedLang);
+    const isSameLang = (code?: string) => (want === 'ua' ? (norm(code) === 'ua' || norm(code) === 'uk') : norm(code) === want);
+    const byLang = list.filter(p => isSameLang(p.lang_code as any));
+    const pool = byLang.length > 0 ? byLang : list;
+    const active = pool.find(p => p.is_active);
+    if (active?.prompt) {
+      const preview = String(active.prompt).slice(0, 120);
+      console.debug('[resolvePromptForColumnFrom] use', { col, source: 'active', id: active.id, name: active.name, preview });
+      return active.prompt;
+    }
+    if (Array.isArray(pool) && pool.length > 0) {
+      const latest = [...pool].filter(x => typeof x?.prompt === 'string').sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0];
+      if (latest && typeof latest.prompt === 'string') {
+        const preview = latest.prompt.slice(0, 120);
+        console.debug('[resolvePromptForColumnFrom] use', { col, source: 'latest', id: latest.id, name: latest.name, preview });
+        return latest.prompt;
+      }
+    }
+    const tplKey = mapSiteColumnToProductTplKey[col];
+    const fromTpl = st?.productTpl?.[tplKey] as string | undefined;
+    if (fromTpl && typeof fromTpl === 'string') {
+      const preview = fromTpl.slice(0, 120);
+      console.debug('[resolvePromptForColumnFrom] use', { col, source: 'local-productTpl', tplKey, preview });
+      return fromTpl;
+    }
+    console.warn('[resolvePromptForColumnFrom] no prompt available', { col });
+    return null;
+  };
+
+  // Слухач події з Templates: коли користувач активує промпт, Generation підтягує зміни одразу
+  useEffect(() => {
+    const handler = async (e: CustomEvent<{ column?: SiteColumnName | null; lang?: 'ua' | 'en' | 'ru' }>) => {
+      try {
+        const detail = (e as any)?.detail || {};
+        const eventLang = detail.lang as 'ua' | 'en' | 'ru' | undefined;
+        const column = detail.column as SiteColumnName | undefined;
+        if (eventLang && eventLang !== selectedLang) {
+          console.info('[Generation] ai_pf_prompts_changed ignored (lang mismatch)', { eventLang, selectedLang });
+          return;
+        }
+        if (column) {
+          console.log('[Generation] Refresh prompts for column via event', { column, selectedLang });
+          const list = await fetchColumnPrompts(column, selectedLang as any);
+          setTemplatesState(prev => {
+            const prevPrompts = ((prev as any)?.prompts ?? {}) as Record<SiteColumnName, SiteContentPrompt[]>;
+            return { ...(prev || {}), prompts: { ...prevPrompts, [column]: list }, lang: selectedLang } as any;
+          });
+        } else {
+          console.log('[Generation] Refresh all prompts via event', { selectedLang });
+          const prompts = await fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any);
+          setTemplatesState(prev => ({ ...(prev || {}), prompts, lang: selectedLang } as any));
+        }
+        toast({ title: 'Активний промпт оновлено' });
+      } catch (err) {
+        console.error('[Generation] Failed to handle ai_pf_prompts_changed', err);
+      }
+    };
+    window.addEventListener('ai_pf_prompts_changed' as any, handler as any);
+    return () => window.removeEventListener('ai_pf_prompts_changed' as any, handler as any);
+  }, [selectedLang]);
+  useEffect(() => () => {
+    document.removeEventListener('mousemove', onHeaderResizeMove);
+    document.removeEventListener('mouseup', onHeaderResizeEnd);
+  }, [onHeaderResizeEnd, onHeaderResizeMove]);
+  const getColStyle = useCallback((col: SiteColumnName) => {
+    const w = columnWidths[col];
+    return w ? ({ width: w, minWidth: w, maxWidth: w } as CSSProperties) : undefined;
+  }, [columnWidths]);
   // Прийом шаблонів із сторінки Templates через router state і логування
   type TemplatesState = {
     from?: 'templates' | 'generation-fallback';
@@ -146,13 +298,13 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     // Fallback: напряму завантажуємо промпти з API і локальні шаблони, щоб логувати навіть при прямому заході
     (async () => {
       try {
-        const prompts = await fetchAllColumnPrompts();
-        const productTpl = getTemplates('product', 'ua');
-        const categoryTpl = getTemplates('category', 'ua');
+        const prompts = await fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any);
+        const productTpl = getTemplates('product', selectedLang as any);
+        const categoryTpl = getTemplates('category', selectedLang as any);
         const fallback = {
           from: 'generation-fallback' as const,
           entity: 'product' as const,
-          lang: 'ua',
+          lang: selectedLang,
           prompts,
           productTpl,
           categoryTpl,
@@ -168,7 +320,23 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         console.warn('[Templates -> Generation] Fallback fetch failed', err);
       }
     })();
-  }, [incomingTemplates]);
+  }, [incomingTemplates, selectedLang]);
+
+  // При зміні мови — перезавантажити промпти з API
+  useEffect(() => {
+    (async () => {
+      try {
+        const prompts = await fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any);
+        setTemplatesState(prev => ({
+          ...(prev || {}),
+          lang: selectedLang,
+          prompts,
+        } as any));
+      } catch (e) {
+        // noop
+      }
+    })();
+  }, [selectedLang]);
   
   const isTranslateMode = mode === 'translation';
   // Завантаження списку моделей для генерації
@@ -202,25 +370,117 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const stableIdCounterRef = useRef(0);
   const getRowKey = (desc: ContentDescription, _index: number) => {
     const anyDesc = desc as any;
-    const pid = anyDesc.product_id;
-    if (pid != null) return String(pid);
-    if (desc.id != null) return String(desc.id);
+    const langCode = (desc.site_lang_code ?? '').toString().toLowerCase() || 'unknown';
+    // Гарантуємо наявність унікального UID на кожному об'єкті (копіюється через спред)
     if (!anyDesc[ROW_UID]) {
-      anyDesc[ROW_UID] = `${desc.site_lang_code ?? ''}|uid${++stableIdCounterRef.current}`;
+      anyDesc[ROW_UID] = `uid${++stableIdCounterRef.current}`;
     }
-    return String(anyDesc[ROW_UID]);
+    const uid = String(anyDesc[ROW_UID]);
+    const pid = anyDesc.product_id;
+    if (pid != null) return `${pid}|${langCode}|${uid}`;
+    if (desc.id != null) return `${desc.id}|${langCode}|${uid}`;
+    return `${langCode}|${uid}`;
   };
   const isCellChecked = (rowKey: string, col: string) => !!selectedCells[`${rowKey}:${col}`];
 
-  // Стабільний ключ рядка для маркування генерації/збереження: product_id або lang|product
-  const getStableKey = (d: ContentDescription) =>
-    String((d as any).product_id ?? `${d.site_lang_code ?? ''}|${d.site_product ?? d.product_name ?? ''}`);
+  // Стабільний ключ рядка: product_id+lang (канонічна), інакше id+lang, інакше lang|product
+  const getStableKey = (d: ContentDescription) => {
+    const anyD: any = d as any;
+    const lang = canonicalLang(d.site_lang_code) || '';
+    if (anyD.product_id != null) return `${String(anyD.product_id)}|${lang}`;
+    if (anyD.id != null) return `${String(anyD.id)}|${lang}`;
+    return `${lang}|${d.site_product ?? d.product_name ?? ''}`;
+  };
 
   // Позначка, що для рядка було виконано хоча б одну AI‑генерацію
   const markRowGenerated = (desc: ContentDescription) => {
     const key = getStableKey(desc);
     setGeneratedRows(prev => ({ ...prev, [key]: true }));
   };
+
+  // Обчислити, який промпт буде використаний для конкретної колонки (для логування/діагностики)
+  const getPromptChoiceForColumn = (col: SiteColumnName) => {
+    const st = templatesState as any;
+    if (st?.enabled && st.enabled[col] === false) {
+      return { col, source: 'disabled' as const };
+    }
+    const list = (st?.prompts?.[col] as SiteContentPrompt[] | undefined) || [];
+    const norm = (s?: string) => (s || '').toLowerCase();
+    const want = norm(selectedLang);
+    const isSameLang = (code?: string) => (want === 'ua' ? (norm(code) === 'ua' || norm(code) === 'uk') : norm(code) === want);
+    const byLang = list.filter(p => isSameLang(p.lang_code as any));
+    const pool = byLang.length > 0 ? byLang : list;
+    const active = pool.find(p => p.is_active);
+    if (active?.prompt) {
+      return { col, source: 'active' as const, id: active.id, name: active.name, prompt: active.prompt };
+    }
+    if (Array.isArray(pool) && pool.length > 0) {
+      const latest = [...pool].filter(x => typeof x?.prompt === 'string').sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0];
+      if (latest && typeof latest.prompt === 'string') {
+        return { col, source: 'latest' as const, id: latest.id, name: latest.name, prompt: latest.prompt };
+      }
+    }
+    const tplKey = mapSiteColumnToProductTplKey[col];
+    const fromTpl = st?.productTpl?.[tplKey] as string | undefined;
+    if (fromTpl && typeof fromTpl === 'string') {
+      return { col, source: 'local-productTpl' as const, tplKey, prompt: fromTpl };
+    }
+    return { col, source: 'none' as const };
+  };
+
+  const logActivePromptsNow = () => {
+    const st = templatesState as any;
+    if (!st) { console.warn('[Generation] logActivePrompts: templatesState is empty'); return; }
+    const rows = (SITE_COLUMNS as SiteColumnName[]).map((c) => {
+      const choice = getPromptChoiceForColumn(c) as any;
+      const preview = typeof choice.prompt === 'string' ? choice.prompt.slice(0, 160) : '';
+      return {
+        col: c,
+        source: choice.source,
+        id: choice.id ?? '-',
+        name: choice.name ?? '-',
+        preview,
+      };
+    });
+    try {
+      console.groupCollapsed('[Generation] Активні промпти для мови', selectedLang);
+      // eslint-disable-next-line no-console
+      console.table(rows);
+      console.groupEnd();
+    } catch {
+      // eslint-disable-next-line no-console
+      console.log('[Generation] Active prompts', rows);
+    }
+  };
+
+  // Повний лог усіх шаблонів (prompts) по кожній колонці
+  const logAllPromptsNow = () => {
+    const st = templatesState as any;
+    if (!st?.prompts) { console.warn('[Generation] logAllPrompts: prompts are empty'); return; }
+    try {
+      console.groupCollapsed('[Generation] Всі шаблони (prompts) для мови', selectedLang);
+      (SITE_COLUMNS as SiteColumnName[]).forEach((col) => {
+        const list = ((st.prompts?.[col] as SiteContentPrompt[]) || []);
+        const rows = list.map((it) => ({ id: it.id, name: it.name, is_active: it.is_active, lang_code: it.lang_code, preview: String(it.prompt || '').slice(0, 160) }));
+        console.groupCollapsed('[Prompts]', col, `(${rows.length})`);
+        // eslint-disable-next-line no-console
+        console.table(rows);
+        console.groupEnd();
+      });
+      console.groupEnd();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.log('[Generation] All prompts dump failed', e);
+    }
+  };
+
+  // Автоматично логувати застосовувані промпти щоразу, коли оновлюються prompts або мова
+  useEffect(() => {
+    if (!templatesState?.prompts) return;
+    logAllPromptsNow();
+    logActivePromptsNow();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templatesState?.prompts, selectedLang]);
 
   // Дефолтний промо-текст, якщо поле порожнє, коли перекладаємо
   const getDefaultPromoText = (lang: 'ua' | 'en' | 'ru') => {
@@ -254,100 +514,121 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     page_title: 'site_page_title',
   };
 
-  // Переклад для вибраних клітинок на поточній сторінці
+  // Переклад для вибраних клітинок на поточній сторінці (в обидві мови: ru і en)
   const handleTranslateSelected = async () => {
     setTranslating(true);
     setTranslateProgress('');
     try {
       const cols = SITE_COLUMNS as SiteColumnName[];
-      // Збираємо по рядках об'єкти для перекладу
-      const payloadItems: TranslateDescriptionItem[] = [];
-      pagedDescriptions.forEach((desc, idx) => {
-        const rowKey = getRowKey(desc, idx);
-        const selectedCols = cols.filter(col => selectedCells[`${rowKey}:${col}`]);
-        if (selectedCols.length === 0) return;
-        const product_id = (desc as any).product_id as number | undefined;
-        if (typeof product_id !== 'number') return; // пропускаємо без product_id
-        const item: TranslateDescriptionItem = {
-          product_id,
-          lang_code: targetLang,
-          // Базові поля ініціалізуємо null — бек має оновити лише надіслані значення
-          site_product: null,
-          site_shortname: null,
-          site_short_description: null,
-          site_full_description: null,
-          site_meta_keywords: null,
-          site_meta_description: null,
-          site_searchwords: null,
-          site_page_title: null,
-          site_promo_text: null,
-        };
-        selectedCols.forEach(col => {
-          const field = mapSiteColumnToContentField[col];
-          const current = (desc as any)[field] as string | null | undefined;
-          if (field === 'site_promo_text' && (!current || String(current).trim() === '')) {
-            // Якщо promo_text порожній — ставимо дефолт
-            (item as any)[field] = getDefaultPromoText(targetLang);
-          } else {
-            (item as any)[field] = current ?? '';
+      // Функція побудови payload для конкретної мови
+      const buildPayloadForLang = (lang: 'ru' | 'en'): TranslateDescriptionItem[] => {
+        const items: TranslateDescriptionItem[] = [];
+        pagedDescriptions.forEach((desc, idx) => {
+          const rowKey = getRowKey(desc, idx);
+          const selectedCols = cols.filter(col => selectedCells[`${rowKey}:${col}`]);
+          if (selectedCols.length === 0) return;
+          const product_id = (desc as any).product_id as number | undefined;
+          if (typeof product_id !== 'number') return; // пропускаємо без product_id
+          const item: TranslateDescriptionItem = {
+            product_id,
+            lang_code: lang,
+            // Базові поля ініціалізуємо null — бек має оновити лише надіслані значення
+            site_product: null,
+            site_shortname: null,
+            site_short_description: null,
+            site_full_description: null,
+            site_meta_keywords: null,
+            site_meta_description: null,
+            site_searchwords: null,
+            site_page_title: null,
+            site_promo_text: null,
+          };
+          selectedCols.forEach(col => {
+            const field = mapSiteColumnToContentField[col];
+            const current = (desc as any)[field] as string | null | undefined;
+            if (field === 'site_promo_text' && (!current || String(current).trim() === '')) {
+              // Якщо promo_text порожній — ставимо дефолт для цільової мови
+              (item as any)[field] = getDefaultPromoText(lang);
+            } else {
+              (item as any)[field] = current ?? '';
+            }
+          });
+          // Додаємо назву продукту для контексту перекладу, навіть якщо її не вибрано
+          if (!selectedCols.includes('product')) {
+            const baseName = desc.site_product || desc.product_name || '';
+            if (baseName) item.site_product = baseName;
           }
+          items.push(item);
         });
-        // Додаємо назву продукту для контексту перекладу, навіть якщо її не вибрано
-        if (!selectedCols.includes('product')) {
-          const baseName = desc.site_product || desc.product_name || '';
-          if (baseName) item.site_product = baseName;
-        }
-        payloadItems.push(item);
-      });
+        return items;
+      };
 
-      if (payloadItems.length === 0) {
-        setTranslateProgress('Нічого не вибрано');
-        return;
+      const langs: Array<'ru' | 'en'> = ['ru', 'en'];
+      for (const lang of langs) {
+        const payloadItems = buildPayloadForLang(lang);
+        if (payloadItems.length === 0) {
+          setTranslateProgress(prev => prev ? `${prev} | ${lang}: 0/0` : `${lang}: 0/0`);
+          continue;
+        }
+        const res = await translateSiteDescriptions({ lang_code: lang, descriptions: payloadItems });
+        const list: any[] = Array.isArray(res)
+          ? res
+          : (Array.isArray((res as any)?.translations)
+              ? (res as any).translations
+              : (Array.isArray((res as any)?.descriptions)
+                ? (res as any).descriptions
+                : (Array.isArray((res as any)?.items)
+                  ? (res as any).items
+                  : (Array.isArray((res as any)?.result) ? (res as any).result : []))));
+
+        // Оновлюємо локальний стейт перекладеними значеннями для поточної мови
+        let done = 0;
+        list.forEach((it) => {
+          const pid = (it as any).product_id;
+          if (typeof pid !== 'number') return;
+          setDescriptions(prev => {
+            const respLang = ((it as any).site_lang_code ?? (it as any).lang_code ?? lang) as string | undefined;
+            const findByLang = (arr: typeof prev) => {
+              if (!respLang) return -1;
+              const norm = (s: string) => (s || '').toLowerCase();
+              const want = norm(respLang);
+              return arr.findIndex(x => (x as any).product_id === pid && norm((x as any).site_lang_code ?? '') === want);
+            };
+            const idx = findByLang(prev);
+            if (idx === -1) {
+              // Якщо рядка для цієї мови ще немає — додаємо новий (upsert)
+              const newEntry: any = { product_id: pid, site_lang_code: respLang };
+              (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
+                .forEach((k) => {
+                  if ((it as any)[k] != null) newEntry[k] = (it as any)[k];
+                });
+              return [...prev, newEntry] as any;
+            }
+            const next = [...prev];
+            const curr = { ...next[idx] } as any;
+            (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
+              .forEach((k) => {
+                if (it[k] != null) curr[k] = it[k];
+              });
+            next[idx] = curr;
+            return next as any;
+          });
+          // Позначаємо рядок як змінений/згенерований для подальшого збереження
+          markRowGenerated({ product_id: pid } as any);
+          done++;
+        });
+        setTranslateProgress(prev => prev ? `${prev} | ${lang}: ${done}/${payloadItems.length}` : `${lang}: ${done}/${payloadItems.length}`);
       }
 
-      const res = await translateSiteDescriptions({ lang_code: targetLang, descriptions: payloadItems });
-      const list: any[] = Array.isArray(res)
-        ? res
-        : (Array.isArray((res as any)?.descriptions)
-            ? (res as any).descriptions
-            : (Array.isArray((res as any)?.items)
-              ? (res as any).items
-              : (Array.isArray((res as any)?.result) ? (res as any).result : [])));
-
-      // Оновлюємо локальний стейт перекладеними значеннями
-      let done = 0;
-      list.forEach((it) => {
-        const pid = (it as any).product_id;
-        if (typeof pid !== 'number') return;
-        setDescriptions(prev => {
-          const respLang = ((it as any).site_lang_code ?? (it as any).lang_code ?? targetLang) as string | undefined;
-          const findByLang = (arr: typeof prev) => {
-            if (!respLang) return -1;
-            const norm = (s: string) => (s || '').toLowerCase();
-            const want = norm(respLang);
-            return arr.findIndex(x => (x as any).product_id === pid && norm((x as any).site_lang_code ?? '') === want);
-          };
-          const idx = findByLang(prev);
-          if (idx === -1) return prev; // не оновлюємо іншу мову
-          const next = [...prev];
-          const curr = { ...next[idx] } as any;
-          // Копіюємо лише відомі поля, якщо вони присутні у відповіді
-          (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
-            .forEach((k) => {
-              if (it[k] != null) curr[k] = it[k];
-            });
-          next[idx] = curr;
-          return next as any;
+      // Після успішного перекладу перед очищенням вибору зберігаємо розгортання
+      setExpandedRowKeys(prev => {
+        const next = { ...prev } as Record<string, boolean>;
+        Object.keys(rowCheckedRows).forEach(k => {
+          if (rowCheckedRows[k]) next[k] = true;
         });
-        // Позначаємо рядок як змінений/згенерований для подальшого збереження
-        // Використовуємо product_id як стабільний ключ
-        markRowGenerated({ product_id: pid } as any);
-        done++;
+        return next;
       });
-      setTranslateProgress(`${done}/${payloadItems.length}`);
-
-      // Після успішного перекладу очищаємо вибір і стани чекбоксів,
-      // щоб синхронізувати UI так само, як після генерації
+      // Тепер очищаємо вибір і стани чекбоксів
       setSelectedCells({});
       setRowCheckedRows({});
       setColumnHeaderChecked({});
@@ -358,20 +639,53 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     }
   };
 
+  
+
   const resolvePromptForColumn = (col: SiteColumnName): string | null => {
     const st = templatesState as any;
     // Якщо користувач вимкнув цю колонку у Templates — пропускаємо генерацію
-    if (st?.enabled && st.enabled[col] === false) return null;
-    // 1) намагаємось збережені prompts (перший елемент у колонці)
-    const list = st?.prompts?.[col] as Array<{ prompt: string }> | undefined;
-    const fromPrompts = list?.[0]?.prompt;
-    if (fromPrompts && typeof fromPrompts === 'string') return fromPrompts;
+    if (st?.enabled && st.enabled[col] === false) {
+      console.info('[resolvePromptForColumn] disabled by Templates', { col });
+      return null;
+    }
+    // 1) активний промпт з бекенду, інакше перший
+    const list = (st?.prompts?.[col] as SiteContentPrompt[] | undefined) || [];
+    // Фільтруємо за мовою інтерфейсу (ua ~ uk)
+    const norm = (s?: string) => (s || '').toLowerCase();
+    const want = norm(selectedLang);
+    const isSameLang = (code?: string) => (want === 'ua' ? (norm(code) === 'ua' || norm(code) === 'uk') : norm(code) === want);
+    const byLang = list.filter(p => isSameLang(p.lang_code as any));
+    const pool = byLang.length > 0 ? byLang : list; // якщо бек не проставляє lang_code — не відкидаємо такі записи
+    if (byLang.length === 0 && list.length > 0) {
+      console.debug('[resolvePromptForColumn] no lang match, falling back to unfiltered list', { col, selectedLang });
+    }
+    const active = pool.find(p => p.is_active);
+    if (active?.prompt) {
+      const preview = typeof active.prompt === 'string' ? active.prompt.slice(0, 120) : '';
+      console.debug('[resolvePromptForColumn] use', { col, source: 'active', id: active.id, name: active.name, preview });
+      return active.prompt;
+    }
+    // Якщо активного немає — беремо найновіший (найбільший id) у вибірці мови
+    if (Array.isArray(pool) && pool.length > 0) {
+      const latest = [...pool].filter(x => typeof x?.prompt === 'string').sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0];
+      if (latest && typeof latest.prompt === 'string') {
+        const preview = latest.prompt.slice(0, 120);
+        console.debug('[resolvePromptForColumn] use', { col, source: 'latest', id: latest.id, name: latest.name, preview });
+        return latest.prompt;
+      }
+    }
     // 2) fallback до локальних шаблонів productTpl
     const tplKey = mapSiteColumnToProductTplKey[col];
     const fromTpl = st?.productTpl?.[tplKey] as string | undefined;
-    if (fromTpl && typeof fromTpl === 'string') return fromTpl;
+    if (fromTpl && typeof fromTpl === 'string') {
+      const preview = fromTpl.slice(0, 120);
+      console.debug('[resolvePromptForColumn] use', { col, source: 'local-productTpl', tplKey, preview });
+      return fromTpl;
+    }
+    console.warn('[resolvePromptForColumn] no prompt available', { col });
     return null;
   };
+
 
   // Універсальний парсер відповіді бекенда, щоб дістати згенерований текст
   const extractGeneratedText = (res: unknown): string | null => {
@@ -584,6 +898,37 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         setSelectedProgress('Нічого не вибрано');
         return;
       }
+      // 1) Перед генерацією підтягнути актуальні промпти для задіяних колонок і поточної мови
+      let localPromptsByCol: Record<SiteColumnName, SiteContentPrompt[]> | null = null;
+      try {
+        const involvedCols = Array.from(new Set(jobs.map(j => j.col)));
+        console.log('[GenerateSelected] Refresh involved prompts', { involvedCols, selectedLang });
+        const settled = await Promise.allSettled(involvedCols.map(c => fetchColumnPrompts(c, selectedLang as any)));
+        setTemplatesState(prev => {
+          const prevPrompts = ((prev as any)?.prompts ?? {}) as Record<SiteColumnName, SiteContentPrompt[]>;
+          const nextPrompts = { ...prevPrompts } as Record<SiteColumnName, SiteContentPrompt[]>;
+          involvedCols.forEach((c, idx) => {
+            const s = settled[idx];
+            if (s.status === 'fulfilled') nextPrompts[c] = s.value;
+          });
+          localPromptsByCol = nextPrompts;
+          return { ...(prev || {}), prompts: nextPrompts, lang: selectedLang } as any;
+        });
+        try {
+          involvedCols.forEach((c, idx) => {
+            const s = settled[idx];
+            if (s.status === 'fulfilled') {
+              const rows = (s.value || []).map((it: any) => ({ id: it.id, name: it.name, is_active: it.is_active, lang_code: it.lang_code }));
+              console.groupCollapsed('[Prompts] Received list for', c, 'lang', selectedLang);
+              // eslint-disable-next-line no-console
+              console.table(rows);
+              console.groupEnd();
+            }
+          });
+        } catch {}
+      } catch (e) {
+        console.warn('[GenerateSelected] Failed to refresh prompts before generation', e);
+      }
       // Генерування для product виконуємо останнім, щоб не змінювати ідентифікатор рядка до заповнення інших колонок
       jobs.sort((a, b) => (a.col === 'product' ? 1 : 0) - (b.col === 'product' ? 1 : 0));
       let done = 0;
@@ -593,10 +938,24 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
           const site_product = desc.site_product || desc.product_name || '';
           const site_full_description = desc.site_full_description || desc.description || '';
           // Дозволяємо генерувати 'product' навіть якщо назва порожня; інші колонки вимагають назву
-          if (job.col !== 'product' && !site_product) { done++; setSelectedProgress(`${done}/${jobs.length}`); continue; }
-          const prompt = resolvePromptForColumn(job.col);
-          if (!prompt) { done++; setSelectedProgress(`${done}/${jobs.length}`); continue; }
+          if (job.col !== 'product' && !site_product) {
+            console.warn('[GenerateSelected] Skip: empty site_product for col', job.col, 'row:', {
+              product_id: (desc as any).product_id,
+              site_lang_code: (desc as any).site_lang_code,
+              site_product: desc.site_product,
+              product_name: desc.product_name,
+            });
+            done++; setSelectedProgress(`${done}/${jobs.length}`); continue;
+          }
+          const prompt = localPromptsByCol
+            ? resolvePromptForColumnFrom(localPromptsByCol, job.col)
+            : resolvePromptForColumn(job.col);
+          if (!prompt) {
+            console.warn('[GenerateSelected] Skip: no prompt resolved for col', job.col, 'lang:', selectedLang);
+            done++; setSelectedProgress(`${done}/${jobs.length}`); continue;
+          }
           const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
+          console.debug('[GenerateSelected] POST /content/generate_ai_description', { col: job.col, payload });
           const res = await generateAiDescription(payload);
           const generated = extractGeneratedText(res);
           if (generated && typeof generated === 'string') {
@@ -660,13 +1019,46 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         setMassProgress('Немає порожніх полів на сторінці');
         return;
       }
+      // 1) Перед масовою генерацією підтягнути актуальні промпти для задіяних колонок
+      let localPromptsByCol2: Record<SiteColumnName, SiteContentPrompt[]> | null = null;
+      try {
+        const involvedCols = Array.from(new Set(jobs.map(j => j.col)));
+        console.log('[MassGenerate] Refresh involved prompts', { involvedCols, selectedLang });
+        const settled = await Promise.allSettled(involvedCols.map(c => fetchColumnPrompts(c, selectedLang as any)));
+        setTemplatesState(prev => {
+          const prevPrompts = ((prev as any)?.prompts ?? {}) as Record<SiteColumnName, SiteContentPrompt[]>;
+          const nextPrompts = { ...prevPrompts } as Record<SiteColumnName, SiteContentPrompt[]>;
+          involvedCols.forEach((c, idx) => {
+            const s = settled[idx];
+            if (s.status === 'fulfilled') nextPrompts[c] = s.value;
+          });
+          localPromptsByCol2 = nextPrompts;
+          return { ...(prev || {}), prompts: nextPrompts, lang: selectedLang } as any;
+        });
+        try {
+          involvedCols.forEach((c, idx) => {
+            const s = settled[idx];
+            if (s.status === 'fulfilled') {
+              const rows = (s.value || []).map((it: any) => ({ id: it.id, name: it.name, is_active: it.is_active, lang_code: it.lang_code }));
+              console.groupCollapsed('[Prompts] Received list for', c, 'lang', selectedLang);
+              // eslint-disable-next-line no-console
+              console.table(rows);
+              console.groupEnd();
+            }
+          });
+        } catch {}
+      } catch (e) {
+        console.warn('[MassGenerate] Failed to refresh prompts before generation', e);
+      }
       let done = 0;
       for (const job of jobs) {
         const desc = job.row;
         const site_product = desc.site_product || desc.product_name || '';
         const site_full_description = desc.site_full_description || desc.description || '';
         if (!site_product) { done++; setMassProgress(`${done}/${jobs.length}`); continue; }
-        const prompt = resolvePromptForColumn(job.col);
+        const prompt = localPromptsByCol2
+          ? resolvePromptForColumnFrom(localPromptsByCol2, job.col)
+          : resolvePromptForColumn(job.col);
         if (!prompt) { done++; setMassProgress(`${done}/${jobs.length}`); continue; }
         try {
           const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
@@ -713,16 +1105,18 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const handleSaveChanges = async () => {
     try {
       setSaving(true);
-      // Побудова мапи початкових значень за стабільними ключами
-      const initialById = new Map<number, ContentDescription>();
+      // Побудова мапи початкових значень за стабільними ключами (з урахуванням мови)
+      const initialByPidLang = new Map<string, ContentDescription>();
       const initialByComposite = new Map<string, ContentDescription>();
-      const makeCompositeKey = (d: ContentDescription) => `${d.site_lang_code ?? ''}|${d.site_product ?? d.product_name ?? ''}`;
+      const makeCompositeKey = (d: ContentDescription) => `${canonicalLang(d.site_lang_code) ?? ''}|${d.site_product ?? d.product_name ?? ''}`;
       initialDescriptions.forEach((desc) => {
-        if (typeof desc.product_id === 'number') initialById.set(desc.product_id, desc);
+        const lang = canonicalLang(desc.site_lang_code ?? '');
+        if (typeof desc.product_id === 'number') initialByPidLang.set(`${desc.product_id}|${lang}`, desc);
         initialByComposite.set(makeCompositeKey(desc), desc);
       });
 
       const payload: Array<any> = [];
+      const diffs: Array<{ product_id: number | undefined; lang: string; name: string; field: string; before: string; after: string }>= [];
       let skippedNoProductId = 0;
       const diffFields: Array<keyof ContentDescription> = [
         'site_lang_code' as any,
@@ -737,31 +1131,39 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         'site_promo_text',
       ];
 
+      const norm = (key: keyof ContentDescription, v: any) => {
+        // Не нормалізуємо site_product тут, щоб випадково не очистити ідентифікатор назви
+        if (key === 'site_product' as any) return v;
+        if (typeof v === 'string' && v.trim() === '') {
+          try { console.debug('[SaveChanges] normalize empty -> null for', String(key)); } catch {}
+          return null;
+        }
+        return v;
+      };
+
       descriptions.forEach((curr) => {
-        // Зберігаємо лише ті рядки, де під час цієї сесії була AI‑генерація
-        const wasGenerated = !!generatedRows[getStableKey(curr)];
-        if (!wasGenerated) return;
-        // Знаходимо базовий рядок: спершу за product_id, інакше за композитним ключем
+        // Знаходимо базовий рядок: спершу за product_id+lang, інакше за композитним ключем (lang|name)
+        const currLang = canonicalLang(curr.site_lang_code ?? '');
         const base = typeof curr.product_id === 'number'
-          ? initialById.get(curr.product_id)
-          : initialByComposite.get(`${curr.site_lang_code ?? ''}|${curr.site_product ?? curr.product_name ?? ''}`);
+          ? initialByPidLang.get(`${curr.product_id}|${currLang}`)
+          : initialByComposite.get(`${currLang}|${curr.site_product ?? curr.product_name ?? ''}`);
         if (!base) {
           const product_id = curr.product_id;
           if (typeof product_id !== 'number') { skippedNoProductId++; return; }
-          // Новий рядок: надсилаємо повний рядок (усі поля)
-          const item: any = {
-            product_id,
-            site_lang_code: curr.site_lang_code ?? null,
-            site_product: curr.site_product ?? curr.product_name ?? null,
-            site_shortname: curr.site_shortname ?? null,
-            site_short_description: curr.site_short_description ?? null,
-            site_full_description: curr.site_full_description ?? null,
-            site_meta_keywords: curr.site_meta_keywords ?? null,
-            site_meta_description: curr.site_meta_description ?? null,
-            site_searchwords: curr.site_searchwords ?? null,
-            site_page_title: curr.site_page_title ?? null,
-            site_promo_text: curr.site_promo_text ?? null,
-          };
+          // Новий рядок: відправляємо ТІЛЬКИ наявні поля (без null), щоб нічого зайвого не видалити
+          const item: any = { product_id };
+          const lang = (curr.site_lang_code ?? '') as string; // у payload не канонізуємо
+          const prodName = curr.site_product ?? curr.product_name;
+          if (curr.site_lang_code !== undefined) { item.site_lang_code = lang; item.lang_code = lang; }
+          if (prodName !== undefined) { item.site_product = prodName; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_product', before: '(new)', after: String(prodName ?? '') }); }
+          if (curr.site_shortname !== undefined) { const v = norm('site_shortname', curr.site_shortname); item.site_shortname = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_shortname', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_short_description !== undefined) { const v = norm('site_short_description', curr.site_short_description); item.site_short_description = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_short_description', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_full_description !== undefined) { const v = norm('site_full_description', curr.site_full_description); item.site_full_description = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_full_description', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_meta_keywords !== undefined) { const v = norm('site_meta_keywords', curr.site_meta_keywords); item.site_meta_keywords = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_meta_keywords', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_meta_description !== undefined) { const v = norm('site_meta_description', curr.site_meta_description); item.site_meta_description = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_meta_description', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_searchwords !== undefined) { const v = norm('site_searchwords', curr.site_searchwords); item.site_searchwords = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_searchwords', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_page_title !== undefined) { const v = norm('site_page_title', curr.site_page_title); item.site_page_title = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_page_title', before: '(new)', after: String(v ?? '') }); }
+          if (curr.site_promo_text !== undefined) { const v = norm('site_promo_text', curr.site_promo_text); item.site_promo_text = v; diffs.push({ product_id, lang, name: String(prodName ?? ''), field: 'site_promo_text', before: '(new)', after: String(v ?? '') }); }
           payload.push(item);
           return;
         }
@@ -776,21 +1178,36 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         if (hasDiff) {
           const product_id = typeof curr.product_id === 'number' ? curr.product_id : (typeof base?.product_id === 'number' ? base!.product_id : undefined);
           if (typeof product_id !== 'number') { skippedNoProductId++; return; }
-          // Існуючий рядок: надсилаємо повний рядок (усі поля)
-          const fullItem: any = {
-            product_id,
-            site_lang_code: curr.site_lang_code ?? base.site_lang_code ?? null,
-            site_product: curr.site_product ?? curr.product_name ?? base.site_product ?? base.product_name ?? null,
-            site_shortname: curr.site_shortname ?? null,
-            site_short_description: curr.site_short_description ?? null,
-            site_full_description: curr.site_full_description ?? null,
-            site_meta_keywords: curr.site_meta_keywords ?? null,
-            site_meta_description: curr.site_meta_description ?? null,
-            site_searchwords: curr.site_searchwords ?? null,
-            site_page_title: curr.site_page_title ?? null,
-            site_promo_text: curr.site_promo_text ?? null,
+          // Існуючий рядок: ВІДПРАВЛЯЄМО ПОВНИЙ РЯДОК: незмінні поля — зі значенням base, змінені — з curr
+          const item: any = { product_id };
+          const lang = (curr.site_lang_code ?? base.site_lang_code ?? '') as string; // у payload не канонізуємо
+          item.site_lang_code = lang; (item as any).lang_code = lang;
+          const newName = curr.site_product ?? curr.product_name;
+          const baseName = base.site_product ?? base.product_name;
+          item.site_product = (newName !== undefined ? newName : baseName);
+          if (String(newName ?? baseName ?? '') !== String(baseName ?? '')) {
+            diffs.push({ product_id, lang, name: String(newName ?? baseName ?? ''), field: 'site_product', before: String(baseName ?? ''), after: String(newName ?? baseName ?? '') });
+          }
+          const setField = (key: keyof ContentDescription) => {
+            const beforeVal = (base as any)[key];
+            const afterVal = (curr as any)[key];
+            // якщо зміни є — беремо поточне; інакше — базове
+            const outValRaw = (String(beforeVal ?? '') !== String(afterVal ?? '')) ? afterVal : beforeVal;
+            const outVal = norm(key, outValRaw);
+            (item as any)[key] = outVal ?? null; // надсилаємо явне значення (null для очищених)
+            if (String(beforeVal ?? '') !== String(outVal ?? '')) {
+              diffs.push({ product_id, lang, name: String(newName ?? baseName ?? ''), field: String(key), before: String(beforeVal ?? ''), after: String(outVal ?? '') });
+            }
           };
-          payload.push(fullItem);
+          setField('site_shortname');
+          setField('site_short_description');
+          setField('site_full_description');
+          setField('site_meta_keywords');
+          setField('site_meta_description');
+          setField('site_searchwords');
+          setField('site_page_title');
+          setField('site_promo_text');
+          payload.push(item);
         }
       });
 
@@ -807,11 +1224,20 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         return;
       }
 
+      try {
+        const changedRows = new Set(diffs.map(d => d.product_id)).size;
+        console.groupCollapsed('[SaveChanges] Diff summary', { rows: changedRows, fields: diffs.length });
+        // eslint-disable-next-line no-console
+        console.table(diffs);
+        console.groupEnd();
+      } catch {}
+      console.log('[SaveChanges] payload length:', payload.length, payload);
       await updateSiteDescriptions({ descriptions: payload });
       // Показуємо лише статус без кількості змін
       toast({ title: 'Успішно' });
-      // Оновлюємо базову копію після успішного збереження
-      setInitialDescriptions(descriptions.map(it => ({ ...it })));
+      // Після збереження перезавантажуємо дані з сервера, щоб уникнути локальних артефактів
+      preferServerOnceRef.current = true;
+      await fetchData();
       // Скидаємо маркери згенерованих рядків після успішного збереження
       setGeneratedRows({});
     } catch (e) {
@@ -843,9 +1269,52 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         limit: response.limit,
         sampleLangs: (response.items || []).slice(0, 5).map((x: any) => x?.site_lang_code)
       });
-      setDescriptions(response.items);
-      // Зберігаємо базовий стан для виявлення змін
-      setInitialDescriptions(response.items.map(it => ({ ...it })));
+      const serverItems = response.items;
+      // Якщо щойно виконали збереження — беремо чисті серверні дані без мерджу
+      if (preferServerOnceRef.current) {
+        preferServerOnceRef.current = false;
+        setDescriptions(serverItems as any);
+      } else {
+        // Зливаймо серверні дані з локальними незбереженими змінами
+        setDescriptions(prev => {
+          try {
+            const prevByKey = new Map(prev.map(d => [getStableKey(d), d]));
+            const fields: Array<keyof ContentDescription> = [
+              'site_lang_code' as any,
+              'site_product' as any,
+              'site_shortname',
+              'site_short_description',
+              'site_full_description',
+              'site_meta_keywords',
+              'site_meta_description',
+              'site_searchwords',
+              'site_page_title',
+              'site_promo_text',
+            ];
+            const merged = serverItems.map((serverItem: any) => {
+              const key = getStableKey(serverItem);
+              const local = prevByKey.get(key) as any;
+              if (!local) return serverItem as ContentDescription;
+              const out: any = { ...serverItem };
+              for (const f of fields) {
+                const localVal = local?.[f] ?? null;
+                const serverVal = serverItem?.[f] ?? null;
+                // Якщо локальне значення відрізняється від серверного (unsaved change) — лишаємо локальне
+                if (String(serverVal ?? '') !== String(localVal ?? '')) {
+                  out[f] = localVal;
+                }
+              }
+              return out as ContentDescription;
+            });
+            return merged;
+          } catch {
+            // У разі помилки мерджу — повертаємо серверні дані як є
+            return serverItems as any;
+          }
+        });
+      }
+      // Базовий стан завжди дорівнює серверу (не включає локальні незбережені зміни)
+      setInitialDescriptions(serverItems.map(it => ({ ...it })));
       // total рахуємо після клієнтської фільтрації
     } catch (err) {
       setError('Помилка при завантаженні даних. Спробуйте пізніше.');
@@ -873,7 +1342,6 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   // Очищення вибору клітинок при зміні джерела даних (page/filters/search/limit/productType/lang)
   useEffect(() => {
     setSelectedCells({});
-    setGeneratedRows({});
     setRowCheckedRows({});
     setColumnHeaderChecked({});
   }, [selectedProductType, page, limit, searchQuery, customFilters, selectedLang]);
@@ -996,6 +1464,34 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const pagedDescriptions = sortedDescriptions.slice((page - 1) * limit, page * limit);
   const totalPages = Math.ceil(totalFiltered / limit);
   
+  // Допоміжні: пошук варіантів по мовах для того самого продукту
+  const normLang = (s: string | undefined) => (s || '').toLowerCase();
+  const isUaCode = (s: string | undefined) => {
+    const l = normLang(s);
+    return l === 'ua' || l === 'uk';
+  };
+  const findLangVariant = (base: ContentDescription, lang: 'ua' | 'en' | 'ru'): ContentDescription | null => {
+    const pid = (base as any).product_id ?? null;
+    if (pid != null) {
+      const found = descriptions.find((d) => {
+        if ((d as any).product_id !== pid) return false;
+        const code = normLang(d.site_lang_code);
+        return lang === 'ua' ? isUaCode(code) : code === lang;
+      });
+      return found || null;
+    }
+    // Фолбек: пошук за назвою
+    const name = base.site_product || base.product_name || '';
+    const found = descriptions.find((d) => {
+      const code = normLang(d.site_lang_code);
+      const sameLang = lang === 'ua' ? isUaCode(code) : code === lang;
+      if (!sameLang) return false;
+      const n2 = d.site_product || d.product_name || '';
+      return n2 === name;
+    });
+    return found || null;
+  };
+  
   // Function to truncate text with ellipsis
   const truncateText = (text: string | undefined, maxLength: number) => {
     if (!text) return '';
@@ -1018,15 +1514,44 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const EditableTextCell = ({ rowKey: _rowKey, col, value, desc, long = false, placeholder = '-', truncate = 0 }: EditableTextCellProps) => {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<string>(value);
-    const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+    const inputRef = useRef<HTMLTextAreaElement | null>(null);
     // Запам'ятовуємо значення на старті редагування, щоб уникнути перезапису зовнішніх оновлень (напр., генерації)
     const valueAtEditStartRef = useRef<string>(value);
     const wrapperRef = useRef<HTMLDivElement | null>(null);
+    const overlayRef = useRef<HTMLDivElement | null>(null);
+    const [overlayPos, setOverlayPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
     useEffect(() => {
-      if (editing && inputRef.current) {
-        inputRef.current.focus();
+      if (editing) {
+        // Позиціонуємо textarea над клітинкою
+        if (wrapperRef.current) {
+          const rect = wrapperRef.current.getBoundingClientRect();
+          setOverlayPos({ top: rect.top, left: rect.left, width: rect.width });
+        }
+        // Фокус у textarea
+        if (inputRef.current) {
+          inputRef.current.focus();
+          // Розміщуємо курсор в кінець
+          const len = inputRef.current.value.length;
+          inputRef.current.setSelectionRange(len, len);
+        }
       }
+    }, [editing]);
+
+    // Репозиціонування при скролі/ресайзі, коли редактор відкрито
+    useEffect(() => {
+      if (!editing) return;
+      const handle = () => {
+        if (!wrapperRef.current) return;
+        const rect = wrapperRef.current.getBoundingClientRect();
+        setOverlayPos({ top: rect.top, left: rect.left, width: rect.width });
+      };
+      window.addEventListener('scroll', handle, true);
+      window.addEventListener('resize', handle);
+      return () => {
+        window.removeEventListener('scroll', handle, true);
+        window.removeEventListener('resize', handle);
+      };
     }, [editing]);
 
     // Оновлюємо чернетку, якщо значення змінилось зовні
@@ -1039,38 +1564,54 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
       const v = draft ?? '';
       const field = mapSiteColumnToContentField[col];
       setDescriptions(prev => {
-        const targetId = (desc as any).product_id ?? desc.id ?? null;
-        const targetLang = desc.site_lang_code ?? '';
-        const targetName = desc.site_product || desc.product_name || '';
-        const idx = prev.findIndex(it => {
-          const candidateId = (it as any).product_id ?? it.id ?? null;
-          if (targetId != null && candidateId != null) return candidateId === targetId;
-          const itLang = it.site_lang_code ?? '';
-          const itName = it.site_product || it.product_name || '';
-          return itLang === targetLang && itName === targetName;
-        });
+        // 1) Перевага: стабільний UID рядка (копіюється при спреді)
+        const targetUid = (desc as any)[ROW_UID];
+        let idx = -1;
+        if (targetUid !== undefined) {
+          idx = prev.findIndex((it) => (it as any)[ROW_UID] === targetUid);
+        }
+        // 2) Фолбек: пошук за id або (lang+name)
+        if (idx === -1) {
+          const targetId = (desc as any).product_id ?? (desc as any).id ?? null;
+          const targetLang = (desc as any).site_lang_code ?? '';
+          const targetName = (desc as any).site_product || (desc as any).product_name || '';
+          idx = prev.findIndex(it => {
+            const candidateId = (it as any).product_id ?? (it as any).id ?? null;
+            if (targetId != null && candidateId != null) return candidateId === targetId;
+            const itLang = (it as any).site_lang_code ?? '';
+            const itName = (it as any).site_product || (it as any).product_name || '';
+            return itLang === targetLang && itName === targetName;
+          });
+        }
         if (idx === -1) return prev;
         const next = [...prev];
         next[idx] = { ...next[idx], [field]: v } as ContentDescription;
         return next;
       });
+      // Позначаємо рядок як змінений, щоб "Зберегти зміни" відправило його на бекенд
+      markRowGenerated(desc);
     };
 
-    // Під час редагування: закривати лише при кліку поза клітинкою (з комітом)
+    // Під час редагування: закривати при кліку поза клітинкою (з комітом),
+    // але НЕ закривати під час операцій генерації/перекладу/збереження.
+    // Також використовуємо подію 'click' замість 'mousedown', щоб onClick на кнопках
+    // встиг встановити стани (selectedGenerating/translating/...), і редактор не закрився.
     useEffect(() => {
       if (!editing) return;
-      const onDocMouseDown = (e: MouseEvent) => {
+      const onDocClick = (e: MouseEvent) => {
+        const operationInProgress = translating || selectedGenerating || massGenerating || saving;
+        if (operationInProgress) return;
         if (!wrapperRef.current) return;
         const target = e.target as Node;
-        if (!wrapperRef.current.contains(target)) {
+        const insideOverlay = overlayRef.current ? overlayRef.current.contains(target) : false;
+        if (!wrapperRef.current.contains(target) && !insideOverlay) {
           commitDraft();
           setEditing(false);
         }
       };
-      // Використовуємо фазу спливання, щоб подія всередині інпуту не закривала редактор завчасно
-      document.addEventListener('mousedown', onDocMouseDown, false);
-      return () => document.removeEventListener('mousedown', onDocMouseDown, false);
-    }, [editing, draft]);
+      document.addEventListener('click', onDocClick, false);
+      return () => document.removeEventListener('click', onDocClick, false);
+    }, [editing, draft, translating, selectedGenerating, massGenerating, saving]);
 
     // save/cancel більше не потрібні — редагування застосовується миттєво в onChange,
     // а Escape відновлює початкове значення
@@ -1089,86 +1630,60 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     }
 
     return (
-      <div ref={wrapperRef} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} className="w-full flex-1">
-        {long ? (
-          <textarea
-            ref={inputRef as any}
-            className="w-full h-20 text-xs leading-none bg-transparent border border-gray-300 dark:border-gray-600 rounded p-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={draft}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDraft(v);
-            }}
-            rows={2}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                const original = valueAtEditStartRef.current ?? '';
-                const field = mapSiteColumnToContentField[col];
-                setDescriptions(prev => {
-                  const targetId = (desc as any).product_id ?? desc.id ?? null;
-                  const targetLang = desc.site_lang_code ?? '';
-                  const targetName = desc.site_product || desc.product_name || '';
-                  const idx = prev.findIndex(it => {
-                    const candidateId = (it as any).product_id ?? it.id ?? null;
-                    if (targetId != null && candidateId != null) return candidateId === targetId;
-                    const itLang = it.site_lang_code ?? '';
-                    const itName = it.site_product || it.product_name || '';
-                    return itLang === targetLang && itName === targetName;
+      <>
+        {/* Якір усередині клітинки для вимірювання позиції */}
+        <div ref={wrapperRef} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} className="w-full flex-1" />
+        {/* Оверлей-редактор над таблицею */}
+        {overlayPos && createPortal(
+          <div ref={overlayRef} style={{ position: 'fixed', top: overlayPos.top, left: overlayPos.left, width: overlayPos.width, zIndex: 9999 }}>
+            <Textarea
+              ref={inputRef as any}
+              className="resize text-xs leading-tight bg-white dark:bg-neutral-900 border border-gray-300 dark:border-gray-600 rounded p-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[64px]"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                // Ctrl+Enter або Cmd+Enter — зберегти і закрити
+                if ((e.key === 'Enter') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitDraft(); setEditing(false); }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  const original = valueAtEditStartRef.current ?? '';
+                  const field = mapSiteColumnToContentField[col];
+                  setDescriptions(prev => {
+                    // 1) за стабільним UID
+                    const targetUid = (desc as any)[ROW_UID];
+                    let idx = -1;
+                    if (targetUid !== undefined) {
+                      idx = prev.findIndex((it) => (it as any)[ROW_UID] === targetUid);
+                    }
+                    // 2) фолбек за id або (lang+name)
+                    if (idx === -1) {
+                      const targetId = (desc as any).product_id ?? (desc as any).id ?? null;
+                      const targetLang = (desc as any).site_lang_code ?? '';
+                      const targetName = (desc as any).site_product || (desc as any).product_name || '';
+                      idx = prev.findIndex(it => {
+                        const candidateId = (it as any).product_id ?? (it as any).id ?? null;
+                        if (targetId != null && candidateId != null) return candidateId === targetId;
+                        const itLang = (it as any).site_lang_code ?? '';
+                        const itName = (it as any).site_product || (it as any).product_name || '';
+                        return itLang === targetLang && itName === targetName;
+                      });
+                    }
+                    if (idx === -1) return prev;
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], [field]: original } as ContentDescription;
+                    return next;
                   });
-                  if (idx === -1) return prev;
-                  const next = [...prev];
-                  next[idx] = { ...next[idx], [field]: original } as ContentDescription;
-                  return next;
-                });
-                setDraft(original);
-                setEditing(false);
-              }
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                commitDraft();
-                setEditing(false);
-              }
-            }}
-          />
-        ) : (
-          <Input
-            ref={inputRef as any}
-            className="w-full h-5 min-h-[2px] text-xs leading-none bg-transparent border border-gray-300 dark:border-gray-600 rounded p-0.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={draft}
-            onChange={(e) => {
-              const v = e.target.value;
-              setDraft(v);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitDraft(); setEditing(false); }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                const original = valueAtEditStartRef.current ?? '';
-                const field = mapSiteColumnToContentField[col];
-                setDescriptions(prev => {
-                  const targetId = (desc as any).product_id ?? desc.id ?? null;
-                  const targetLang = desc.site_lang_code ?? '';
-                  const targetName = desc.site_product || desc.product_name || '';
-                  const idx = prev.findIndex(it => {
-                    const candidateId = (it as any).product_id ?? it.id ?? null;
-                    if (targetId != null && candidateId != null) return candidateId === targetId;
-                    const itLang = it.site_lang_code ?? '';
-                    const itName = it.site_product || it.product_name || '';
-                    return itLang === targetLang && itName === targetName;
-                  });
-                  if (idx === -1) return prev;
-                  const next = [...prev];
-                  next[idx] = { ...next[idx], [field]: original } as ContentDescription;
-                  return next;
-                });
-                setDraft(original);
-                setEditing(false);
-              }
-            }}
-          />
+                  setDraft(original);
+                  setEditing(false);
+                }
+              }}
+              onBlur={() => { commitDraft(); setEditing(false); }}
+              rows={6}
+            />
+          </div>,
+          document.body
         )}
-      </div>
+      </>
     );
   };
   
@@ -1367,7 +1882,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
            
             
             {/* Кнопки та опції */}
-            <div className="flex flex-wrap items-center gap-2 justify-end">
+            <div className="flex flex-wrap items-center gap-2 justify-start">
               <Button
                 variant="outline"
                 onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
@@ -1457,7 +1972,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('product')} style={getColStyle('product')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Назва">Назва</span>
@@ -1483,7 +1998,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('shortname')} style={getColStyle('shortname')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Коротка">Коротка</span>
@@ -1509,7 +2024,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('short_description')} style={getColStyle('short_description')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Опис">Опис</span>
@@ -1535,7 +2050,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('full_description')} style={getColStyle('full_description')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Повний">Повний</span>
@@ -1561,7 +2076,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('promo_text')} style={getColStyle('promo_text')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Промо">Промо</span>
@@ -1587,7 +2102,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('meta_keywords')} style={getColStyle('meta_keywords')}>
                     <div className="flex flex-col gap-0.5 items-start justify-center h-full">
                       <div className="flex items-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Мета">Мета</span>
@@ -1613,7 +2128,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('meta_description')} style={getColStyle('meta_description')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Мета-опис">Мета-опис</span>
@@ -1639,7 +2154,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('searchwords')} style={getColStyle('searchwords')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Пошукові слова">Пошукові слова</span>
@@ -1665,7 +2180,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       )}
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl">
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl" resizable onResizeStart={onResizeStart('page_title')} style={getColStyle('page_title')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Заголовок">Заголовок</span>
@@ -1703,10 +2218,29 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                 ) : (
                   pagedDescriptions.map((desc, index) => {
                     const rowKey = getRowKey(desc, index);
+                    // У режимі перекладу: якщо користувач вручну перемкнув (chevron),
+                    // використовуємо це значення. Інакше — розкриваємо за станом чекбокса рядка.
+                    const manualExpand = expandedRowKeys[rowKey];
+                    const expanded = isTranslateMode && (
+                      manualExpand !== undefined ? manualExpand : (getRowCheckedState(rowKey) === true)
+                    );
                     return (
-                      <TableRow key={rowKey} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                      <Fragment key={rowKey}>
+                      <TableRow className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
                         <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
                           <div className="flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300">
+                            {isTranslateMode ? (
+                              <button
+                                type="button"
+                                className="h-4 w-4 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                                title={expanded ? 'Згорнути підрядки' : 'Розгорнути підрядки'}
+                                onClick={(e) => { e.stopPropagation(); toggleRowExpanded(rowKey); }}
+                              >
+                                {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                              </button>
+                            ) : (
+                              <span className="w-4" />
+                            )}
                             <span className="w-6 text-right text-gray-500">{(page - 1) * limit + index + 1}</span>
                             <Checkbox
                               aria-label="Вибрати весь рядок"
@@ -1717,7 +2251,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('product')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_product || desc.product_name || '')}`} title={desc.site_product || desc.product_name || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1737,7 +2271,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('shortname')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_shortname || '')}`}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1757,7 +2291,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('short_description')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_short_description || '')}`} title={desc.site_shortname || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1777,7 +2311,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('full_description')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_full_description || desc.description || '')}`} title={desc.site_full_description || desc.description || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1797,7 +2331,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('promo_text')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_promo_text || '')}`} title={desc.site_promo_text || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1817,7 +2351,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('meta_keywords')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_keywords || '')}`} title={desc.site_meta_keywords || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1837,7 +2371,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('meta_description')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_description || '')}`} title={desc.site_meta_description || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1857,7 +2391,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('searchwords')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_searchwords || '')}`} title={desc.site_searchwords || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1877,7 +2411,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]">
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('page_title')}>
                           <div className={`flex items-center gap-0.5 ${minWClass(desc.site_page_title || '')}`} title={desc.site_page_title || ''}>
                             {!isTranslateMode && (
                               <Checkbox
@@ -1898,6 +2432,130 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           </div>
                         </TableCell>
                       </TableRow>
+                      {expanded && (
+                        ['ua','en','ru'].map((lang) => {
+                          const variant = findLangVariant(desc, lang as 'ua'|'en'|'ru');
+                          const vKey = variant ? getRowKey(variant, 0) : `${rowKey}-variant-${lang}`;
+                          const label = lang.toUpperCase();
+                          const getValForCol = (col: SiteColumnName): string => {
+                            if (!variant) return '';
+                            const v = variant as ContentDescription;
+                            switch (col) {
+                              case 'product':
+                                return (v.site_product || v.product_name || '') as string;
+                              case 'shortname':
+                                return (v.site_shortname || '') as string;
+                              case 'short_description':
+                                return (v.site_short_description || '') as string;
+                              case 'full_description':
+                                return (v.site_full_description || v.description || '') as string;
+                              case 'promo_text':
+                                return (v.site_promo_text || '') as string;
+                              case 'meta_keywords':
+                                return (v.site_meta_keywords || '') as string;
+                              case 'meta_description':
+                                return (v.site_meta_description || '') as string;
+                              case 'searchwords':
+                                return (v.site_searchwords || '') as string;
+                              case 'page_title':
+                                return (v.site_page_title || '') as string;
+                              default:
+                                return '';
+                            }
+                          };
+                          return (
+                            <TableRow key={`${rowKey}-lang-${lang}`} className={`h-auto min-h-[2px] bg-white/70 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                              <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
+                                <div className="flex items-center justify-center">
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0.5">{label}</Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('product')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('product'))}`} title={getValForCol('product')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="product" value={getValForCol('product')} desc={variant} long={true} />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('shortname')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('shortname'))}`}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="shortname" value={getValForCol('shortname')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('short_description')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('short_description'))}`} title={getValForCol('short_description')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="short_description" value={getValForCol('short_description')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('full_description')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('full_description'))}`} title={getValForCol('full_description')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="full_description" value={getValForCol('full_description')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('promo_text')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('promo_text'))}`} title={getValForCol('promo_text')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="promo_text" value={getValForCol('promo_text')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('meta_keywords')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('meta_keywords'))}`} title={getValForCol('meta_keywords')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="meta_keywords" value={getValForCol('meta_keywords')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('meta_description')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('meta_description'))}`} title={getValForCol('meta_description')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="meta_description" value={getValForCol('meta_description')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('searchwords')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('searchwords'))}`} title={getValForCol('searchwords')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="searchwords" value={getValForCol('searchwords')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('page_title')}>
+                                <div className={`flex items-center gap-0.5 ${minWClass(getValForCol('page_title'))}`} title={getValForCol('page_title')}>
+                                  {variant ? (
+                                    <EditableTextCell rowKey={vKey} col="page_title" value={getValForCol('page_title')} desc={variant} long />
+                                  ) : (
+                                    <div className="truncate text-gray-400">-</div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                      </Fragment>
                     );
                   })
                 )}
@@ -1906,7 +2564,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
               </div>
             </div>
             {/* Нижня панель дій (дублікат верхньої) */}
-            <div className="flex flex-wrap items-center gap-2 justify-end px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex flex-wrap items-center gap-2 justify-start px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <Button
                 variant="outline"
                 onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
