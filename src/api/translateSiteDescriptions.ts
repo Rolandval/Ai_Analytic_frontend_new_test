@@ -17,6 +17,7 @@ export type TranslateDescriptionItem = {
 export type TranslateSiteDescriptionsRequest = {
   lang_code: 'ua' | 'en' | 'ru' | string;
   descriptions: TranslateDescriptionItem[];
+  engine?: 'ai' | 'free' | string;
 };
 
 export type TranslateSiteDescriptionsResponse = {

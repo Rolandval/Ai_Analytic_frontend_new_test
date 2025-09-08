@@ -1,6 +1,8 @@
 import type React from 'react';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { History, Trash2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,6 +21,7 @@ import {
   fetchColumnPrompts,
   createSiteContentPrompt,
   activateSiteContentPrompt,
+  deleteSiteContentPrompt,
   mapProductFieldKeyToSiteColumnName,
   type SiteColumnName,
   type SiteContentPrompt,
@@ -63,6 +66,10 @@ export default function AIProductFillerTemplates() {
   const [originalPrompts, setOriginalPrompts] = useState<
     Partial<Record<SiteColumnName, Record<number, { name: string; prompt: string }>>>
   >({});
+  // Діалог історії промптів
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyColumn, setHistoryColumn] = useState<SiteColumnName | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   // Перемикачі: увімкнена/вимкнена генерація по кожній колонці (для продуктів) для поточної мови
   type EnabledMap = Partial<Record<SiteColumnName, boolean>>;
   const ENABLED_STORAGE_KEY = 'ai_pf_enabled_columns_v1';
@@ -123,6 +130,41 @@ export default function AIProductFillerTemplates() {
       notifyPromptsChanged(column);
     } catch (e) {
       console.error('Не вдалося активувати підказку', e);
+    }
+  };
+
+  const deletePrompt = async (column: SiteColumnName, id: number) => {
+    if (!window.confirm('Видалити цей промпт? Дію неможливо скасувати.')) return;
+    // Перевіряємо, чи був він активним до видалення
+    const prevList = prompts[column] ?? [];
+    const wasActive = !!prevList.find((p) => p.id === id)?.is_active;
+    setDeletingId(id);
+    try {
+      const ok = await deleteSiteContentPrompt(id);
+      if (ok) {
+        let list = await fetchColumnPrompts(column, lang);
+        // Якщо видаляли активний — активуємо "попередню" версію
+        if (wasActive && list.length > 0) {
+          // шукаємо найбільший id, що менший за видалений; якщо немає — просто максимальний id
+          const less = list.filter((x) => x.id < id);
+          let toActivate = less.length > 0 ? less.reduce((a, b) => (a.id > b.id ? a : b)) : list.reduce((a, b) => (a.id > b.id ? a : b));
+          if (toActivate && !toActivate.is_active) {
+            await activateSiteContentPrompt(toActivate.id);
+            list = await fetchColumnPrompts(column, lang);
+          }
+        }
+        setPrompts(prev => ({ ...prev, [column]: list }));
+        const orig = list.reduce((acc, it) => {
+          acc[it.id] = { name: it.name, prompt: it.prompt };
+          return acc;
+        }, {} as Record<number, { name: string; prompt: string }>);
+        setOriginalPrompts(prev => ({ ...prev, [column]: orig }));
+        notifyPromptsChanged(column);
+      }
+    } catch (e) {
+      console.error('Не вдалося видалити підказку', e);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -191,12 +233,21 @@ export default function AIProductFillerTemplates() {
   const createPrompt = async (column: SiteColumnName, name: string, prompt: string) => {
     setCreatingColumn(column);
     try {
-      const payload = { name, prompt, site_column_name: column, lang_code: lang, is_active: false } as const;
+      const payload = { name, prompt, site_column_name: column, lang_code: lang, is_active: true } as const;
       console.log('[CreateSiteContentPrompt] Payload:', payload);
-      await createSiteContentPrompt(payload);
-      // After create, reload this column to get real ID from backend
-      const list = await fetchColumnPrompts(column, lang);
+      const created = await createSiteContentPrompt(payload);
+      // Reload the column list to capture the new item (and its real id)
+      let list = await fetchColumnPrompts(column, lang);
       console.log('[CreateSiteContentPrompt] Reloaded column list:', column, list);
+      // Try to find created item in the list
+      let target = list.find(it => it.id === created?.id);
+      if (!target) target = list.find(it => it.prompt === prompt && it.name === name);
+      if (!target) target = list.find(it => it.prompt === prompt);
+      // If target exists and is not active, explicitly activate it (backend should deactivate previous active)
+      if (target && !target.is_active) {
+        await activateSiteContentPrompt(target.id);
+        list = await fetchColumnPrompts(column, lang);
+      }
       setPrompts(prev => ({ ...prev, [column]: list }));
       const orig = list.reduce((acc, it) => {
         acc[it.id] = { name: it.name, prompt: it.prompt };
@@ -218,6 +269,16 @@ export default function AIProductFillerTemplates() {
   const vars = useMemo(() => (entity === 'product' ? PRODUCT_VARIABLES : CATEGORY_VARIABLES), [entity]);
   const fields = useMemo(() => (entity === 'product' ? PRODUCT_FIELDS : CATEGORY_FIELDS), [entity]);
   // left labels removed with Saved prompts UI
+
+  // Мапа колонки у читабельну назву поля (для заголовка діалогу)
+  const columnToFieldLabel = useMemo(() => {
+    const map = new Map<SiteColumnName, string>();
+    PRODUCT_FIELDS.forEach((f) => {
+      const col = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+      if (col) map.set(col, f.label);
+    });
+    return map;
+  }, []);
 
   const handlePromptChange = (
     column: SiteColumnName,
@@ -245,9 +306,9 @@ export default function AIProductFillerTemplates() {
       const column = mapProductFieldKeyToSiteColumnName(key as keyof ProductTemplates);
       if (column) {
         const list = prompts[column] ?? [];
-        const first = list[0];
-        if (first) {
-          handlePromptChange(column, first.id, { prompt: value });
+        const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+        if (active) {
+          handlePromptChange(column, active.id, { prompt: value });
           return;
         }
       }
@@ -268,15 +329,13 @@ export default function AIProductFillerTemplates() {
           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
           if (!column) return;
           const list = prompts[column] ?? [];
-          const first = list[0] as SiteContentPrompt | undefined;
+          const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
           // Determine current prompt text exactly as textarea shows
-          const currentPrompt = first
-            ? first.prompt
-            : ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? '');
-          const currentName = first ? first.name : column;
+          const currentPrompt = (active?.prompt ?? ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? ''));
+          const currentName = active ? active.name : column;
 
-          if (first) {
-            if (isDirty(column, first)) {
+          if (active) {
+            if (isDirty(column, active)) {
               tasks.push(createPrompt(column, currentName, currentPrompt));
             }
           } else {
@@ -406,7 +465,28 @@ export default function AIProductFillerTemplates() {
                 {fields.map(f => (
                   <div key={f.key} id={`field-${f.key}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <a href={`#field-${f.key}`} className="text-green-700 hover:underline">{f.label}</a>
+                      <div className="flex items-center gap-2">
+                        <a href={`#field-${f.key}`} className="text-green-700 hover:underline">{f.label}</a>
+                        {entity === 'product' && (() => {
+                          const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                          if (!column) return null;
+                          const list = prompts[column] ?? [];
+                          return (
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:border-neutral-700 dark:hover:bg-neutral-800/70"
+                              onClick={() => {
+                                setHistoryColumn(column);
+                                setHistoryOpen(true);
+                              }}
+                              title={`Переглянути історію збережених промптів${list.length ? ` (${list.length})` : ''}`}
+                              aria-label={`Історія${list.length ? ` (${list.length})` : ''}`}
+                            >
+                              <History className="h-4 w-4" />
+                            </button>
+                          );
+                        })()}
+                      </div>
                       <div className="flex items-center gap-3">
                         <div className="hidden md:flex gap-2 text-xs text-muted-foreground">
                           <span className={lang === 'ua' ? 'font-semibold' : ''}>UA</span>
@@ -442,8 +522,8 @@ export default function AIProductFillerTemplates() {
                             const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                             if (column) {
                               const list = prompts[column] ?? [];
-                              const first = list[0] as SiteContentPrompt | undefined;
-                              if (first) return first.prompt;
+                              const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+                              if (active) return active.prompt;
                             }
                             return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
                           } else {
@@ -460,8 +540,8 @@ export default function AIProductFillerTemplates() {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                           if (column) {
                             const list = prompts[column] ?? [];
-                            const first = list[0];
-                            if (first) return first.prompt.length;
+                            const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+                            if (active) return active.prompt.length;
                           }
                           return (productTpl?.[f.key as keyof ProductTemplates] ?? '').length;
                         }
@@ -473,14 +553,14 @@ export default function AIProductFillerTemplates() {
                           if (entity !== 'product') return null;
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                           if (!column) return null;
-                          const first = (prompts[column] ?? [])[0] as SiteContentPrompt | undefined;
+                          const active = (prompts[column] ?? []).find((it) => !!it.is_active) || (prompts[column] ?? [])[0];
                           // Current textarea value for this field
                           const currentPrompt = (() => {
-                            if (first) return first.prompt;
+                            if (active) return active.prompt;
                             return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
                           })();
                           const loading = creatingColumn === column;
-                          return first ? (
+                          return active ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -516,41 +596,7 @@ export default function AIProductFillerTemplates() {
                         })()}
                       </div>
                     </div>
-                    {/* Список збережених промптів цієї колонки */}
-                    {entity === 'product' && (() => {
-                      const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
-                      if (!column) return null;
-                      const list = prompts[column] ?? [];
-                      return (
-                        <div className="mt-2 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-2">
-                          <div className="text-xs font-medium mb-1">Збережені промпти ({list.length})</div>
-                          <div className="space-y-1 max-h-40 overflow-auto">
-                            {list.length === 0 && (
-                              <div className="text-xs text-neutral-500">Немає промптів</div>
-                            )}
-                            {list.map((p) => (
-                              <div key={p.id} className="flex items-center gap-2 text-xs">
-                                {p.is_active && (
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">active</span>
-                                )}
-                                <span className="truncate" title={p.name || p.prompt}>{p.name || `${column} #${p.id}`}</span>
-                                <span className="text-neutral-400">—</span>
-                                <span className="truncate" title={p.prompt}>{p.prompt.slice(0, 80)}</span>
-                                <button
-                                  type="button"
-                                  className="ml-auto text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-800 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30 disabled:opacity-50"
-                                  onClick={() => activatePrompt(column, p.id)}
-                                  disabled={!!p.is_active}
-                                  title={p.is_active ? 'Вже активний' : 'Зробити активним'}
-                                >
-                                  Активувати
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    {/* ІСТОРІЮ перенесено у попап (кнопка "Історія" у хедері поля) */}
                   </div>
                 ))}
               </div>
@@ -564,6 +610,71 @@ export default function AIProductFillerTemplates() {
         </div>
       </div>
       </div>
+
+      {/* ДІАЛОГ: Історія збережених промптів */}
+      <Dialog
+        open={historyOpen}
+        onOpenChange={(o) => {
+          setHistoryOpen(o);
+          if (!o) setHistoryColumn(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Історія промптів — {historyColumn ? (columnToFieldLabel.get(historyColumn) ?? historyColumn) : ''} ({lang.toUpperCase()})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-auto">
+            {(() => {
+              const list = historyColumn ? (prompts[historyColumn] ?? []) : [];
+              if (!list.length) {
+                return <div className="text-sm text-neutral-500">Немає збережених промптів</div>;
+              }
+              return (
+                <div className="space-y-2">
+                  {list.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2 text-sm">
+                      {p.is_active && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">active</span>
+                      )}
+                      <span className="truncate" title={p.name || p.prompt}>{p.name || `${historyColumn} #${p.id}`}</span>
+                      <span className="text-neutral-400">—</span>
+                      <span className="truncate" title={p.prompt}>{p.prompt.slice(0, 120)}</span>
+                      <div className="ml-auto flex items-center gap-2">
+                        {historyColumn && (
+                          <>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-800 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                              onClick={() => activatePrompt(historyColumn, p.id)}
+                              disabled={!!p.is_active || deletingId === p.id}
+                              title={p.is_active ? 'Вже активний' : 'Зробити активним'}
+                            >
+                              Активувати
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-red-300 text-red-700 hover:bg-red-50 dark:text-red-300 dark:border-red-600 dark:hover:bg-red-900/20 disabled:opacity-50"
+                              onClick={() => historyColumn && deletePrompt(historyColumn, p.id)}
+                              disabled={deletingId === p.id}
+                              title="Видалити промпт"
+                              aria-label="Видалити промпт"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       </AIProductFillerLayout>
     );
   }

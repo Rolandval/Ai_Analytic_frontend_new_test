@@ -253,3 +253,15 @@ export const activateSiteContentPrompt = async (id: number): Promise<boolean> =>
     return false;
   }
 };
+
+// Delete a prompt by id
+export const deleteSiteContentPrompt = async (id: number): Promise<boolean> => {
+  try {
+    const res = await apiClient.delete(`/content/delete_site_content_prompt/${id}`);
+    return !!res;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[deleteSiteContentPrompt] failed', e);
+    return false;
+  }
+};
