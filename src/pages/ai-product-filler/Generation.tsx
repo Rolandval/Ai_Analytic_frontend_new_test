@@ -691,36 +691,28 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
           if (typeof product_id !== 'number') return; // пропускаємо без product_id
           // Визначаємо джерельний рядок для Free режиму (sourceLang)
           const srcDesc = (translationEngine === 'free') ? (getVariantForRow(desc, sourceLang) ?? desc) : desc;
-          const item: TranslateDescriptionItem = {
-            product_id,
-            lang_code: lang,
-            // Базові поля ініціалізуємо null — бек має оновити лише надіслані значення
-            site_product: null,
-            site_shortname: null,
-            site_short_description: null,
-            site_full_description: null,
-            site_meta_keywords: null,
-            site_meta_description: null,
-            site_searchwords: null,
-            site_page_title: null,
-            site_promo_text: null,
-          };
+          // Формуємо item лише з НЕпорожніми полями; бек може відхиляти повністю порожні значення
+          const base: TranslateDescriptionItem = { product_id, lang_code: lang } as TranslateDescriptionItem;
+          let nonEmptyCount = 0;
           selectedCols.forEach(col => {
             const field = mapSiteColumnToContentField[col];
             const current = (srcDesc as any)[field] as string | null | undefined;
+            let value: string | null = null;
             if (field === 'site_promo_text' && (!current || String(current).trim() === '')) {
-              // Якщо promo_text порожній — ставимо дефолт для цільової мови
-              (item as any)[field] = getDefaultPromoText(lang);
+              value = getDefaultPromoText(lang);
             } else {
-              (item as any)[field] = current ?? '';
+              const s = (current ?? '').toString().trim();
+              value = s.length > 0 ? s : null;
+            }
+            if (value != null) {
+              (base as any)[field] = value;
+              nonEmptyCount++;
             }
           });
-          // Додаємо назву продукту для контексту перекладу, навіть якщо її не вибрано
-          if (!selectedCols.includes('product')) {
-            const baseName = (srcDesc as any).site_product || (srcDesc as any).product_name || '';
-            if (baseName) item.site_product = baseName;
-          }
-          items.push(item);
+          // ВАЖЛИВО: не додаємо site_product, якщо колонку product НЕ вибрано,
+          // інакше бек може сприйняти це як інструкцію перекладати назву.
+          // Якщо немає жодного непорожнього вибраного поля — пропускаємо цей item (інакше можливий 422)
+          if (nonEmptyCount > 0) items.push(base);
         });
         return items;
       };
