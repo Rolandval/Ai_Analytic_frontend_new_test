@@ -13,7 +13,7 @@ import { fetchAllColumnPrompts, fetchColumnPrompts, type SiteColumnName, type Si
 import { getTemplates } from '@/api/productFillerMock';
 import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
 import { generateAiDescription } from '@/api/generateAiDescription';
-import { translateSiteDescriptions, type TranslateDescriptionItem } from '@/api/translateSiteDescriptions';
+import { aiTranslateSiteDescriptions, translateSiteDescriptionsFree, type TranslateDescriptionItem } from '@/api/translateSiteDescriptions';
 import { chatApi } from '@/api/chatApi';
 import { updateSiteDescriptions } from '@/api/updateSiteDescriptions';
 import { toast } from '@/hooks/use-toast';
@@ -620,6 +620,16 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     page_title: 'site_page_title',
   };
 
+  // Зворотна мапа: content field -> назва колонки (SiteColumnName)
+  const mapContentFieldToSiteColumn: Record<string, SiteColumnName> = useMemo(() => {
+    const out: Record<string, SiteColumnName> = {} as any;
+    (Object.keys(mapSiteColumnToContentField) as SiteColumnName[]).forEach((col) => {
+      const field = mapSiteColumnToContentField[col] as string;
+      out[field] = col;
+    });
+    return out;
+  }, []);
+
   // Базові сталі ширини колонок (px): фіксовані для незалежного ресайзу
   const DEFAULT_COL_WIDTHS: Record<SiteColumnName, number> = {
     product: 280,
@@ -717,14 +727,46 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         return items;
       };
 
-      const langs: Array<'ua' | 'en' | 'ru'> = (translationEngine === 'free') ? [targetLang] : ['ru', 'en'];
+      // Перекладаємо тільки обрану цільову мову. Для AI — відправляємо model_name, для Free — top-level lang_code
+      const langs: Array<'ua' | 'en' | 'ru'> = [targetLang];
       for (const lang of langs) {
+        // Карта вибраних колонок для кожного продукту на поточній сторінці
+        const selectedByPid: Record<number, Set<SiteColumnName>> = {} as any;
+        const cols = SITE_COLUMNS as SiteColumnName[];
+        pagedDescriptions.forEach((desc, idx) => {
+          const rowKey = getRowKey(desc, idx);
+          const pid = (desc as any).product_id as number | undefined;
+          if (typeof pid !== 'number') return;
+          cols.forEach((col) => {
+            if (selectedCells[`${rowKey}:${col}`]) {
+              if (!selectedByPid[pid]) selectedByPid[pid] = new Set();
+              selectedByPid[pid].add(col);
+            }
+          });
+        });
         const payloadItems = buildPayloadForLang(lang);
         if (payloadItems.length === 0) {
           setTranslateProgress(prev => prev ? `${prev} | ${lang}: 0/0` : `${lang}: 0/0`);
           continue;
         }
-        const res = await translateSiteDescriptions({ lang_code: lang, descriptions: payloadItems, engine: translationEngine });
+        // Нормалізуємо під схему: усі поля як рядки; ДЛЯ НЕВИБРАНИХ ПОЛІВ — ПУСТИЙ РЯДОК,
+        // щоб бекенд їх проігнорував і не перекладав. Це гарантує переклад лише вибраної клітинки.
+        const normalized = payloadItems.map((it) => ({
+          lang_code: (it as any).lang_code ?? lang,
+          product_id: (it as any).product_id as number,
+          site_product: String((it as any).site_product ?? ''),
+          site_shortname: String((it as any).site_shortname ?? ''),
+          site_short_description: String((it as any).site_short_description ?? ''),
+          site_full_description: String((it as any).site_full_description ?? ''),
+          site_meta_keywords: String((it as any).site_meta_keywords ?? ''),
+          site_meta_description: String((it as any).site_meta_description ?? ''),
+          site_searchwords: String((it as any).site_searchwords ?? ''),
+          site_page_title: String((it as any).site_page_title ?? ''),
+          site_promo_text: String((it as any).site_promo_text ?? ''),
+        }));
+        const res = (translationEngine === 'ai')
+          ? await aiTranslateSiteDescriptions({ model_name: selectedChatModel || 'GPT-4o-mini', descriptions: normalized })
+          : await translateSiteDescriptionsFree({ lang_code: lang, descriptions: normalized });
         const list: any[] = Array.isArray(res)
           ? res
           : (Array.isArray((res as any)?.translations)
@@ -740,6 +782,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         list.forEach((it) => {
           const pid = (it as any).product_id;
           if (typeof pid !== 'number') return;
+          const allowed = selectedByPid[pid] ?? new Set<SiteColumnName>();
           setDescriptions(prev => {
             const respLang = ((it as any).site_lang_code ?? (it as any).lang_code ?? lang) as string | undefined;
             const findByLang = (arr: typeof prev) => {
@@ -750,19 +793,30 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
             };
             const idx = findByLang(prev);
             if (idx === -1) {
-              // Якщо рядка для цієї мови ще немає — додаємо новий (upsert)
+              // Якщо рядка для цієї мови ще немає — додаємо новий (upsert) ТІЛЬКИ якщо є хоч одне непорожнє поле
               const newEntry: any = { product_id: pid, site_lang_code: respLang };
+              let hasAny = false;
               (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
                 .forEach((k) => {
-                  if ((it as any)[k] != null) newEntry[k] = (it as any)[k];
+                  const col = mapContentFieldToSiteColumn[k] as SiteColumnName | undefined;
+                  if (!col || !allowed.has(col)) return;
+                  const v = (it as any)[k];
+                  if (typeof v === 'string' && v.trim().length > 0) {
+                    newEntry[k] = v;
+                    hasAny = true;
+                  }
                 });
-              return [...prev, newEntry] as any;
+              if (hasAny) return [...prev, newEntry] as any;
+              return prev;
             }
             const next = [...prev];
             const curr = { ...next[idx] } as any;
             (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
               .forEach((k) => {
-                if (it[k] != null) curr[k] = it[k];
+                const col = mapContentFieldToSiteColumn[k] as SiteColumnName | undefined;
+                if (!col || !allowed.has(col)) return;
+                const v = (it as any)[k];
+                if (typeof v === 'string' && v.trim().length > 0) curr[k] = v;
               });
             next[idx] = curr;
             return next as any;
@@ -774,8 +828,10 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
           const descKey: any = { product_id: pid, site_lang_code: respLang };
           (['site_product','site_shortname','site_short_description','site_full_description','site_meta_keywords','site_meta_description','site_searchwords','site_page_title','site_promo_text'] as const)
             .forEach((k) => {
+              const col = mapContentFieldToSiteColumn[k] as SiteColumnName | undefined;
+              if (!col || !allowed.has(col)) return;
               const v = (it as any)[k];
-              if (v != null) saveUnsavedField(descKey, k as any, v);
+              if (typeof v === 'string' && v.trim().length > 0) saveUnsavedField(descKey as any, k as any, v);
             });
           done++;
         });
@@ -2760,7 +2816,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                         </TableCell>
                       </TableRow>
                       {expanded && (
-                        (translationEngine === 'free' ? [targetLang] : ['en','ru']).map((lang) => {
+                        ([targetLang] as Array<'ua'|'en'|'ru'>).map((lang) => {
                           const variant = findLangVariant(desc, lang as 'ua'|'en'|'ru');
                           if (!variant) return null;
                           // Показуємо лише ті мови, де переклад готовий: для EN — латинка без кирилиці; для RU/UA — кирилиця
