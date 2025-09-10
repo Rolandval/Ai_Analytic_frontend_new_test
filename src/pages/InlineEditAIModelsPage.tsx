@@ -186,12 +186,8 @@ export const AIModelsPage = () => {
       toast({
         title: "Успіх",
         description: "Модель створено успішно",
-      });
-      
-      // Оновити список
-      fetchModels();
-      
-      // Очистити новий рядок
+      }); 
+      fetchModels(); 
       setNewRow(null);
     } catch (err: any) {
       toast({

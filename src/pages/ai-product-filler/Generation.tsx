@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover
 import { useLocation } from 'react-router-dom';
 import bgImage from './img/photo_2025-09-02_23-21-26.jpg';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
+import { useTheme } from '@/hooks/useTheme';
 
 interface ContentDescription {
   id?: number;
@@ -65,6 +66,7 @@ interface CustomFilter {
 
 export default function AIProductFillerGeneration({ title = 'AI генерація', mode = 'generation' }: { title?: string; mode?: 'generation' | 'translation' }) {
   const location = useLocation();
+  const { isDarkMode } = useTheme();
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
@@ -1924,15 +1926,19 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   return (
     <AIProductFillerLayout>
     <div
-      className="relative min-h-[calc(100vh-64px)] overflow-hidden"
-      style={{
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }}
+      className="relative min-h-[calc(100vh-64px)] overflow-hidden bg-white dark:bg-neutral-900"
+      style={
+        (isDarkMode ? undefined : ({
+          backgroundImage: `url(${bgImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        } as CSSProperties))
+      }
     >
-      <div className="absolute inset-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-[1.5px] pointer-events-none" />
+      {!isDarkMode && (
+        <div className="absolute inset-0 bg-white/70 backdrop-blur-[1.5px] pointer-events-none" />
+      )}
       <div className="relative z-10 w-full px-0 py-0 overflow-x-hidden">
       {/* Header */}
       <div className="mb-6">
@@ -2257,8 +2263,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
       )}*/}
 
       {/* Table */}
-      <div className="p-8 rounded-2xl m-5 bg-white/95 shadow-xl ring-1 ring-black/5">
-      <div className="bg-white/95   dark:bg-slate-800/90 rounded-2xl shadow-xl ring-1 ring-black/5 overflow-x-hidden backdrop-blur-sm">
+      <div className="p-8 rounded-2xl m-5 bg-white/95 dark:bg-transparent shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+      <div className="bg-white/95   dark:bg-slate-800/90 rounded-2xl shadow-xl ring-1 ring-black/5 dark:ring-white/10 overflow-x-hidden backdrop-blur-sm">
         {loading ? (
           <div className="flex justify-center items-center p-8">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -2285,9 +2291,10 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                         aria-label="Вибрати всі колонки на сторінці"
                         checked={getMasterCheckedState()}
                         onCheckedChange={(checked) => onMasterCheckedChange(checked)}
-                        className="h-4 w-4"
+                        size="md"
+                        className="dark:bg-neutral-800/70 hover:shadow-md"
                         disabled={massGenerating || translating}
-                      />
+                      />z
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('product')} style={getColStyle('product')}>
@@ -2308,7 +2315,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Назва"
                           checked={getColumnCheckedState('product')}
                           onCheckedChange={(checked) => onColumnCheckedChange('product', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2332,7 +2340,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Коротка"
                           checked={getColumnCheckedState('shortname')}
                           onCheckedChange={(checked) => onColumnCheckedChange('shortname', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2356,7 +2365,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Опис"
                           checked={getColumnCheckedState('short_description')}
                           onCheckedChange={(checked) => onColumnCheckedChange('short_description', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2380,7 +2390,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Повний"
                           checked={getColumnCheckedState('full_description')}
                           onCheckedChange={(checked) => onColumnCheckedChange('full_description', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2404,7 +2415,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Промо"
                           checked={getColumnCheckedState('promo_text')}
                           onCheckedChange={(checked) => onColumnCheckedChange('promo_text', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2428,7 +2440,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Мета"
                           checked={getColumnCheckedState('meta_keywords')}
                           onCheckedChange={(checked) => onColumnCheckedChange('meta_keywords', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2452,7 +2465,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Мета-опис"
                           checked={getColumnCheckedState('meta_description')}
                           onCheckedChange={(checked) => onColumnCheckedChange('meta_description', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2476,7 +2490,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Пошукові слова"
                           checked={getColumnCheckedState('searchwords')}
                           onCheckedChange={(checked) => onColumnCheckedChange('searchwords', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2500,7 +2515,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                           aria-label="Вибрати колонку Заголовок"
                           checked={getColumnCheckedState('page_title')}
                           onCheckedChange={(checked) => onColumnCheckedChange('page_title', checked)}
-                          className="h-4 w-4"
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
                         />
                       </div>
@@ -2526,7 +2542,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                     );
                     return (
                       <Fragment key={rowKey}>
-                      <TableRow className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                      <TableRow className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
                         <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
                           <div className="flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300">
                             {isTranslateMode ? (
@@ -2547,7 +2563,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={getRowCheckedState(rowKey)}
                               onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-4 w-4"
+                              size="md"
+                              className="dark:bg-neutral-800/70"
                             />
                           </div>
                         </TableCell>
@@ -2558,7 +2575,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'product')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'product', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2579,7 +2597,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'shortname')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'shortname', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2600,7 +2619,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'short_description')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'short_description', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2621,7 +2641,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'full_description')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'full_description', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2642,7 +2663,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'promo_text')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'promo_text', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2663,7 +2685,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'meta_keywords')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_keywords', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2684,7 +2707,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'meta_description')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'meta_description', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2705,7 +2729,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'searchwords')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'searchwords', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2726,7 +2751,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                               checked={isCellChecked(rowKey, 'page_title')}
                               onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'page_title', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-3 w-3"
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
                             />
                             <EditableTextCell
                               rowKey={rowKey}
@@ -2777,7 +2803,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                             }
                           };
                           return (
-                            <TableRow key={`${rowKey}-lang-${lang}`} className={`h-auto min-h-[2px] bg-white/70 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                            <TableRow key={`${rowKey}-lang-${lang}`} className={`h-auto min-h-[2px] bg-white/70 dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
                               <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
                                 <div className="flex items-center justify-center">
                                   <Badge variant="secondary" className="text-[10px] px-1 py-0.5">{label}</Badge>

@@ -61,15 +61,17 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="relative group">
+    <div ref={setNodeRef} style={style} className="relative group pl-6 w-full min-w-0">
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
-      {children}
+      <div className="w-full min-w-0">
+        {children}
+      </div>
     </div>
   );
 };
@@ -196,7 +198,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     actions: (
-      <div className="flex flex-col gap-1 h-[60px]">
+      <div className="flex  flex-col gap-1 h-[60px]">
         <label className="text-[12px] font-medium text-slate-600">Дії</label>
         <div className="flex items-end gap-1 h-[60px]">
           <Button
@@ -278,6 +280,9 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             showSelectAll={true}
             selectAllLabel="Вибрати всіх постачальників"
             clearLabel="Скинути"
+            enablePagination
+            pageSize={100}
+            showPageSizeSelector
           />
         </div>
       </div>
@@ -551,7 +556,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   };
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-full w-auto mx-auto flex flex-col gap-4">
       {/* Top search and active filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {/* Name search input */}
@@ -767,7 +772,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       </div>
 
       {/* Mobile filter toggle */}
-      <div className="flex items-center justify-between md:hidden p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+      <div className="flex items-center justify-between  md:hidden p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
         <div className="flex items-center gap-2">
           <Filter size={18} className="text-gray-500" />
           <span className="text-sm font-medium">Параметри фільтрації</span>
@@ -788,10 +793,15 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          <div className={cn(
-            "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pl-6",
-            isExpanded ? "grid" : "hidden md:grid"
-          )}>
+          <div
+            className={cn(
+              // Always fill full width and auto-wrap, prevent overlap
+              "grid w-full gap-3 sm:gap-5 transition-all duration-200",
+              "[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] [grid-auto-rows:minmax(60px,auto)]",
+              // Respect mobile toggle: hidden until expanded on mobile, visible on md+
+              isExpanded ? "grid" : "hidden md:grid"
+            )}
+          >
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}

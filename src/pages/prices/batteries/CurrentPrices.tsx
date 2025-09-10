@@ -130,6 +130,7 @@ export default function BatteryCurrentPricesPage() {
       currencySymbol="₴"
       columns={createColumns(hook.filters.markup || markup)}
       hook={hook as any}
+      compact
       chartConfig={{
         getChart: hook.getChart,
         suppliers: (hook as any).supplierOptions ?? [],

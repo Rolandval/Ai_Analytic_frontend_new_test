@@ -116,7 +116,7 @@ const SUPPLIERS_URL = `${API_BASE_URL}/suppliers`;
 // New endpoint returning full supplier detail (array)
 const SUPPLIERS_DETAIL_URL = `${API_BASE_URL}/suppliers/detail`;
 
-export const getBatterySuppliers = async ({ page = 1, page_size = 1000 }: { page?: number; page_size?: number } = {}) => {
+export const getBatterySuppliers = async ({ page = 1, page_size = 100, search = '' }: { page?: number; page_size?: number; search?: string } = {}) => {
   const res = await api.get(SUPPLIERS_DETAIL_URL);
   const list: Supplier[] = (res.data || []).map((item: any) => ({
     id: item.supplier_id ?? item.id,
@@ -131,10 +131,12 @@ export const getBatterySuppliers = async ({ page = 1, page_size = 1000 }: { page
     phone: Array.isArray(item.phone_numbers) ? item.phone_numbers[0] : undefined,
   }));
 
+  const q = (search || '').toLowerCase().trim();
+  const filtered = q ? list.filter(s => (s.name || '').toLowerCase().includes(q)) : list;
   const start = (page - 1) * page_size;
-  const paginated = list.slice(start, start + page_size);
+  const paginated = filtered.slice(start, start + page_size);
   return {
-    count: list.length,
+    count: filtered.length,
     next: null,
     previous: null,
     results: paginated,

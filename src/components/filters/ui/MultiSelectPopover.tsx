@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,12 @@ export interface MultiSelectPopoverProps {
   selectAllLabel?: string;
   /** Custom label for the clear button */
   clearLabel?: string;
+  /** Enable client-side pagination for long lists (e.g., suppliers). Default: false */
+  enablePagination?: boolean;
+  /** Page size for pagination. Default: 100 */
+  pageSize?: number;
+  /** Show a small selector to change page size (10/50/100). Default: false */
+  showPageSizeSelector?: boolean;
 }
 
 /**
@@ -36,9 +42,14 @@ export function MultiSelectPopover({
   showSelectAll = false,
   selectAllLabel = 'Вибрати всі',
   clearLabel = 'Скинути',
+  enablePagination = false,
+  pageSize = 100,
+  showPageSizeSelector = false,
 }: MultiSelectPopoverProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [localPageSize, setLocalPageSize] = useState(pageSize);
   const selected = values ?? [];
   const label = (v: Option) => (getLabel ? getLabel(v) : v);
 
@@ -47,6 +58,24 @@ export function MultiSelectPopover({
     () => options.filter(o => o.toLowerCase().includes(search.toLowerCase())),
     [options, search]
   );
+
+  // Reset page when search, options or open state changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, options, open]);
+
+  const effectivePageSize = showPageSizeSelector ? localPageSize : pageSize;
+  const total = filtered.length;
+  const totalPages = enablePagination ? Math.max(1, Math.ceil(total / effectivePageSize)) : 1;
+  const currentPage = Math.min(page, totalPages);
+  const paged = enablePagination
+    ? filtered.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize)
+    : filtered;
+
+  // Sync local page size when prop changes (e.g., parent re-render) or when popover opens
+  useEffect(() => {
+    setLocalPageSize(pageSize);
+  }, [pageSize, open, options]);
 
   const toggle = (value: Option) => {
     const exists = selected.includes(value);
@@ -110,7 +139,7 @@ export function MultiSelectPopover({
             <div className="py-2 px-3 text-sm text-muted-foreground">Не знайдено</div>
           )}
 
-          {filtered.map(opt => {
+          {paged.map(opt => {
             const checked = selected.includes(opt);
             return (
               <label
@@ -132,6 +161,79 @@ export function MultiSelectPopover({
             );
           })}
         </div>
+
+        {/* Pagination controls */}
+        {enablePagination && (
+          <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="text-muted-foreground">Всього: {total}</div>
+              {showPageSizeSelector && (
+                <div className="flex items-center gap-1">
+                  <span>Показати:</span>
+                  <select
+                    className="h-6 border rounded px-1 bg-background"
+                    value={localPageSize}
+                    onChange={(e) => {
+                      // Update page size by lifting via a synthetic rerender: use local state workaround
+                      // As pageSize is a prop, we can't set it here; instead, restart from page 1 and rely on parent to pass a new prop if controlled.
+                      // For internal usage, just reset page to 1; parent can re-render with new pageSize if it passes a different prop.
+                      // Here we manage local page size for internal pagination.
+                      const el = e.target as HTMLSelectElement;
+                      const next = Number(el.value);
+                      setLocalPageSize(next);
+                      setPage(1);
+                    }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border border-border hover:bg-background"
+                onClick={() => setPage(1)}
+                disabled={currentPage === 1}
+                aria-label="Перша сторінка"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border border-border hover:bg-background"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                aria-label="Попередня сторінка"
+              >
+                ‹
+              </button>
+              <span className="px-2 select-none">
+                {currentPage} з {totalPages}
+              </span>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border border-border hover:bg-background"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                aria-label="Наступна сторінка"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 rounded-md border border-border hover:bg-background"
+                onClick={() => setPage(totalPages)}
+                disabled={currentPage === totalPages}
+                aria-label="Остання сторінка"
+              >
+                »
+              </button>
+            </div>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

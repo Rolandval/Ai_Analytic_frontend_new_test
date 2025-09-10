@@ -27,7 +27,7 @@ export default function AIProductFillerLayout({ children }: Props) {
             id="ai-pf-sidebar"
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
-            className={`group relative overflow-hidden dark:bg-neutral-900/70 ring-1 ring-black/5 backdrop-blur transition-[width] ${hovered ? 'duration-300 ease-out' : 'duration-150 ease-in'} ${hovered ? 'w-[220px] open' : 'w-10'} hover:w-[220px]`}
+            className={`group relative overflow-hidden dark:bg-neutral-900/70 ring-1 ring-black/5 dark:ring-white/10 backdrop-blur transition-[width] ${hovered ? 'duration-300 ease-out' : 'duration-150 ease-in'} ${hovered ? 'w-[220px] open' : 'w-10'} hover:w-[220px]`}
           >
             {/* Header */}
             <div className="h-12 flex items-center border-b px-2 min-w-0">
@@ -53,7 +53,7 @@ export default function AIProductFillerLayout({ children }: Props) {
                   'whitespace-nowrap overflow-hidden',
                   'max-w-0 group-[.open]:max-w-[160px] group-hover:max-w-[160px] transition-[max-width]',
                   'pointer-events-none group-[.open]:pointer-events-auto group-hover:pointer-events-auto',
-                ].join(' ')}
+                ].join('  ')}
               >
                 AI Product Filler
               </span>
@@ -108,11 +108,18 @@ export default function AIProductFillerLayout({ children }: Props) {
 
           </aside>
           {/* Main content */}
-          <main className="min-w-0 relative">
+          <main className="min-w-0 relative bg-[#FAFDFF] dark:bg-neutral-900">
         
             {children}
           </main>
         </div>
+      </div>
+      {/* Floating theme switcher (bottom-left) */}
+      <div className="fixed left-3 bottom-3 z-[9999]">
+        <FillerThemeSwitcher
+          mode="toggle"
+          className="h-9 w-9 rounded-full border bg-white/90 dark:bg-neutral-900/80 shadow-md ring-1 ring-black/5 dark:ring-white/10 text-neutral-700 dark:text-neutral-200 cursor-pointer"
+        />
       </div>
     </div>
   );

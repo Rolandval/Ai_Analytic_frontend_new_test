@@ -40,6 +40,7 @@ const statusLabels: Record<string, string> = {
 
 // Default filter order
 const DEFAULT_FILTER_ORDER = [
+  'actions',
   // 'full_name' moved to TopSearch area
   'brands',
   'suppliers', 
@@ -83,6 +84,8 @@ interface Props {
   setFilters: (f: SolarPanelPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
+  // Optional actions passed from parent page to render inside a draggable tile
+  actionsButtonGroup?: React.ReactNode;
 }
 
 interface TopSearchProps {
@@ -113,18 +116,20 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
     <div
       ref={setNodeRef}
       style={style}
-      className="relative group"
+      className="relative group pl-6 w-full min-w-0"
     >
       {/* Drag handle */}
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 rounded"
+        className="absolute left-1 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
         title="Перетягніть для зміни порядку"
       >
         <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
-      {children}
+      <div className="w-full min-w-0">
+        {children}
+      </div>
     </div>
   );
 };
@@ -193,7 +198,7 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
   };
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-auto mx-auto flex flex-col gap-4">
       {/* Top search and active filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {/* Name search input */}
@@ -460,7 +465,7 @@ const ActiveBadges: React.FC<{ badges: React.ReactNode[]; onReset: () => void; }
   );
 };
 
-export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
+export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, actionsButtonGroup }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<SolarPanelPriceListRequestSchema>({
     ...current,
@@ -543,6 +548,56 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
+    actions: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Дії</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          {actionsButtonGroup ?? (
+            <>
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-8 px-2 text-xs"
+                onClick={() => {
+                  // Re-apply current local filters to trigger refresh
+                  setFilters({ ...local });
+                }}
+                title="Оновити дані"
+                aria-label="Оновити дані"
+              >
+                Оновити
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-8 px-2 text-xs"
+                onClick={() => {
+                  const normalize = (o: Record<string, any>) => {
+                    const n: Record<string, any> = {};
+                    Object.entries(o).forEach(([k, v]) => {
+                      if (v === '' || v === null) return;
+                      if (Array.isArray(v)) {
+                        if (v.length > 0) n[k] = v.slice();
+                      } else if (v !== undefined) {
+                        n[k] = v;
+                      }
+                    });
+                    return n;
+                  };
+                  const payload = normalize({ ...local });
+                  const text = JSON.stringify(payload, null, 2);
+                  navigator.clipboard.writeText(text).catch(() => {});
+                }}
+                title="Копіювати налаштування"
+                aria-label="Копіювати налаштування"
+              >
+                Копіювати
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    ),
     // full_name moved to TopSearch
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
@@ -868,7 +923,7 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
 
   return (
     <>
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-auto mx-auto flex flex-col gap-4">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

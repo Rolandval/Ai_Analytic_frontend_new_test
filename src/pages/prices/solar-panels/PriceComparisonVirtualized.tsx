@@ -497,6 +497,82 @@ export default function SolarPanelPriceComparisonVirtualized() {
         )}
       </div>
 
+      {/* Pagination Footer */}
+      {comparisonData && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* Shown range */}
+          <div className="text-sm text-muted-foreground">
+            {comparisonData.total > 0
+              ? (
+                <>Показано {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, comparisonData.total)} з {comparisonData.total}</>
+              ) : (
+                <>Показано 0 - 0 з 0</>
+              )}
+          </div>
+
+          {/* Page size selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm">На сторінці:</span>
+            <select
+              className="h-8 border rounded-md px-2 text-sm"
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); setFiltersApplied(true); }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={30}>30</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+
+          {/* Pager controls */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => { setPage(1); setFiltersApplied(true); }}
+              disabled={page <= 1}
+              aria-label="Перша сторінка"
+            >
+              «
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => { setPage(p => Math.max(1, p - 1)); setFiltersApplied(true); }}
+              disabled={page <= 1}
+              aria-label="Попередня сторінка"
+            >
+              ‹
+            </Button>
+            <span className="text-sm px-2 select-none">{page} / {comparisonData.pages || 1}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => { setPage(p => Math.min((comparisonData.pages || 1), p + 1)); setFiltersApplied(true); }}
+              disabled={page >= (comparisonData.pages || 1)}
+              aria-label="Наступна сторінка"
+            >
+              ›
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => { setPage(comparisonData.pages || 1); setFiltersApplied(true); }}
+              disabled={page >= (comparisonData.pages || 1)}
+              aria-label="Остання сторінка"
+            >
+              »
+            </Button>
+          </div>
+        </div>
+      )}
+
       <PriceUpdateModal
         isOpen={updatePriceModalOpen}
         onClose={() => setUpdatePriceModalOpen(false)}

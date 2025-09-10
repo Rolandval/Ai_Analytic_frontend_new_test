@@ -560,16 +560,6 @@ export default function SolarPanelPriceComparison() {
     <div className="space-y-4">
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на сонячні панелі</h1>
       
-      <div className="space-y-4 mb-4">
-        <SolarPanelComparisonFilters 
-          current={filters}
-          setFilters={handleFiltersChange}
-          brands={brands}
-          suppliers={suppliers}
-          settingsButton={settingsButton}
-        />
-      </div>
-      
       <div className="mb-6 flex flex-wrap items-center gap-2" />
 
       {!isLoading && comparisonData && comparisonData.panels.length === 0 && (
@@ -587,6 +577,15 @@ export default function SolarPanelPriceComparison() {
       <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
         <div className="overflow-auto">
           <div className="p-4">
+            <div className="mb-4">
+              <SolarPanelComparisonFilters 
+                current={filters}
+                setFilters={handleFiltersChange}
+                brands={brands}
+                suppliers={suppliers}
+                settingsButton={settingsButton}
+              />
+            </div>
             {!filtersApplied ? (
               <div className="text-center py-10 text-gray-500">
                 <p className="font-medium">Застосуйте фільтри для відображення даних</p>

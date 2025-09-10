@@ -155,7 +155,7 @@ const SUPPLIERS_URL = `${BASE_URL}/suppliers`;
 // New full-detail endpoint
 const SUPPLIERS_DETAIL_URL = `${BASE_URL}/suppliers/detail`;
 
-export const getSolarPanelSuppliers = async ({ page, page_size }: { page: number; page_size: number }) => {
+export const getSolarPanelSuppliers = async ({ page, page_size = 100, search = '' }: { page: number; page_size?: number; search?: string }) => {
   const res = await api.get(SUPPLIERS_DETAIL_URL);
   const list: Supplier[] = (res.data || []).map((item: any) => ({
     id: item.supplier_id ?? item.id,
@@ -168,9 +168,11 @@ export const getSolarPanelSuppliers = async ({ page, page_size }: { page: number
     email: Array.isArray(item.emails) ? item.emails[0] : undefined,
     phone: Array.isArray(item.phone_numbers) ? item.phone_numbers[0] : undefined,
   }));
+  const q = (search || '').toLowerCase().trim();
+  const filtered = q ? list.filter(s => (s.name || '').toLowerCase().includes(q)) : list;
   const start = (page - 1) * page_size;
-  const paginated = list.slice(start, start + page_size);
-  return { count: list.length, next: null, previous: null, results: paginated } as const;
+  const paginated = filtered.slice(start, start + page_size);
+  return { count: filtered.length, next: null, previous: null, results: paginated } as const;
 };
 
 
@@ -183,9 +185,9 @@ export const updateSolarPanelSupplier = async (supplier: Supplier): Promise<Supp
   // Конвертуємо масиви в рядки для бекенду
   const supplierDetail = {
     description: supplier.description || null,
-    cities: supplier.cities?.join(', ') || null,
-    emails: supplier.emails?.join(', ') || null,
-    phone_numbers: supplier.phone_numbers?.join(', ') || null
+    cities: Array.isArray(supplier.cities) ? supplier.cities.join(', ') : (supplier.cities || null),
+    emails: Array.isArray(supplier.emails) ? supplier.emails.join(', ') : (supplier.emails || null),
+    phone_numbers: Array.isArray(supplier.phone_numbers) ? supplier.phone_numbers.join(', ') : (supplier.phone_numbers || null)
   };
 
   const response = await api.post(`${BASE_URL}/supplier/${supplier.id}/detail`, supplierDetail);

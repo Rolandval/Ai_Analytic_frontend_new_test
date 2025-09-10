@@ -69,16 +69,18 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative"
+      className="group relative pl-6 w-full min-w-0"
     >
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
-      {children}
+      <div className="w-full min-w-0">
+        {children}
+      </div>
     </div>
   );
 };
@@ -240,6 +242,8 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           showSelectAll
           selectAllLabel="Вибрати всіх постачальників"
           clearLabel="Скинути"
+          enablePagination
+          pageSize={100}
           className="h-10"
         />
       </div>
@@ -546,9 +550,9 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   return (
     <>
 
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-2 sm:gap-4">
+    <div className="w-full  flex flex-col gap-2 sm:gap-4">
       {/* Top search and active filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+      <div className="flex flex-col   sm:flex-row gap-3 items-start sm:items-center">
         {/* Name search input */}
         <div className="flex-shrink-0">
           <Input
@@ -801,11 +805,15 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          <div className={cn(
-            "grid gap-3 sm:gap-5 transition-all duration-200 pl-6",
-            isExpanded ? "grid-cols-1 sm:grid-cols-2" : "hidden md:grid",
-            "md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-          )}>
+          <div
+            className={cn(
+              // Always fill full width and auto-wrap; use safe min width to avoid overlap
+              "grid gap-3 sm:gap-5 transition-all duration-200",
+              "[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] [grid-auto-rows:minmax(60px,auto)]",
+              // Respect mobile toggle
+              isExpanded ? "grid" : "hidden md:grid"
+            )}
+          >
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}

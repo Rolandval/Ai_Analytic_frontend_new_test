@@ -35,6 +35,7 @@ const supplierStatuses = ['ME', 'SUPPLIER', 'COMPETITOR'];
 
 // Default filter order for batteries
 const DEFAULT_BATTERY_FILTER_ORDER = [
+  'actions',
   'brands',
   'suppliers',
   'cities',
@@ -53,7 +54,9 @@ const DEFAULT_BATTERY_FILTER_ORDER = [
 const getSavedBatteryFilterOrder = (): string[] => {
   try {
     const saved = localStorage.getItem('batteryFilterOrder');
-    return saved ? JSON.parse(saved) : DEFAULT_BATTERY_FILTER_ORDER;
+    const base: string[] = saved ? JSON.parse(saved) : DEFAULT_BATTERY_FILTER_ORDER;
+    // Ensure new tiles like 'actions' are present even with legacy saved orders
+    return base.includes('actions') ? base : ['actions', ...base];
   } catch {
     return DEFAULT_BATTERY_FILTER_ORDER;
   }
@@ -87,21 +90,17 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="relative group"
-    >
-      {/* Drag handle */}
+    <div ref={setNodeRef} style={style} className="relative group pl-6 w-full min-w-0">
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 rounded"
-        title="Перетягніть для зміни порядку"
+        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing"
       >
-        <GripVertical className="w-4 h-4 text-gray-400" />
+        <GripVertical className="h-4 w-4 text-gray-400" />
       </div>
-      {children}
+      <div className="w-full min-w-0">
+        {children}
+      </div>
     </div>
   );
 };
@@ -111,6 +110,8 @@ interface Props {
   setFilters: (f: BatteryPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
+  // Optional actions passed from parent page to render inside a draggable tile
+  actionsButtonGroup?: React.ReactNode;
 }
 
 interface TopSearchProps {
@@ -331,13 +332,22 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
 };
 
 
-export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
+export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, actionsButtonGroup }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current,
     markup: current.markup !== undefined ? current.markup : 15,
   });
   const [filterOrder, setFilterOrder] = useState<string[]>(getSavedBatteryFilterOrder());
+  // Migrate legacy order on mount to ensure 'actions' exists
+  useEffect(() => {
+    if (!filterOrder.includes('actions')) {
+      const next = ['actions', ...filterOrder];
+      setFilterOrder(next);
+      saveBatteryFilterOrder(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // Drag and drop sensors
   const sensors = useSensors(
@@ -421,6 +431,14 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
+    actions: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Дії</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          {actionsButtonGroup}
+        </div>
+      </div>
+    ),
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover
@@ -689,7 +707,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
 
   return (
     <>
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-auto mx-auto flex flex-col gap-4">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}

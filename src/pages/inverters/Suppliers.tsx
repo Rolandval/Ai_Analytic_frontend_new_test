@@ -20,9 +20,10 @@ import {
 
 const InverterSuppliersPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [pageSize, setPageSize] = useState<number>(100);
+  const [search, setSearch] = useState('');
 
-  const { data: paginatedData, isLoading } = useGetInverterSuppliers(currentPage, ITEMS_PER_PAGE);
+  const { data: paginatedData, isLoading } = useGetInverterSuppliers(currentPage, pageSize, search);
   const addSupplier = useAddInverterSupplier();
   const updateSupplier = useUpdateInverterSupplier();
   const deleteSupplier = useDeleteInverterSupplier();
@@ -33,7 +34,7 @@ const InverterSuppliersPage = () => {
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
 
   const suppliers = paginatedData?.results || [];
-  const totalPages = Math.ceil((paginatedData?.count || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil((paginatedData?.count || 0) / pageSize);
 
   // NOTE: Sorting and filtering are disabled.
   // To re-enable them, the backend API needs to support sorting and filtering parameters.
@@ -86,9 +87,23 @@ const InverterSuppliersPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">Управління постачальниками інверторів</h1>
-        <Button onClick={() => openDialog()}>Додати постачальника</Button>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Пошук за назвою…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            className="w-[260px]"
+          />
+          <Button
+            variant="default"
+            className="bg-gray-900 text-white hover:bg-gray-800 border-transparent shadow-sm"
+            onClick={() => openDialog()}
+          >
+            Додати постачальника
+          </Button>
+        </div>
       </div>
 
       {/* NOTE: Filtering is disabled until supported by the backend API. */}
@@ -137,14 +152,34 @@ const InverterSuppliersPage = () => {
               ))}
             </TableBody>
           </Table>
-          {totalPages > 1 && (
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              className="mt-4"
-            />
-          )}
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="text-sm text-muted-foreground">
+                Показано {suppliers.length > 0 ? (pageSize * (currentPage - 1) + 1) : 0} - {Math.min(pageSize * currentPage, paginatedData?.count || 0)} з {paginatedData?.count || 0}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">Показати:</span>
+                <select
+                  className="h-8 border rounded-md px-2 text-sm"
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                >
+                  <option value={10}>10</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+            <div className="w-full sm:w-auto">
+              {totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              )}
+            </div>
+          </div>
         </>
       )}
 

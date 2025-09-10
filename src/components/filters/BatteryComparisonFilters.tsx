@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import { BatteryPriceListRequestSchema } from '@/types/batteries';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -145,15 +146,17 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
   
 
   return (
-    <div ref={setNodeRef} style={style} className="relative group">
+    <div ref={setNodeRef} style={style} className="relative group pl-8 w-full min-w-0">
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-2 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="h-4 w-4 text-gray-400" />
       </div>
-      {children}
+      <div className="w-full min-w-0">
+        {children}
+      </div>
     </div>
   );
 };
@@ -164,13 +167,15 @@ interface Props {
   brands: string[];
   suppliers: string[];
   settingsButton?: React.ReactNode;
+  copyTableButton?: React.ReactNode;
 }
 
-export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
+export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton, copyTableButton }) => {
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  const { toast } = useToast();
   
 
   // Auto-apply filters with debounce
@@ -264,23 +269,7 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
       <div className="flex flex-col gap-1 h-[60px]">
         <label className="text-[12px] font-medium text-slate-600">Дії</label>
         <div className="flex items-end gap-1 h-[60px]">
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-8 px-2 text-xs"
-            onClick={async () => {
-              try {
-                await refreshBatteriesData();
-                toast({ title: 'Оновлено', description: 'Дані про наявність оновлено.', duration: 2000 });
-              } catch (e) {
-                toast({ title: 'Помилка', description: 'Не вдалося оновити дані про наявність.', variant: 'destructive' });
-              }
-            }}
-            title="Оновити дані про наявність"
-            aria-label="Оновити дані про наявність"
-          >
-            Оновити
-          </Button>
+          {copyTableButton}
           <Button
             variant="outline"
             size="xs"
@@ -314,7 +303,7 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
       </div>
     ),
     brands: (
-      <div className="h-[60px] flex flex-col justify-end">
+      <div className="h-[60px] flex flex-col justify-end min-w-0">
         <MultiSelectPopover
           placeholder="Виробник"
           options={brands}
@@ -323,12 +312,12 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
           showSelectAll
           selectAllLabel="Вибрати всі бренди"
           clearLabel="Скинути"
-          className="h-10"
+          className="h-10 w-full"
         />
       </div>
     ),
     suppliers: (
-      <div className="h-[60px] flex flex-col justify-end">
+      <div className="h-[60px] flex flex-col justify-end min-w-0">
         <MultiSelectPopover
           placeholder="Постачальники"
           options={suppliers}
@@ -337,7 +326,9 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
           showSelectAll
           selectAllLabel="Вибрати всіх постачальників"
           clearLabel="Скинути"
-          className="h-10"
+          enablePagination
+          pageSize={100}
+          className="h-10 w-full"
         />
       </div>
     ),
@@ -579,7 +570,7 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
   };
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-full flex flex-col gap-4">
       {/* Top search and active filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {/* Name search input */}
@@ -783,11 +774,15 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          <div className={cn(
-            "grid gap-3 sm:gap-5 transition-all duration-200",
-            isExpanded ? "grid-cols-1 sm:grid-cols-2" : "hidden md:grid",
-            "md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-          )}>
+          <div
+            className={cn(
+              // Always use auto-fit to fill the full available width of the table container
+              "grid w-full gap-4 sm:gap-5 transition-all duration-200",
+              "[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))] [grid-auto-rows:minmax(60px,auto)]",
+              // Respect mobile toggle: hidden until expanded on mobile, always visible on md+
+              isExpanded ? "grid" : "hidden md:grid"
+            )}
+          >
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}

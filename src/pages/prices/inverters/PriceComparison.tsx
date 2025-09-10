@@ -483,31 +483,22 @@ export default function InverterPriceComparison() {
     <div className="space-y-4">
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на інвертори</h1>
       
-      <div className="space-y-4 mb-4">
-        <InverterComparisonFilters 
-          current={filters}
-          setFilters={handleFiltersChange}
-          brands={brands}
-          suppliers={suppliers}
-          settingsButton={settingsButton}
-        />
-        {!isLoading && comparisonData && comparisonData.inverters.length === 0 && (
-          <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200">
-              Нічого не знайдено
-            </h2>
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-              Змініть параметри фільтрації або оновіть дані про наявність.
-            </p>
-          </div>
-        )}
-      </div>
+      
       
       {/* Top toolbar removed: actions are now inside filters' compact block */}
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="overflow-auto">
           <div className="p-2 sm:p-4">
+            <div className="mb-4">
+              <InverterComparisonFilters 
+                current={filters}
+                setFilters={handleFiltersChange}
+                brands={brands}
+                suppliers={suppliers}
+                settingsButton={settingsButton}
+              />
+            </div>
             {!filtersApplied ? (
               <div className="text-center py-10 text-gray-500">
                 <p className="font-medium">Застосуйте фільтри для відображення даних</p>

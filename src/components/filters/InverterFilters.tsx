@@ -66,16 +66,18 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative"
+      className="group relative pl-6 w-full min-w-0"
     >
       <div
         {...attributes}
         {...listeners}
-        className="absolute -left-6 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
+        className="absolute left-1 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing"
       >
         <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
-      {children}
+      <div className="w-full min-w-0">
+        {children}
+      </div>
     </div>
   );
 };
@@ -98,6 +100,8 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
   useEffect(() => {
     setLocal(current);
   }, [current]);
+
+  // [removed]: migration placed below after filterOrder is declared
 
   useEffect(() => {
     const fetchCities = async () => {
@@ -168,7 +172,7 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
   };
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-full w-auto mx-auto flex flex-col gap-4">
       {/* Top search and active filters */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {/* Name search input */}
@@ -189,7 +193,7 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
             return (
               <>
                 {hasAny && (
-                  <div className="relative max-h-[56px] overflow-hidden">
+                  <div className="relative  max-h-[56px] overflow-hidden">
                     <div className="flex flex-wrap gap-2 items-center">
                       {/* Бейджі активних фільтрів */}
                       {/* Бренди */}
@@ -268,7 +272,7 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
                       
                       {/* Потужність */}
                       {(local.power_min || local.power_max) && (
-                        <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
+                        <Badge variant="secondary" className="bg-pink-100  text-pink-800 border-pink-200">
                           Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
                           <X 
                             className="w-3 h-3 ml-1 cursor-pointer" 
@@ -432,6 +436,7 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
                                 />
                               </Badge>
                             )}
+                              
                             {(local.price_min !== undefined || local.price_max !== undefined) && (
                               <Badge variant="secondary" className="bg-red-100 text-red-800 border-red-200">
                                 Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} $
@@ -503,7 +508,12 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
 }
 ;
 
-export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
+// Extend props to optionally accept actions from parent page (PriceHistoryPage)
+interface PropsWithActions extends Props {
+  actionsButtonGroup?: React.ReactNode;
+}
+
+export const InverterFilters: React.FC<PropsWithActions> = ({ current, setFilters, brands, suppliers, actionsButtonGroup }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current,
@@ -513,6 +523,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
   
   // Drag and drop state
   const defaultFilterOrder = [
+    'actions',
     'firmware',
     'brands',
     'suppliers',
@@ -529,7 +540,10 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
   
   const [filterOrder, setFilterOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('inverter-filters-order');
-    return saved ? JSON.parse(saved) : defaultFilterOrder;
+    let base: string[] = saved ? JSON.parse(saved) : defaultFilterOrder;
+    // Ensure new tiles like 'actions' are present even with legacy saved orders
+    if (!base.includes('actions')) base = ['actions', ...base];
+    return base;
   });
   
   const sensors = useSensors(
@@ -614,8 +628,54 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
+    actions: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Дії</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          {actionsButtonGroup ?? (
+            <>
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-8 px-2 text-xs"
+                onClick={() => {
+                  setFilters({ ...local });
+                }}
+                title="Оновити дані"
+                aria-label="Оновити дані"
+              >
+                Оновити
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-8 px-2 text-xs"
+                onClick={() => {
+                  const normalize = (o: Record<string, any>) => {
+                    const n: Record<string, any> = {};
+                    Object.entries(o).forEach(([k, v]) => {
+                      if (v === '' || v === null) return;
+                      if (Array.isArray(v)) { if (v.length > 0) n[k] = v.slice(); }
+                      else if (v !== undefined) { n[k] = v; }
+                    });
+                    return n;
+                  };
+                  const payload = normalize({ ...local });
+                  const text = JSON.stringify(payload, null, 2);
+                  navigator.clipboard.writeText(text).catch(() => {});
+                }}
+                title="Копіювати налаштування"
+                aria-label="Копіювати налаштування"
+              >
+                Копіювати
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    ),
     firmware: (
-      <div className="h-[60px] flex flex-col justify-end">
+      <div className="h-[60px]  flex flex-col justify-end">
         <Input
           placeholder="Firmware"
           value={local.firmware ?? ''}
@@ -870,7 +930,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
 
   return (
     <>
-    <div className="w-full max-w-[1280px] mx-auto flex flex-col gap-4">
+    <div className="w-full   w-auto mx-auto flex flex-col gap-4">
 
       {/* Filter Grid */}
       <DndContext
@@ -879,7 +939,7 @@ export const InverterFilters: React.FC<Props> = ({ current, setFilters, brands, 
         onDragEnd={handleDragEnd}
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+          <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}

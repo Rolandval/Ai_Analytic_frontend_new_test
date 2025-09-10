@@ -13,7 +13,7 @@ export const BatteryPrices = () => {
   const [page, setPage] = useState(1);
   const { data, isLoading, error } = useBatteryPrices({ ...filters, page, page_size: 10 });
   const { brands: brandOptions } = useBatteryBrands();
-
+ 
   const handleFilterChange = (name: keyof Omit<BatteryPriceListRequest, 'page' | 'page_size'>, value: any) => {
     setPage(1);
     const finalValue = value === '' || (Array.isArray(value) && value.length === 0) ? undefined : value;

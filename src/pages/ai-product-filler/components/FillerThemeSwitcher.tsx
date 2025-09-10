@@ -8,9 +8,10 @@ import { createPortal } from 'react-dom';
 interface ThemeToggleProps {
   className?: string;
   sidebarOpen?: boolean; // true = розгорнутий, false = згорнутий
+  mode?: 'menu' | 'toggle'; // 'menu' (клік відкриває меню), 'toggle' (клік миттєво перемикає темну/світлу)
 }
 
-export const FillerThemeSwitcher = ({ className, sidebarOpen }: ThemeToggleProps) => {
+export const FillerThemeSwitcher = ({ className, sidebarOpen, mode = 'menu' }: ThemeToggleProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const { theme, setTheme } = useThemeStore();
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -98,26 +99,58 @@ export const FillerThemeSwitcher = ({ className, sidebarOpen }: ThemeToggleProps
     { name: 'Системна', value: 'system', icon: Monitor },
   ];
 
+  const handleQuickToggle = () => {
+    // Визначаємо поточну ефективну тему
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const effectiveDark = theme === 'dark' || (theme === 'system' && prefersDark);
+    const next: 'light' | 'dark' = effectiveDark ? 'light' : 'dark';
+    setTheme(next);
+    // Миттєво застосувати клас до <html>, щоб не залежати від циклу ефектів у App
+    try {
+      const root = window.document.documentElement;
+      root.classList.remove('light', 'dark');
+      root.classList.add(next);
+    } catch {}
+  };
+
   return (
     <div className="relative">
       <button
         ref={btnRef}
         onMouseDown={(e) => {
-          // Відкривати раніше (до click), щоб не втратити фокус при зміні ширини сайдбару
-          e.preventDefault();
-          setOverButton(true);
-          setIsOpen((v) => !v);
-          requestAnimationFrame(updateAnchor);
-        }}
-        onClick={() => {
-          // Нічого не робимо тут, відкриття/закриття обробляє onMouseDown
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (mode === 'menu') {
+            // Відкривати раніше (до click), щоб не втратити фокус при зміні ширини сайдбару
             e.preventDefault();
             setOverButton(true);
             setIsOpen((v) => !v);
             requestAnimationFrame(updateAnchor);
+          }
+        }}
+        onClick={(e) => {
+          if (mode === 'toggle') {
+            e.preventDefault();
+            handleQuickToggle();
+            return;
+          }
+          // у режимі меню click не потрібен (працює onMouseDown)
+        }}
+        onContextMenu={(e) => {
+          // Відкрити меню по правому кліку навіть у режимі toggle
+          e.preventDefault();
+          setOverButton(true);
+          setIsOpen(true);
+          requestAnimationFrame(updateAnchor);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (mode === 'toggle') {
+              handleQuickToggle();
+            } else {
+              setOverButton(true);
+              setIsOpen((v) => !v);
+              requestAnimationFrame(updateAnchor);
+            }
           }
         }}
         onMouseEnter={() => setOverButton(true)}

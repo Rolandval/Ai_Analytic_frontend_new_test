@@ -390,6 +390,32 @@ export default function BatteryPriceComparison() {
     { key: 'full_name', direction: 'asc' } // Початкове сортування за назвою
   );
 
+  // Compact Copy button to place inside filters' draggable actions block
+  const copyTableButton = (
+    <Button
+      variant="outline"
+      size="xs"
+      className="h-8 px-2 text-xs"
+      title="Копіювати таблицю"
+      aria-label="Копіювати таблицю"
+      onClick={() => {
+        setCopying(true);
+        const text = buildExport();
+        if (!text) {
+          toast({ title: 'Немає даних', description: 'Немає рядків для копіювання.', variant: 'destructive' });
+          setCopying(false);
+          return;
+        }
+        navigator.clipboard.writeText(text)
+          .then(() => toast({ title: 'Скопійовано', description: 'Таблицю скопійовано в буфер обміну.', duration: 2000 }))
+          .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати таблицю.', variant: 'destructive' }))
+          .finally(() => setCopying(false));
+      }}
+    >
+      {copying ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </Button>
+  );
+
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
@@ -582,26 +608,18 @@ export default function BatteryPriceComparison() {
     <div className="space-y-4">
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на акумулятори</h1>
       
-      <div className="space-y-4 mb-4">
-        <BatteryComparisonFilters 
-          current={filters}
-          setFilters={handleFiltersChange}
-          brands={brands}
-          suppliers={suppliers}
-          settingsButton={settingsButton}
-        />
-      </div>
-      
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-  
-
-        {/* Settings moved into filters via settingsButton prop */}
-
-        {/* Removed top-level bulk apply controls; actions moved to 'Акт' column header */}
-      </div>
-
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        <div className="p-[0.2rem]">
+        <div className="p-4">
+          <div className="mb-4">
+            <BatteryComparisonFilters 
+              current={filters}
+              setFilters={handleFiltersChange}
+              brands={brands}
+              suppliers={suppliers}
+              settingsButton={settingsButton}
+              copyTableButton={copyTableButton}
+            />
+          </div>
           {filtersApplied ? (
             <Table className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5">
               <TableHeader>

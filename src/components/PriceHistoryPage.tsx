@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Settings, Copy, Check, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Settings, Copy, Check, ArrowUp, ArrowDown, ArrowUpDown, Phone, Edit3, Trash2, LineChart } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -56,6 +56,7 @@ interface PriceHistoryPageProps<T, CreatePayload = any, UpdatePayload = any> {
   createFormComponent?: React.ReactNode;
   chartConfig?: ChartConfig; // optional chart support
   topSearchComponent?: React.ReactNode; // новий компонент для пошуку зверху
+  compact?: boolean; // щільний режим відображення без горизонтального скролу
 }
 
 export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
@@ -63,6 +64,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
 ) {
   const { title, currencySymbol, columns, hook, filterComponent, createFormComponent, chartConfig } = props;
   const { rows, total, page, pageSize, setPage, setPageSize, loading } = hook;
+  const compact = Boolean((props as any).compact);
   
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<{ id: number; price: number } | null>(null);
@@ -77,6 +79,11 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
     delete: true,
     chart: true
   });
+
+  // Page-specific storage keys (so each page remembers its own settings)
+  const columnVisibilityKey = React.useMemo(() => `columnVisibility:${title}`, [title]);
+  const buttonsVisibilityKey = React.useMemo(() => `buttonsVisibility:${title}`, [title]);
+  const pageSizeKey = React.useMemo(() => `pageSize:${title}`, [title]);
 
   // Стан для сортування
   const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' | null }>({ 
@@ -127,7 +134,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   // Функція для збереження налаштувань видимості колонок в localStorage
   const saveColumnSettings = (newVisibility: Record<string, boolean>) => {
     try {
-      localStorage.setItem('columnVisibility', JSON.stringify(newVisibility));
+      localStorage.setItem(columnVisibilityKey, JSON.stringify(newVisibility));
     } catch (e) {
       console.error('Failed to save column settings', e);
     }
@@ -136,7 +143,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   // Функція для збереження налаштувань видимості кнопок в localStorage
   const saveButtonsSettings = (newVisibility: typeof buttonsVisibility) => {
     try {
-      localStorage.setItem('buttonsVisibility', JSON.stringify(newVisibility));
+      localStorage.setItem(buttonsVisibilityKey, JSON.stringify(newVisibility));
     } catch (e) {
       console.error('Failed to save buttons settings', e);
     }
@@ -145,32 +152,59 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   // Завантаження налаштувань при монтуванні компоненту
   useEffect(() => {
     try {
-      const storedColumnVisibility = localStorage.getItem('columnVisibility');
+      // 1) Try to load stored settings (page-specific)
+      const storedColumnVisibility = localStorage.getItem(columnVisibilityKey);
       if (storedColumnVisibility) {
         setVisibleColumns(JSON.parse(storedColumnVisibility));
       } else {
-        // Якщо немає збережених налаштувань, всі колонки видимі за замовчуванням
-        const defaultVisibility: Record<string, boolean> = {};
-        columns.forEach(col => {
-          defaultVisibility[col.key as string] = true;
-        });
-        setVisibleColumns(defaultVisibility);
+        // 2) If nothing stored: in compact mode pick essential; otherwise show all
+        if (compact) {
+          const defaultVisibility: Record<string, boolean> = {};
+          const available = new Set(columns.map(c => c.key as string));
+          const desired: string[] = ['full_name', 'brand', 'supplier'];
+          const pickFirst = (...names: string[]) => names.find((n) => available.has(n));
+          const measure = pickFirst('power', 'volume');
+          const priceMain = pickFirst('price_markup_uah', 'price_uah', 'price');
+          const date = available.has('date') ? 'date' : undefined;
+          if (measure) desired.push(measure);
+          if (priceMain) desired.push(priceMain);
+          if (date) desired.push(date);
+          columns.forEach((col) => {
+            const key = col.key as string;
+            defaultVisibility[key] = desired.includes(key);
+          });
+          setVisibleColumns(defaultVisibility);
+          // By default in compact mode hide action buttons only if no stored settings exist
+          setButtonsVisibility({ contact: false, edit: false, delete: false, chart: false });
+        } else {
+          const defaultVisibility: Record<string, boolean> = {};
+          columns.forEach(col => {
+            defaultVisibility[col.key as string] = true;
+          });
+          setVisibleColumns(defaultVisibility);
+        }
       }
-      
-      const storedButtonsVisibility = localStorage.getItem('buttonsVisibility');
+      const storedButtonsVisibility = localStorage.getItem(buttonsVisibilityKey);
       if (storedButtonsVisibility) {
         setButtonsVisibility(JSON.parse(storedButtonsVisibility));
       }
+      // Load saved page size if available
+      const storedPageSize = localStorage.getItem(pageSizeKey);
+      if (storedPageSize && hook.setPageSize) {
+        const val = parseInt(storedPageSize, 10);
+        if (!Number.isNaN(val) && val > 0) {
+          hook.setPageSize(val);
+        }
+      }
     } catch (e) {
       console.error('Failed to load settings', e);
-      // Резервний варіант - всі колонки видимі
       const defaultVisibility: Record<string, boolean> = {};
       columns.forEach(col => {
         defaultVisibility[col.key as string] = true;
       });
       setVisibleColumns(defaultVisibility);
     }
-  }, []);
+  }, [compact, columns, columnVisibilityKey, buttonsVisibilityKey, hook, pageSizeKey]);
   
   // Рекурсивна функція для видобування тексту з React елементів
   const extractTextFromReactElement = (element: React.ReactNode): string => {
@@ -298,6 +332,11 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
     return <ArrowUpDown className="h-4 w-4 text-gray-400" />;
   };
 
+  // Похідні значення для таблиці
+  const visibleColsCount = columns.filter(c => visibleColumns[c.key as string] !== false).length;
+  const hasAnyActionButtons = (buttonsVisibility.contact || buttonsVisibility.edit || buttonsVisibility.delete || (buttonsVisibility.chart && !!chartConfig));
+  const totalCols = visibleColsCount + 1 + (hasAnyActionButtons ? 1 : 0); // +1 за стовпець №, +1 за "Дії" (якщо є)
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">{title}</h1>
@@ -309,91 +348,96 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
         </div>
       )}
       
-      {/* Top controls */}
+      {/* Top controls (filters + action buttons injected into filters) */}
       <div className="w-full mb-2 flex flex-col gap-2">
-        <div className="flex-1 min-w-0">
-          {filterComponent}
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => {
-              setCopying(true);
-              // Копіювання даних таблиці
-              const tableData = sortedRows
-                .map(row => {
-                  const rowData: Record<string, any> = {};
-                  columns.forEach(col => {
-                    // Перевірка чи колонка видима
-                    if (visibleColumns[col.key as string] !== false) {
-                      // Отримання значення для цієї комірки
-                      let cellValue: any = row[col.key as keyof typeof row];
-                      
-                      // Використовуємо функцію рендерингу, якщо вона є, для отримання текстового значення
-                      if (col.render) {
-                        const renderedValue = col.render(row);
-                        // Перевіряємо, чи результат рендеру містить текст
-                        if (React.isValidElement(renderedValue)) {
-                          cellValue = extractTextFromReactElement(renderedValue);
-                        } else {
-                          cellValue = String(renderedValue || '');
-                        }
-                      }
-                      
-                      // Додаємо значення до даних рядка
-                      rowData[col.header] = cellValue;
-                    }
-                  });
-                  return rowData;
-                })
-                .map(row => Object.values(row).join('\t'))
-                .join('\n');
-              
-              // Створюємо рядок заголовків для колонок, які є видимими
-              const headers = columns
-                .filter(col => visibleColumns[col.key as string] !== false)
-                .map(col => col.header)
-                .join('\t');
-              
-              // Повний текст таблиці з заголовками та даними
-              const fullTable = `${headers}\n${tableData}`;
-              
-              // Копіюємо в буфер обміну
-              navigator.clipboard.writeText(fullTable)
-                .then(() => {
-                  // Показуємо спливаюче повідомлення про успішне копіювання
-                  toast({
-                    title: "Скопійовано!",
-                    description: "Дані таблиці скопійовані в буфер обміну.",
-                    duration: 3000
-                  });
-                })
-                .catch(err => {
-                  console.error('Помилка копіювання: ', err);
-                  toast({
-                    title: "Помилка",
-                    description: "Не вдалося скопіювати дані таблиці.",
-                    variant: "destructive",
-                    duration: 3000
-                  });
-                })
-                .finally(() => {
-                  setCopying(false);
-                });
-            }}
-          >
-            {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          </Button>
+        {(() => {
+          // Build action buttons group to pass into filters as a prop
+          const actionButtons = (
+            <div className="flex items-center gap-2">
+              {/* Rows per page selector */}
+            
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4" />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setCopying(true);
+                  // Копіювання даних таблиці
+                  const tableData = sortedRows
+                    .map(row => {
+                      const rowData: Record<string, any> = {};
+                      columns.forEach(col => {
+                        // Перевірка чи колонка видима
+                        if (visibleColumns[col.key as string] !== false) {
+                          // Отримання значення для цієї комірки
+                          let cellValue: any = row[col.key as keyof typeof row];
+                          
+                          // Використовуємо функцію рендерингу, якщо вона є, для отримання текстового значення
+                          if (col.render) {
+                            const renderedValue = col.render(row);
+                            // Перевіряємо, чи результат рендеру містить текст
+                            if (React.isValidElement(renderedValue)) {
+                              cellValue = extractTextFromReactElement(renderedValue);
+                            } else {
+                              cellValue = String(renderedValue || '');
+                            }
+                          }
+                          
+                          // Додаємо значення до даних рядка
+                          rowData[col.header] = cellValue;
+                        }
+                      });
+                      return rowData;
+                    })
+                    .map(row => Object.values(row).join('\t'))
+                    .join('\n');
+                  
+                  // Створюємо рядок заголовків для колонок, які є видимими
+                  const headers = columns
+                    .filter(col => visibleColumns[col.key as string] !== false)
+                    .map(col => col.header)
+                    .join('\t');
+                  
+                  // Повний текст таблиці з заголовками та даними
+                  const fullTable = `${headers}\n${tableData}`;
+                  
+                  // Копіюємо в буфер обміну
+                  navigator.clipboard.writeText(fullTable)
+                    .then(() => {
+                      // Показуємо спливаюче повідомлення про успішне копіювання
+                      toast({
+                        title: "Скопійовано!",
+                        description: "Дані таблиці скопійовані в буфер обміну.",
+                        duration: 3000
+                      });
+                    })
+                    .catch(err => {
+                      console.error('Помилка копіювання: ', err);
+                      toast({
+                        title: "Помилка",
+                        description: "Не вдалося скопіювати дані таблиці.",
+                        variant: "destructive",
+                        duration: 3000
+                      });
+                    })
+                    .finally(() => {
+                      setCopying(false);
+                    });
+                }}
+                title="Копіювати таблицю"
+                aria-label="Копіювати таблицю"
+              >
+                {copying ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80">
-              <div className="space-y-4">
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" title="Налаштування" aria-label="Налаштування">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="font-medium">Налаштування колонок</h4>
                   <div className="flex gap-2">
@@ -581,19 +625,29 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   )}
                 </div>
               </div>
-            </PopoverContent>
-          </Popover>
-          
-          <Button onClick={() => setCreateOpen(true)}>Додати</Button>
-        </div>
+                </PopoverContent>
+              </Popover>
+              
+              <button className='px-3 py-1 border border-gray-200 rounded rounded-md' onClick={() => setCreateOpen(true)} title="Додати" aria-label="Додати">Додати</button>
+            </div>
+          );
+          const filtersNode = React.isValidElement(filterComponent)
+            ? React.cloneElement(filterComponent as any, { actionsButtonGroup: actionButtons })
+            : filterComponent;
+          return (
+            <div className="flex-1 min-w-0">
+              {filtersNode}
+            </div>
+          );
+        })()}
       </div>
       
       {/* Table */}
-      <div className="rounded-md border w-full overflow-x-auto">
-        <table className="w-full table-auto" style={{userSelect: 'text'}}>
+      <div className={`rounded-md border w-full ${compact ? 'overflow-x-hidden pr-8' : 'overflow-x-auto'}`}>
+        <table className={`w-full ${compact ? 'table-fixed text-xs' : 'table-auto'} `} style={{userSelect: 'text'}}>
           <thead style={{userSelect: 'none'}}>
             <tr className="bg-muted/50">
-              <th className="py-2 px-4 text-center font-medium text-sm w-16" title="№">№</th>
+              <th className={`${compact ? 'py-1 px-2 text-xs w-10' : 'py-2 px-4 text-sm w-16'} text-center font-medium`} title="№">№</th>
               {columns.map(column => {
                 if (visibleColumns[column.key as string] === false) {
                   return null;
@@ -605,16 +659,16 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 return (
                   <th
                     key={column.key as string}
-                    className={`py-2 px-4 ${headerAlignment} font-medium text-sm`}
+                    className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} ${headerAlignment} font-medium overflow-hidden last:pr-3`}
                     title={column.headerTitle || column.header}
                   >
                     <div className={`flex items-center gap-1 ${justifyContent}`}>
                       <button
-                        className="hover:bg-muted/50 flex items-center gap-2 px-2 py-1 rounded transition-colors"
+                        className={`hover:bg-muted/50 flex items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} rounded transition-colors flex-nowrap`}
                         onClick={() => handleSortClick(column.key as string, column.sortKey)}
                       >
-                        <span>{column.header}</span>
-                        <span className="flex items-center">
+                        <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} block`}>{column.header}</span>
+                        <span className="flex items-center flex-none">
                           {getSortIcon(column.key as string, column.sortKey)}
                         </span>
                       </button>
@@ -622,26 +676,33 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   </th>
                 );
               })}
-              <th className="py-2 px-4 text-center font-medium text-sm" title="Дії">Дії</th>
+              {hasAnyActionButtons && (
+                <th
+                  className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center font-medium last:pr-3 ${compact ? 'w-[104px] min-w-[104px]' : 'w-[160px] min-w-[160px]'}`}
+                  title="Дії"
+                >
+                  Дії
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={columns.filter(c => visibleColumns[c.key as string] !== false).length + 2} className="text-center py-4">
+                <td colSpan={totalCols} className="text-center py-4">
                   Завантаження...
                 </td>
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={columns.filter(c => visibleColumns[c.key as string] !== false).length + 2} className="text-center py-4">
+                <td colSpan={totalCols} className="text-center py-4">
                   Немає даних
                 </td>
               </tr>
             ) : (
               sortedRows.map((row: any, index: number) => (
                 <tr key={row.id} className="border-t">
-                  <td className="py-2 px-4 text-center w-16">{(page - 1) * pageSize + index + 1}</td>
+                  <td className={`${compact ? 'py-1 px-2 text-xs w-10' : 'py-2 px-4 w-16'} text-center`}>{(page - 1) * pageSize + index + 1}</td>
                   {columns.map(column => {
                     if (visibleColumns[column.key as string] === false) {
                       return null;
@@ -653,54 +714,84 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                     const dataAlignment = isTextColumn ? 'text-left' : 'text-center';
                     
                     return (
-                      <td key={column.key as string} className={`py-2 px-4 ${dataAlignment} whitespace-nowrap`}>
-                        {column.render ? column.render(row) : String(value || '')}
+                      <td key={column.key as string} className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4'} ${dataAlignment} ${compact ? 'whitespace-nowrap truncate max-w-[180px]' : 'whitespace-nowrap'} last:pr-3`}>
+                        {column.render ? column.render(row) : String(value ?? '')}
                       </td>
                     );
                   })}
-                  <td className="py-2 px-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                    {buttonsVisibility.contact && row.phone && (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={`tel:${row.phone}`}>Контакт</a>
-                      </Button>
-                    )}
-                    {buttonsVisibility.edit && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditRow({ id: row.id, price: row.price })}
-                      >
-                        Змінити
-                      </Button>
-                    )}
-                    {buttonsVisibility.delete && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => {
-                          if (window.confirm('Ви впевнені що хочете видалити цей запис?')) {
-                            hook.deletePrice(row.id);
-                          }
-                        }}
-                      >
-                        Видалити
-                      </Button>
-                    )}
-                    {buttonsVisibility.chart && chartConfig && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setChartRowId(row.id);
-                          setChartOpen(true);
-                        }}
-                      >
-                        Графік
-                      </Button>
-                    )}
-                    </div>
-                  </td>
+                  {hasAnyActionButtons && (
+                    <td className={`${compact ? 'py-1 px-2 text-xs min-w-[104px]' : 'py-2 px-4 min-w-[160px]'} text-center last:pr-3`}>
+                      <div className={`flex items-center justify-center ${compact ? 'gap-1' : 'gap-2'} flex-nowrap`}>
+                      {buttonsVisibility.contact && row.phone && (
+                        compact ? (
+                          <Button size={"xs" as any} variant="ghost" title="Контакт" asChild>
+                            <a href={`tel:${row.phone}`}><Phone className="h-3.5 w-3.5" /></a>
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" asChild>
+                            <a href={`tel:${row.phone}`}>Контакт</a>
+                          </Button>
+                        )
+                      )}
+                      {buttonsVisibility.edit && (
+                        compact ? (
+                          <Button size={"xs" as any} variant="ghost" title="Змінити" onClick={() => setEditRow({ id: row.id, price: row.price })}>
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditRow({ id: row.id, price: row.price })}
+                          >
+                            Змінити
+                          </Button>
+                        )
+                      )}
+                      {buttonsVisibility.delete && (
+                        compact ? (
+                          <Button size={"xs" as any} variant="ghost" title="Видалити" onClick={() => {
+                            if (window.confirm('Ви впевнені що хочете видалити цей запис?')) {
+                              hook.deletePrice(row.id);
+                            }
+                          }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              if (window.confirm('Ви впевнені що хочете видалити цей запис?')) {
+                                hook.deletePrice(row.id);
+                              }
+                            }}
+                          >
+                            Видалити
+                          </Button>
+                        )
+                      )}
+                      {buttonsVisibility.chart && chartConfig && (
+                        compact ? (
+                          <Button size={"xs" as any} variant="ghost" title="Графік" onClick={() => { setChartRowId(row.id); setChartOpen(true); }}>
+                            <LineChart className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setChartRowId(row.id);
+                              setChartOpen(true);
+                            }}
+                          >
+                            Графік
+                          </Button>
+                        )
+                      )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

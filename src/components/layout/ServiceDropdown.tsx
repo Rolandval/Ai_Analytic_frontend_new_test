@@ -11,20 +11,24 @@ export const ServiceDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const { setCurrentServicePath } = useServiceStore();
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (consider the portal menu as inside)
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const clickedInsideButton = !!buttonRef.current && buttonRef.current.contains(target);
+      const clickedInsideMenu = !!menuRef.current && menuRef.current.contains(target);
+      const clickedInsideWrapper = !!dropdownRef.current && dropdownRef.current.contains(target);
+      if (clickedInsideButton || clickedInsideMenu || clickedInsideWrapper) return;
+      setIsOpen(false);
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleDocumentClick, true);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleDocumentClick, true);
     };
   }, []);
 
@@ -67,6 +71,7 @@ export const ServiceDropdown = () => {
     <AnimatePresence>
       {isOpen && position && (
         <motion.div
+          ref={menuRef}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}

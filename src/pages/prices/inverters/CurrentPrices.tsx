@@ -163,6 +163,7 @@ export default function InverterCurrentPricesPage() {
         currencySymbol="₴"
         columns={createColumns(hook.filters.usd_rate || usdRate, hook.filters.markup || markup)}
         hook={hook as any}
+        compact
         chartConfig={{
           getChart: hook.getChart,
           suppliers: (hook as any).supplierOptions ?? [],
