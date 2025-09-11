@@ -2,7 +2,7 @@ import type React from 'react';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { History, Trash2, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { History, Trash2, Loader2, CheckCircle2, AlertCircle, Save } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 // import { useNavigate } from 'react-router-dom';
 
@@ -27,6 +27,7 @@ import {
   type SiteContentPrompt,
 } from '@/api/contentPrompts';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
+import { toast } from '@/hooks/use-toast';
 
 type FieldConfig<K extends string> = { key: K; label: string };
 
@@ -60,7 +61,10 @@ export default function AIProductFillerTemplates() {
   const [productTpl, setProductTpl] = useState<ProductTemplates | null>(null);
   const [categoryTpl, setCategoryTpl] = useState<CategoryTemplates | null>(null);
   const [saving, setSaving] = useState(false);
-  const [prompts, setPrompts] = useState<Partial<Record<SiteColumnName, SiteContentPrompt[]>>>({});
+  // Кеш підказок за мовою: lang -> (column -> prompts)
+  const [promptsByLang, setPromptsByLang] = useState<Partial<Record<Lang, Partial<Record<SiteColumnName, SiteContentPrompt[]>>>> >({});
+  // Обраний для поля language override: column -> lang
+  const [fieldLang, setFieldLang] = useState<Partial<Record<SiteColumnName, Lang>>>({});
   const [creatingColumn, setCreatingColumn] = useState<SiteColumnName | null>(null);
   // Діалог історії промптів
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -70,12 +74,17 @@ export default function AIProductFillerTemplates() {
   type EnabledMap = Partial<Record<SiteColumnName, boolean>>;
   const ENABLED_STORAGE_KEY = 'ai_pf_enabled_columns_v1';
   const [enabled, setEnabled] = useState<EnabledMap>({});
+  // Локальні промпти для перекладу (помовно), без логіки передачі в перекладач
+  const STORAGE_KEY_TRANSLATION_PROMPTS = 'ai_pf.translationPrompts.v1';
+  const [translationPrompts, setTranslationPrompts] = useState<Partial<Record<Lang, string>>>({});
+  // Локальна мова для редактора "Промпти для перекладу"
+  const [transLang, setTransLang] = useState<Lang>(lang);
 
   // Пер-колонкові статуси збереження та базовий текст останнього збереження
   const [savingPerColumn, setSavingPerColumn] = useState<
     Partial<Record<SiteColumnName, 'idle' | 'saving' | 'saved' | 'error'>>
   >({});
-  const [lastSavedText, setLastSavedText] = useState<Partial<Record<SiteColumnName, string>>>({});
+  const [lastSavedTextByLang, setLastSavedTextByLang] = useState<Partial<Record<Lang, Partial<Record<SiteColumnName, string>>>>>({});
 
   // Завантажити стан перемикачів з localStorage для поточної мови
   useEffect(() => {
@@ -92,6 +101,27 @@ export default function AIProductFillerTemplates() {
       setEnabled({});
     }
   }, [entity, lang]);
+
+  // Завантажити локальні промпти для перекладу з localStorage (раз при монтуванні)
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY_TRANSLATION_PROMPTS);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<Record<Lang, string>>;
+        setTranslationPrompts(parsed ?? {});
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const updateTranslationPrompt = (l: Lang, value: string) => {
+    setTranslationPrompts(prev => {
+      const next = { ...prev, [l]: value } as Partial<Record<Lang, string>>;
+      try { window.localStorage.setItem(STORAGE_KEY_TRANSLATION_PROMPTS, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   const persistEnabled = (next: EnabledMap) => {
     setEnabled(next);
@@ -120,9 +150,10 @@ export default function AIProductFillerTemplates() {
   const activatePrompt = async (column: SiteColumnName, id: number) => {
     try {
       await activateSiteContentPrompt(id);
-      // reload this column to reflect new active state
-      const list = await fetchColumnPrompts(column, lang);
-      setPrompts(prev => ({ ...prev, [column]: list }));
+      // reload this column to reflect new active state (для мови, що обрана для цього поля)
+      const l = (fieldLang[column] ?? lang);
+      const list = await fetchColumnPrompts(column, l);
+      setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
       // baseline map більше не використовується
       // сповістити генерацію, що активний промпт змінився
       notifyPromptsChanged(column);
@@ -134,24 +165,25 @@ export default function AIProductFillerTemplates() {
   const deletePrompt = async (column: SiteColumnName, id: number) => {
     if (!window.confirm('Видалити цей промпт? Дію неможливо скасувати.')) return;
     // Перевіряємо, чи був він активним до видалення
-    const prevList = prompts[column] ?? [];
-    const wasActive = !!prevList.find((p) => p.id === id)?.is_active;
+    const l = (fieldLang[column] ?? lang);
+    const prevList = getPromptsFor(column, l);
+    const wasActive = !!prevList.find((p: SiteContentPrompt) => p.id === id)?.is_active;
     setDeletingId(id);
     try {
       const ok = await deleteSiteContentPrompt(id);
       if (ok) {
-        let list = await fetchColumnPrompts(column, lang);
+        let list = await fetchColumnPrompts(column, l);
         // Якщо видаляли активний — активуємо "попередню" версію
         if (wasActive && list.length > 0) {
           // шукаємо найбільший id, що менший за видалений; якщо немає — просто максимальний id
-          const less = list.filter((x) => x.id < id);
+          const less = list.filter((x: SiteContentPrompt) => x.id < id);
           let toActivate = less.length > 0 ? less.reduce((a, b) => (a.id > b.id ? a : b)) : list.reduce((a, b) => (a.id > b.id ? a : b));
           if (toActivate && !toActivate.is_active) {
             await activateSiteContentPrompt(toActivate.id);
-            list = await fetchColumnPrompts(column, lang);
+            list = await fetchColumnPrompts(column, l);
           }
         }
-        setPrompts(prev => ({ ...prev, [column]: list }));
+        setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
         // baseline map більше не використовується
         notifyPromptsChanged(column);
       }
@@ -172,7 +204,7 @@ export default function AIProductFillerTemplates() {
   const loadAllPrompts = async () => {
     try {
       const data = await fetchAllColumnPrompts(undefined as unknown as any, lang);
-      setPrompts(data);
+      setPromptsByLang(prev => ({ ...prev, [lang]: data }));
 
       // ініціалізуємо lastSavedText поточними активними/першими значеннями
       const last: Partial<Record<SiteColumnName, string>> = {};
@@ -181,7 +213,7 @@ export default function AIProductFillerTemplates() {
         const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
         if (active) last[c] = active.prompt;
       });
-      setLastSavedText(last);
+      setLastSavedTextByLang(prev => ({ ...prev, [lang]: last }));
     } catch (e) {
       console.error('Не вдалося завантажити підказки', e);
     }
@@ -195,7 +227,7 @@ export default function AIProductFillerTemplates() {
       from: 'templates' as const,
       entity,
       lang,
-      prompts,
+      prompts: promptsByLang[lang] ?? {},
       productTpl,
       categoryTpl,
       enabled,
@@ -205,16 +237,17 @@ export default function AIProductFillerTemplates() {
     } catch (e) {
       console.warn('[Templates] Failed to persist payload to sessionStorage', e);
     }
-  }, [entity, lang, prompts, productTpl, categoryTpl, enabled]);
+  }, [entity, lang, promptsByLang, productTpl, categoryTpl, enabled]);
 
-  const createPrompt = async (column: SiteColumnName, name: string, prompt: string) => {
+  const createPrompt = async (column: SiteColumnName, name: string, prompt: string, l?: Lang) => {
     setCreatingColumn(column);
     try {
-      const payload = { name, prompt, site_column_name: column, lang_code: lang, is_active: true } as const;
+      const langCode = l ?? (fieldLang[column] ?? lang);
+      const payload = { name, prompt, site_column_name: column, lang_code: langCode, is_active: true } as const;
       console.log('[CreateSiteContentPrompt] Payload:', payload);
       const created = await createSiteContentPrompt(payload);
       // Reload the column list to capture the new item (and its real id)
-      let list = await fetchColumnPrompts(column, lang);
+      let list = await fetchColumnPrompts(column, langCode);
       console.log('[CreateSiteContentPrompt] Reloaded column list:', column, list);
       // Try to find created item in the list
       let target = list.find(it => it.id === created?.id);
@@ -223,9 +256,9 @@ export default function AIProductFillerTemplates() {
       // If target exists and is not active, explicitly activate it (backend should deactivate previous active)
       if (target && !target.is_active) {
         await activateSiteContentPrompt(target.id);
-        list = await fetchColumnPrompts(column, lang);
+        list = await fetchColumnPrompts(column, langCode);
       }
-      setPrompts(prev => ({ ...prev, [column]: list }));
+      setPromptsByLang(prev => ({ ...prev, [langCode]: { ...(prev[langCode]||{}), [column]: list } }));
       notifyPromptsChanged(column);
     } catch (e) {
       console.error('Не вдалося створити підказку', e);
@@ -238,9 +271,42 @@ export default function AIProductFillerTemplates() {
     void loadAllPrompts();
   }, [lang]);
 
+  // Хелпер: отримати список підказок для колонки у заданій мові
+  const getPromptsFor = (column: SiteColumnName, l: Lang): SiteContentPrompt[] => {
+    return (promptsByLang[l]?.[column] ?? []) as SiteContentPrompt[];
+  };
+
+  // При перемиканні мови для конкретного поля — підвантажуємо тільки її для цієї колонки при потребі
+  const ensureColumnLangLoaded = async (column: SiteColumnName, l: Lang) => {
+    if (promptsByLang[l]?.[column]) return;
+    const list = await fetchColumnPrompts(column, l);
+    setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
+    // baseline для нової мови
+    const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+    if (active) setLastSavedTextByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: active.prompt } }));
+  };
+
   const vars = useMemo(() => (entity === 'product' ? PRODUCT_VARIABLES : CATEGORY_VARIABLES), [entity]);
   const fields = useMemo(() => (entity === 'product' ? PRODUCT_FIELDS : CATEGORY_FIELDS), [entity]);
   // left labels removed with Saved prompts UI
+
+  // Глобальний прапор наявності незбережених змін для відображення кнопки у топ-барі
+  const hasUnsaved = useMemo(() => {
+    if (entity !== 'product') return false;
+    try {
+      for (const f of PRODUCT_FIELDS) {
+        const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+        if (!column) continue;
+        const l = (fieldLang[column] ?? lang);
+        const list = getPromptsFor(column, l);
+        const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+        const currentText = (active?.prompt ?? ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? ''));
+        const baseline = (lastSavedTextByLang[l]?.[column] ?? '');
+        if ((currentText || '').trim().length > 0 && currentText !== baseline) return true;
+      }
+    } catch {}
+    return false;
+  }, [entity, fieldLang, lang, productTpl, lastSavedTextByLang, promptsByLang]);
 
   // Мапа колонки у читабельну назву поля (для заголовка діалогу)
   const columnToFieldLabel = useMemo(() => {
@@ -257,10 +323,12 @@ export default function AIProductFillerTemplates() {
     id: number,
     patch: Partial<Pick<SiteContentPrompt, 'name' | 'prompt'>>
   ) => {
-    setPrompts(prev => {
-      const list = prev[column] ?? [];
+    const l = (fieldLang[column] ?? lang);
+    setPromptsByLang(prev => {
+      const by = prev[l] ?? {};
+      const list = (by[column] ?? []) as SiteContentPrompt[];
       const next = list.map(item => (item.id === id ? { ...item, ...patch } : item));
-      return { ...prev, [column]: next };
+      return { ...prev, [l]: { ...by, [column]: next } };
     });
   };
 
@@ -273,7 +341,8 @@ export default function AIProductFillerTemplates() {
       // Try map product field key to API column and update first prompt item inline
       const column = mapProductFieldKeyToSiteColumnName(key as keyof ProductTemplates);
       if (column) {
-        const list = prompts[column] ?? [];
+        const l = (fieldLang[column] ?? lang);
+        const list = getPromptsFor(column, l);
         const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
         if (active) {
           handlePromptChange(column, active.id, { prompt: value });
@@ -297,18 +366,19 @@ export default function AIProductFillerTemplates() {
         (PRODUCT_FIELDS as typeof PRODUCT_FIELDS).forEach((f) => {
           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
           if (!column) return; // немаплені підуть у локальне збереження нижче
-          const list = prompts[column] ?? [];
+          const l = (fieldLang[column] ?? lang);
+          const list = getPromptsFor(column, l);
           const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
           const currentText = (active?.prompt ?? ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? ''));
-          const baseline = (lastSavedText[column] ?? '');
+          const baseline = (lastSavedTextByLang[l]?.[column] ?? '');
           if (!currentText || currentText.trim().length === 0) return; // не створюємо порожні
           if (currentText === baseline) return; // змін немає
 
           setSavingPerColumn((prev) => ({ ...prev, [column]: 'saving' }));
           const currentName = active ? active.name : column;
           const task = (async () => {
-            await createPrompt(column, currentName, currentText);
-            setLastSavedText((prev) => ({ ...prev, [column]: currentText }));
+            await createPrompt(column, currentName, currentText, l);
+            setLastSavedTextByLang((prev) => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: currentText } }));
             setSavingPerColumn((prev) => ({ ...prev, [column]: 'saved' }));
             window.setTimeout(() => {
               setSavingPerColumn((prev) => ({ ...prev, [column]: 'idle' }));
@@ -345,8 +415,9 @@ export default function AIProductFillerTemplates() {
   const copyVar = async (v: string) => {
     try {
       await navigator.clipboard.writeText(v);
+      toast({ title: 'Скопійовано в буфер', description: v });
     } catch {
-      // ignore
+      toast({ title: 'Не вдалося скопіювати', description: v, variant: 'destructive' as any });
     }
   };
 
@@ -354,12 +425,34 @@ export default function AIProductFillerTemplates() {
     <AIProductFillerLayout>
     <div className="w-full py-0">
       <div className="sticky top-0 z-10 px-0 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-neutral-900/60 bg-white/80 dark:bg-neutral-900/80 border-b">
-        <div className="flex items-center justify-between py-3">
-          <div>
+        <div className="flex items-center justify-between py-3 px-3">
+          <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-2xl font-semibold">Шаблони контенту</h1>
-            <p className="text-sm text-muted-foreground">Налаштуйте шаблони AI для продуктів і категорій</p>
           </div>
-          
+          <div className="flex items-center">
+            {saving ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500 text-white text-sm opacity-90 cursor-wait"
+                disabled
+              >
+                <Loader2 className="h-4 w-4 animate-spin" /> Зберігаємо…
+              </button>
+            ) : hasUnsaved ? (
+              <button
+                type="button"
+                onClick={onSave}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500 text-white text-sm shadow hover:bg-emerald-600 transition-colors animate-pulse"
+                title="Є незбережені зміни — натисніть, щоб зберегти"
+              >
+                <Save className="h-4 w-4" /> Зберегти
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-emerald-700 bg-emerald-100/70 text-xs">
+                <CheckCircle2 className="h-4 w-4" /> Збережено
+              </span>
+            )}
+          </div>
         </div>
       </div>
       {/* Outer card */}
@@ -442,7 +535,8 @@ export default function AIProductFillerTemplates() {
                         {entity === 'product' && (() => {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                           if (!column) return null;
-                          const list = prompts[column] ?? [];
+                          const l = (fieldLang[column] ?? lang);
+                          const list = getPromptsFor(column, l);
                           return (
                             <button
                               type="button"
@@ -461,11 +555,24 @@ export default function AIProductFillerTemplates() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="hidden md:flex gap-2 text-xs text-muted-foreground">
-                          <span className={lang === 'ua' ? 'font-semibold text-primary' : ''}>UA</span>
-                          <span>/</span>
-                          <span className={lang === 'ru' ? 'font-semibold text-primary' : ''}>RU</span>
-                          <span>/</span>
-                          <span className={lang === 'en' ? 'font-semibold text-primary' : ''}>EN</span>
+                          {(['ua','ru','en'] as Lang[]).map(lx => (
+                            <button
+                              key={lx}
+                              type="button"
+                              className={[
+                                'hover:underline',
+                                (fieldLang[mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates) as SiteColumnName] ?? lang) === lx ? 'font-semibold text-primary' : ''
+                              ].join(' ')}
+                              onClick={async () => {
+                                const col = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                                if (!col) return;
+                                setFieldLang(prev => ({ ...prev, [col]: lx }));
+                                await ensureColumnLangLoaded(col, lx);
+                              }}
+                            >
+                              {lx.toUpperCase()}
+                            </button>
+                          ))}
                         </div>
                         {entity === 'product' && (() => {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
@@ -493,7 +600,8 @@ export default function AIProductFillerTemplates() {
                           if (entity === 'product') {
                             const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                             if (column) {
-                              const list = prompts[column] ?? [];
+                              const l = (fieldLang[column] ?? lang);
+                              const list = getPromptsFor(column, l);
                               const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
                               if (active) return active.prompt;
                             }
@@ -511,7 +619,8 @@ export default function AIProductFillerTemplates() {
                         if (entity === 'product') {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                           if (column) {
-                            const list = prompts[column] ?? [];
+                            const l = (fieldLang[column] ?? lang);
+                            const list = getPromptsFor(column, l);
                             const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
                             if (active) return active.prompt.length;
                           }
@@ -525,13 +634,14 @@ export default function AIProductFillerTemplates() {
                           if (entity !== 'product') return null;
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                           if (!column) return null;
-                          const list = prompts[column] ?? [];
+                          const l = (fieldLang[column] ?? lang);
+                          const list = getPromptsFor(column, l);
                           const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
                           const currentText = (() => {
                             if (active) return active.prompt;
                             return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
                           })();
-                          const baseline = lastSavedText[column] ?? '';
+                          const baseline = lastSavedTextByLang[l]?.[column] ?? '';
                           const isDirty = currentText !== baseline;
                           const status = savingPerColumn[column] ?? 'idle';
                           const isLoading = creatingColumn === column || status === 'saving';
@@ -566,16 +676,45 @@ export default function AIProductFillerTemplates() {
                   </div>
                 ))}
               </div>
+              <div className="  rounded-2xl  mt-5  dark:bg-slate-800/90  ">
+        <h3 className="text-lg text-green-700 hover:underline mb-2">Промпти для перекладу</h3>
+        <div className="inline-flex rounded-md border overflow-hidden mb-2">
+          {(['ua','ru','en'] as Lang[]).map((lx) => (
+            <button
+              key={lx}
+              type="button"
+              className={[
+                'px-2.5 py-1 text-sm transition-colors',
+                transLang === lx ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800/70'
+              ].join(' ')}
+              onClick={() => setTransLang(lx)}
+              aria-pressed={transLang === lx}
+              aria-label={`Мова перекладацького промпта: ${lx.toUpperCase()}`}
+            >
+              {lx.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <textarea
+          className="w-full min-h-[120px] rounded-md bg-white/70 dark:bg-neutral-900/40 p-3 text-sm border border-emerald-300/70 dark:border-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          value={translationPrompts[transLang] ?? ''}
+          onChange={(e) => updateTranslationPrompt(transLang, e.target.value)}
+          placeholder="Введіть промпт для перекладу…"
+        />
+        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Довжина: {(translationPrompts[transLang] ?? '').length}</span>
+          <span className="text-neutral-500">Локальне збереження</span>
+        </div>
+      </div>
             </div>
-            <div className="flex justify-end mt-4">
-              <button onClick={onSave} className="bg-emerald-400 text-white px-4 py-2 rounded-md disabled:opacity-50" disabled={saving}>
-                {saving ? 'Збереження…' : 'Зберегти'}
-              </button>
-            </div>
+             
           </div>
         </div>
       </div>
       </div>
+
+      {/* Додатковий розділ: Промпти для перекладу (локально, без логіки передачі) */}
+       
 
       {/* ДІАЛОГ: Історія збережених промптів */}
       <Dialog
@@ -593,13 +732,14 @@ export default function AIProductFillerTemplates() {
           </DialogHeader>
           <div className="space-y-2 max-h-[60vh] overflow-auto">
             {(() => {
-              const list = historyColumn ? (prompts[historyColumn] ?? []) : [];
+              const l = historyColumn ? (fieldLang[historyColumn] ?? lang) : lang;
+              const list = historyColumn ? getPromptsFor(historyColumn, l) : [];
               if (!list.length) {
                 return <div className="text-sm text-neutral-500">Немає збережених промптів</div>;
               }
               return (
                 <div className="space-y-2">
-                  {list.map((p) => (
+                  {list.map((p: SiteContentPrompt) => (
                     <div key={p.id} className="flex items-center gap-2 text-sm">
                       {p.is_active && (
                         <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">active</span>

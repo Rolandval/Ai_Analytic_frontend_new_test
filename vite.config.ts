@@ -4,7 +4,8 @@ import path from "path"
 
 const BACKEND_ORIGIN = "http://185.233.44.234:8002";
 const MCP_ORIGIN = "http://185.233.44.234:8080";
-const Upload = 'http://185.233.44.234:8003' 
+const Upload = 'http://185.233.44.234:8003'
+const ANALYTICS_ORIGIN = 'http://185.233.44.234:8003'
 
 export default defineConfig({
   plugins: [react()],
@@ -40,15 +41,20 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/batteries/analytics': {
-        target: BACKEND_ORIGIN,
+        target: ANALYTICS_ORIGIN,
         changeOrigin: true,
       },
       '/inverters/analytics': {
-        target: BACKEND_ORIGIN,
+        target: ANALYTICS_ORIGIN,
         changeOrigin: true,
       },
       '/solar_panels/analytics': {
-        target: BACKEND_ORIGIN,
+        target: ANALYTICS_ORIGIN,
+        changeOrigin: true,
+      },
+      // Деякі ендпоїнти використовують дефіси в шляху
+      '/solar-panels/analytics': {
+        target: ANALYTICS_ORIGIN,
         changeOrigin: true,
       },
       '/batteries/exports': {
@@ -96,7 +102,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/analytics': {
-        target: BACKEND_ORIGIN,
+        target: ANALYTICS_ORIGIN,
         changeOrigin: true,
       },
     },

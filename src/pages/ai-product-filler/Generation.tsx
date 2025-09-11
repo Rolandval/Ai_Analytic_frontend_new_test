@@ -116,6 +116,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   // Стан для перекладу вибраних
   const [translating, setTranslating] = useState(false);
   const [translateProgress, setTranslateProgress] = useState<string>('');
+  // Режим перекладу доступний по пропсу mode
+  const isTranslateMode = mode === 'translation';
   // Масова генерація по колонці — видалено (замість кнопок у хедері використовуються чекбокси вибору колонки)
   const [saving, setSaving] = useState(false);
   // Незалежний візуальний стан чекбокса рядка, щоб вибір стовпця не впливав на нього
@@ -424,7 +426,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     })();
   }, [selectedLang]);
   
-  const isTranslateMode = mode === 'translation';
+  
   // Завантаження списку моделей для генерації / AI-перекладу
   useEffect(() => {
     let mounted = true;
@@ -1709,6 +1711,33 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const totalFiltered = filteredDescriptions.length;
   const pagedDescriptions = sortedDescriptions.slice((page - 1) * limit, page * limit);
   const totalPages = Math.ceil(totalFiltered / limit);
+  // Масове розгортання/згортання рядків (лише у режимі перекладу). Визначено тут, після pagedDescriptions.
+  const getExpandAllCheckedState = useCallback((): boolean | 'indeterminate' => {
+    if (!isTranslateMode) return false;
+    const total = pagedDescriptions.length;
+    if (total === 0) return false;
+    let expanded = 0;
+    for (let i = 0; i < total; i++) {
+      const key = getRowKey(pagedDescriptions[i], i);
+      if (expandedRowKeys[key]) expanded++;
+    }
+    if (expanded === 0) return false;
+    if (expanded === total) return true;
+    return 'indeterminate';
+  }, [isTranslateMode, pagedDescriptions, expandedRowKeys]);
+
+  const onExpandAllCheckedChange = (checked: boolean | 'indeterminate') => {
+    if (!isTranslateMode) return;
+    const shouldExpand = checked === true;
+    setExpandedRowKeys(prev => {
+      const next: Record<string, boolean> = { ...prev };
+      for (let i = 0; i < pagedDescriptions.length; i++) {
+        const key = getRowKey(pagedDescriptions[i], i);
+        if (shouldExpand) next[key] = true; else delete next[key];
+      }
+      return next;
+    });
+  };
   
   // Допоміжні: пошук варіантів по мовах для того самого продукту
   const normLang = (s: string | undefined) => (s || '').toLowerCase();
@@ -2250,47 +2279,51 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                 )
               )
 }
+              {/* Кнопки керування праворуч біля вибору моделі */}
+              <div className="flex items-center gap-2">
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleSaveChanges}
+                  disabled={saving}
+                  title="Надіслати лише змінені рядки до бекенду"
+                >
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Save className="mr-2 h-4 w-4" />
+                  Зберегти зміни
+                </Button>
+                {!isTranslateMode && (
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                    onClick={handleMassGenerate}
+                    disabled={massGenerating || !templatesState}
+                  >
+                    {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={fetchData}>
+                  Оновити
+                </Button>
+              </div>
             </div>
             
             {/* Відображення активних фільтрів */}
            
             
-            {/* Кнопки та опції */}
-            <div className="flex flex-wrap items-center gap-2 justify-start">
+            {/* Центральна кнопка для вибраних дій */}
+            <div className="flex justify-center mt-2">
               <Button
-                variant="outline"
                 onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
                 disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
                 title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
+                className={!isTranslateMode ? 'bg-red-600 hover:bg-red-700 text-white font-semibold px-4' : ''}
+                variant={isTranslateMode ? 'outline' : undefined}
               >
                 {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isTranslateMode
                   ? `Перекласти вибрані${translateProgress ? ` (${translateProgress})` : ''}`
-                  : `Заповнити вибрані${selectedProgress ? ` (${selectedProgress})` : ''}`}
-              </Button>
-              <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={handleSaveChanges}
-                disabled={saving}
-                title="Надіслати лише змінені рядки до бекенду"
-              >
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Save className="mr-2 h-4 w-4" />
-                Зберегти зміни
-              </Button>
-              {!isTranslateMode && (
-                <Button
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                  onClick={handleMassGenerate}
-                  disabled={massGenerating || !templatesState}
-                >
-                  {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
-                </Button>
-              )}
-              <Button variant="outline" onClick={fetchData}>
-                Оновити
+                  : `Згенерувати вибрані${selectedProgress ? ` (${selectedProgress})` : ''}`}
               </Button>
             </div>
           </div>
@@ -2332,23 +2365,49 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
               <Table className="table-fixed min-w-full">
               <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
                 <TableRow>
-                  <TableHead noClamp className="h-10 sm:h-12 w-24 text-center text-gray-700 dark:text-gray-300 font-medium">
-                    <div className="flex items-center justify-center gap-1">
-                      <span>№</span>
-                      <Checkbox
-                        aria-label="Вибрати всі колонки на сторінці"
-                        checked={getMasterCheckedState()}
-                        onCheckedChange={(checked) => onMasterCheckedChange(checked)}
-                        size="md"
-                        className="dark:bg-neutral-800/70 hover:shadow-md"
-                        disabled={massGenerating || translating}
-                      />z
+                  <TableHead noClamp className="h-10 sm:h-12 w-32 text-center text-gray-700 dark:text-gray-300 font-medium">
+                    <div className="relative h-full flex items-center justify-center px-2">
+                      <span className="leading-none">№</span>
+                      {isTranslateMode && (
+                        <div className="absolute left-2 top-1/2 -translate-y-1/2">
+                          {(() => {
+                            const master = getExpandAllCheckedState();
+                            const allExpanded = master === true;
+                            return (
+                              <button
+                                type="button"
+                                aria-label={allExpanded ? 'Згорнути всі рядки' : 'Розгорнути всі рядки'}
+                                title={allExpanded ? 'Згорнути всі рядки' : 'Розгорнути всі рядки'}
+                                onClick={() => onExpandAllCheckedChange(!allExpanded)}
+                                disabled={translating}
+                                className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-neutral-200/70 dark:hover:bg-neutral-800/80 text-neutral-600 dark:text-neutral-300"
+                              >
+                                {allExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <Checkbox
+                          aria-label="Вибрати всі колонки на сторінці"
+                          checked={getMasterCheckedState()}
+                          onCheckedChange={(checked) => onMasterCheckedChange(checked)}
+                          size="md"
+                          className="align-middle dark:bg-neutral-800/70 hover:shadow-md"
+                          disabled={massGenerating || translating}
+                        />
+                      </div>
                     </div>
                   </TableHead>
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('product')} style={getColStyle('product')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Назва">Назва</span>
+                        <span className="truncate" title="Назва товару">Назва</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2373,7 +2432,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('shortname')} style={getColStyle('shortname')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Коротка">Коротка</span>
+                        <span className="truncate" title="Коротка назва">Коротка</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2398,7 +2457,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('short_description')} style={getColStyle('short_description')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Опис">Опис</span>
+                        <span className="truncate" title="Короткий опис">Опис</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2423,7 +2482,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('full_description')} style={getColStyle('full_description')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Повний">Повний</span>
+                        <span className="truncate" title="Повний опис">Повний</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2448,7 +2507,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('promo_text')} style={getColStyle('promo_text')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Промо">Промо</span>
+                        <span className="truncate" title="Промо‑текст">Промо</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2473,7 +2532,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('meta_keywords')} style={getColStyle('meta_keywords')}>
                     <div className="flex flex-col gap-0.5 items-start justify-center h-full">
                       <div className="flex items-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Мета">Мета</span>
+                        <span className="truncate" title="Мета ключові слова (meta keywords)">Мета</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2498,7 +2557,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('meta_description')} style={getColStyle('meta_description')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Мета-опис">Мета-опис</span>
+                        <span className="truncate" title="Мета‑опис (meta description)">Мета-опис</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2523,7 +2582,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('searchwords')} style={getColStyle('searchwords')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Пошукові слова">Пошукові слова</span>
+                        <span className="truncate" title="Пошукові слова для сайту">Пошукові слова</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2548,7 +2607,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl" resizable onResizeStart={onResizeStart('page_title')} style={getColStyle('page_title')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
-                        <span className="truncate" title="Заголовок">Заголовок</span>
+                        <span className="truncate" title="Заголовок сторінки (page title)">Заголовок</span>
                         <Button
                           variant="outline"
                           className="h-5 w-5 p-0 ml-1"
@@ -2591,29 +2650,36 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                     return (
                       <Fragment key={rowKey}>
                       <TableRow className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
-                        <TableCell className="py-0 sm:py-1 px-1 text-center w-24">
-                          <div className="flex items-center justify-center gap-1 text-gray-700 dark:text-gray-300">
-                            {isTranslateMode ? (
-                              <button
-                                type="button"
-                                className="h-4 w-4 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                                title={expanded ? 'Згорнути підрядки' : 'Розгорнути підрядки'}
-                                onClick={(e) => { e.stopPropagation(); toggleRowExpanded(rowKey); }}
-                              >
-                                {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              </button>
-                            ) : (
-                              <span className="w-4" />
-                            )}
-                            <span className="w-6 text-right text-gray-500">{(page - 1) * limit + index + 1}</span>
-                            <Checkbox
-                              aria-label="Вибрати весь рядок"
-                              checked={getRowCheckedState(rowKey)}
-                              onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, checked)}
-                              onClick={(e) => e.stopPropagation()}
-                              size="md"
-                              className="dark:bg-neutral-800/70"
-                            />
+                        <TableCell className="py-0 sm:py-1 px-1 text-center w-32">
+                          <div className="relative flex items-center justify-center text-gray-700 dark:text-gray-300 px-2 h-full">
+                            {/* Ліворуч — chevron у режимі перекладу */}
+                            <div className="absolute left-2 top-1/2 -translate-y-1/2">
+                              {isTranslateMode ? (
+                                <button
+                                  type="button"
+                                  className="h-4 w-4 flex items-center justify-center rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                                  title={expanded ? 'Згорнути підрядки' : 'Розгорнути підрядки'}
+                                  onClick={(e) => { e.stopPropagation(); toggleRowExpanded(rowKey); }}
+                                >
+                                  {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </button>
+                              ) : null}
+                            </div>
+                            {/* По центру — номер рядка (абсолютно по центру, як '№' у хедері) */}
+                            <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center tabular-nums text-gray-500">
+                              {(page - 1) * limit + index + 1}
+                            </span>
+                            {/* Праворуч — чекбокс рядка */}
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                              <Checkbox
+                                aria-label="Вибрати весь рядок"
+                                checked={getRowCheckedState(rowKey)}
+                                onCheckedChange={(checked) => onRowGenerateCheckedChange(rowKey, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                size="md"
+                                className="dark:bg-neutral-800/70"
+                              />
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('product')}>
@@ -3030,4 +3096,4 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     </div>
     </AIProductFillerLayout>
   );
-}
+} 

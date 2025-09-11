@@ -101,9 +101,7 @@ export default function AIProductFillerLayout({ children }: Props) {
                 ))}
               </ul>
             </nav>
-            <div className='mb-12'> 
-            <FillerThemeSwitcher sidebarOpen={hovered} />
-            </div>
+             
             </div>
 
           </aside>
@@ -115,10 +113,10 @@ export default function AIProductFillerLayout({ children }: Props) {
         </div>
       </div>
       {/* Floating theme switcher (bottom-left) */}
-      <div className="fixed left-3 bottom-3 z-[9999]">
+      <div className="fixed left-1 bottom-1 z-[9999]">
         <FillerThemeSwitcher
           mode="toggle"
-          className="h-9 w-9 rounded-full border bg-white/90 dark:bg-neutral-900/80 shadow-md ring-1 ring-black/5 dark:ring-white/10 text-neutral-700 dark:text-neutral-200 cursor-pointer"
+          className="h-8 w-8 rounded-full border bg-white/90 dark:bg-neutral-900/80 shadow-md ring-1 ring-black/5 dark:ring-white/10 text-neutral-700 dark:text-neutral-200 cursor-pointer"
         />
       </div>
     </div>

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import analyticsApi from './analyticsApi';
 
 // ==================== BATTERIES ====================
 export interface BatteryChartPayload {
@@ -8,7 +8,7 @@ export interface BatteryChartPayload {
 
 export const getBatteryPriceChart = async (payload: BatteryChartPayload): Promise<string> => {
   // Endpoint must match backend batteries analytics route
-  const { data } = await axios.post(`/batteries/analytics/chart`, payload);
+  const { data } = await analyticsApi.post(`/batteries/analytics/chart`, payload);
   // backend may wrap base64 string in { chart: '...' }
   return typeof data === 'string' ? data : data.chart ?? '';
 };
@@ -20,7 +20,7 @@ export interface InverterChartPayload {
 }
 
 export const getInverterPriceChart = async (payload: InverterChartPayload): Promise<string> => {
-  const { data } = await axios.post(`/inverters/analytics/chart`, payload);
+  const { data } = await analyticsApi.post(`/inverters/analytics/chart`, payload);
   return typeof data === 'string' ? data : data.chart ?? '';
 };
 
@@ -31,6 +31,6 @@ export interface SolarPanelChartPayload {
 }
 
 export const getSolarPanelPriceChart = async (payload: SolarPanelChartPayload): Promise<string> => {
-  const { data } = await axios.post(`/solar_panels/analytics/chart`, payload);
+  const { data } = await analyticsApi.post(`/solar_panels/analytics/chart`, payload);
   return typeof data === 'string' ? data : data.chart ?? '';
 };
