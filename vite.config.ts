@@ -47,7 +47,7 @@ export default defineConfig({
       '/inverters/analytics': {
         target: ANALYTICS_ORIGIN,
         changeOrigin: true,
-      },
+      }, 
       '/solar_panels/analytics': {
         target: ANALYTICS_ORIGIN,
         changeOrigin: true,

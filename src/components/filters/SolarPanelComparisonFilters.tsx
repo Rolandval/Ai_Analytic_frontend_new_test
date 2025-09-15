@@ -557,9 +557,8 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
   return (
     <div className="w-full w-auto mx-auto flex flex-col gap-4">
-      {/* Top search and active filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        {/* Name search input */}
+       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+ 
         <div className="flex-shrink-0">
           <Input
             placeholder="Назва"
@@ -587,7 +586,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             ))
           )}
           
-          {/* Постачальники */}
+          {/* Постачальники */}-
           {local.suppliers && local.suppliers.length > 0 && (
             local.suppliers.map(supplier => (
               <Badge key={supplier} variant="secondary" className="bg-green-100 text-green-800 border-green-200">

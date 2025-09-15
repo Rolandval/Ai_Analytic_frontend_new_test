@@ -23,6 +23,7 @@ import { useLocation } from 'react-router-dom';
 import bgImage from './img/photo_2025-09-02_23-21-26.jpg';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
 import { useTheme } from '@/hooks/useTheme';
+import { usePFI18n } from './i18n';
 
 interface ContentDescription {
   id?: number;
@@ -64,9 +65,10 @@ interface CustomFilter {
 
 // Колонку мови видалено — мапа назв мов більше не потрібна
 
-export default function AIProductFillerGeneration({ title = 'AI генерація', mode = 'generation' }: { title?: string; mode?: 'generation' | 'translation' }) {
+export default function AIProductFillerGeneration({ title: _title = 'AI генерація', mode = 'generation' }: { title?: string; mode?: 'generation' | 'translation' }) {
   const location = useLocation();
   const { isDarkMode } = useTheme();
+  const { t } = usePFI18n();
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
@@ -117,6 +119,13 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
   const [translating, setTranslating] = useState(false);
   const [translateProgress, setTranslateProgress] = useState<string>('');
   // Режим перекладу доступний по пропсу mode
+  // Документ заголовок за мовою і режимом
+  useEffect(() => {
+    const prev = document.title;
+    const pageTitle = mode === 'translation' ? t('nav.translator') : t('nav.generation');
+    document.title = `${pageTitle} — AI Product Filler`;
+    return () => { document.title = prev; };
+  }, [t, mode]);
   const isTranslateMode = mode === 'translation';
   // Масова генерація по колонці — видалено (замість кнопок у хедері використовуються чекбокси вибору колонки)
   const [saving, setSaving] = useState(false);
@@ -2022,7 +2031,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
         <div className="p-4 space-y-4">
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold">{title}</h1>
+              <h1 className="text-2xl font-bold">{mode === 'translation' ? t('nav.translator') : t('nav.generation')}</h1>
               {isTranslateMode && (
                 <div className="flex items-center gap-1 bg-white/80 dark:bg-neutral-800/80 border border-amber-200/70 dark:border-neutral-700 rounded-full p-1 text-xs select-none">
                   <button
@@ -2047,9 +2056,11 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
               )}
             </div>
             
-            {/* Рядок з пошуком та фільтрами */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-[200px]">
+            {/* Рядок керування (пошук, мова, тип, модель/мови перекладу, кнопки) */}
+            
+            <div className="flex flex-wrap items-center gap-2.5 w-full">
+              {/* Пошук */}
+              <div className="relative flex-1 min-w-[220px] max-w-[480px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="text"
@@ -2059,76 +2070,9 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              
-              
-              
-              {/* Кнопка + з попапом для додавання фільтра */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-10 w-10">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                  
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                  <div className="grid gap-4">
-                    <div className="space-y-2">
-                      <h4 className="font-medium leading-none">Додати фільтр</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Виберіть поле та введіть значення для фільтрації
-                      </p>
-                    </div>
-                    <div className="grid gap-2">
-                      <Select 
-                        value={newFilter.field} 
-                        onValueChange={(value) => setNewFilter({...newFilter, field: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Виберіть поле" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="site_product">Назва продукту</SelectItem>
-                          <SelectItem value="site_shortname">Коротка назва</SelectItem>
-                          <SelectItem value="site_short_description">Короткий опис</SelectItem>
-                          <SelectItem value="site_full_description">Повний опис</SelectItem>
-                          <SelectItem value="site_promo_text">Промо-текст</SelectItem>
-                          <SelectItem value="site_meta_keywords">Мета-ключові слова</SelectItem>
-                          <SelectItem value="site_meta_description">Мета-опис</SelectItem>
-                          <SelectItem value="site_searchwords">Пошукові слова</SelectItem>
-                          <SelectItem value="site_page_title">Заголовок сторінки</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      
-                      <Input 
-                        value={newFilter.value} 
-                        onChange={(e) => setNewFilter({...newFilter, value: e.target.value})} 
-                        placeholder="Значення для пошуку"
-                      />
-                      
-                      <Button 
-                        onClick={() => {
-                          if (newFilter.field && newFilter.value) {
-                            const filter: CustomFilter = {
-                              id: `filter_${Date.now()}`,
-                              name: `${newFilter.field.replace('site_', '')}: ${newFilter.value}`,
-                              field: newFilter.field,
-                              value: newFilter.value,
-                              active: true // Фільтр додається як активний
-                            };
-                            setCustomFilters([...customFilters, filter]);
-                            setNewFilter({ name: '', field: newFilter.field, value: '' });
-                          }
-                        }}
-                      >
-                        Додати фільтр
-                      </Button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              {/* Фільтри мови та типу товару поруч із пошуком */}
+              {/* Мова */}
               <Select value={selectedLang} onValueChange={(value) => setSelectedLang(value as 'ua' | 'en' | 'ru')}>
-                <SelectTrigger className="w-[120px]" title="Мова">
+                <SelectTrigger className="w-[120px] shrink-0" title="Мова">
                   <SelectValue placeholder="Мова" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2137,8 +2081,9 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <SelectItem value="ru">ru</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Тип товару */}
               <Select value={selectedProductType} onValueChange={(value) => setSelectedProductType(value as ProductType | 'all')}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[180px] shrink-0">
                   <SelectValue placeholder="Все типы" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2148,40 +2093,12 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   <SelectItem value="inverters">Інвертори</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="flex items-center flex-wrap gap-2">
-                {customFilters.length > 0 && (
-                  <div className='w-auto min-w-[200px] h-10 flex items-center space-x-1 p-1
-                   bg-black rounded-md border border-[#333]'>
-                    {customFilters.map(filter => (
-                      <Badge 
-                        key={filter.id}
-                        variant="outline" 
-                        className={`flex items-center h-8 gap-1 cursor-pointer rounded-md px-2 ${filter.active ? 'bg-[#333] text-white border-[#444]' : 'bg-black text-gray-300 border-[#333]'} hover:bg-[#222]`}
-                        onClick={() => toggleFilterActive(filter.id)}
-                        title={`Поле: ${filter.field}, Значення: ${filter.value}, Статус: ${filter.active ? 'Активний' : 'Неактивний'}`}
-                      >
-                        {filter.field.replace('site_', '')}: {filter.value}
-                        <X 
-                          size={14} 
-                          className="cursor-pointer text-gray-400 hover:text-red-400" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeCustomFilter(filter.id);
-                          }} 
-                        />
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
               {/* Модель/Мови для перекладу */}
               {!isTranslateMode ? (
                 // Режим генерації: вибір AI-моделі
                 <>
                   <Select value={selectedChatModel} onValueChange={(value) => setSelectedChatModel(value)}>
-                    <SelectTrigger className="w-[240px]" title="AI Модель">
+                    <SelectTrigger className="w-[240px] shrink-0" title="AI Модель">
                       <SelectValue placeholder={modelsLoading ? 'Завантаження моделей…' : 'Виберіть модель'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2208,7 +2125,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   // Режим перекладу + AI: вибір моделі
                   <>
                     <Select value={selectedChatModel} onValueChange={(value) => setSelectedChatModel(value)}>
-                      <SelectTrigger className="w-[240px]" title="AI Модель для перекладу">
+                      <SelectTrigger className="w-[240px] shrink-0" title="AI Модель для перекладу">
                         <SelectValue placeholder={modelsLoading ? 'Завантаження моделей…' : 'Виберіть модель'} />
                       </SelectTrigger>
                       <SelectContent>
@@ -2234,7 +2151,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   // Режим перекладу + Free: вибір джерела і цільової мови (залишається тут)
                   <div className="flex items-center gap-2">
                     <Select value={sourceLang} onValueChange={(value) => setSourceLang(value as 'ua' | 'en' | 'ru')}>
-                      <SelectTrigger className="w-[140px]" title="З якої мови">
+                      <SelectTrigger className="w-[140px] shrink-0" title="З якої мови">
                         <SelectValue placeholder="З мови" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2255,7 +2172,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-amber-600 hover:text-amber-700"
+                      className="h-8 w-8 text-amber-600 hover:text-amber-700 shrink-0"
                       title="Поміняти місцями мови"
                       onClick={() => {
                         setSourceLang(targetLang);
@@ -2266,7 +2183,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                     </Button>
                   </div>
                     <Select value={targetLang} onValueChange={(value) => setTargetLang(value as 'ua' | 'en' | 'ru')}>
-                      <SelectTrigger className="w-[140px]" title="На яку мову">
+                      <SelectTrigger className="w-[140px] shrink-0" title="На яку мову">
                         <SelectValue placeholder="На мову" />
                       </SelectTrigger>
                       <SelectContent>
@@ -2279,8 +2196,69 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                 )
               )
 }
-              {/* Кнопки керування праворуч біля вибору моделі */}
-              <div className="flex items-center gap-2">
+              {/* Кнопки керування – без додаткового контейнера (йдуть як діти головного рядка) */}
+              <>
+                {/* Кнопка + з попапом для додавання фільтра – перенесено сюди */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="Додати фільтр">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Додати фільтр</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Виберіть поле та введіть значення для фільтрації
+                        </p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Select 
+                          value={newFilter.field} 
+                          onValueChange={(value) => setNewFilter({...newFilter, field: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Виберіть поле" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="site_product">Назва продукту</SelectItem>
+                            <SelectItem value="site_shortname">Коротка назва</SelectItem>
+                            <SelectItem value="site_short_description">Короткий опис</SelectItem>
+                            <SelectItem value="site_full_description">Повний опис</SelectItem>
+                            <SelectItem value="site_promo_text">Промо-текст</SelectItem>
+                            <SelectItem value="site_meta_keywords">Мета-ключові слова</SelectItem>
+                            <SelectItem value="site_meta_description">Мета-опис</SelectItem>
+                            <SelectItem value="site_searchwords">Пошукові слова</SelectItem>
+                            <SelectItem value="site_page_title">Заголовок сторінки</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input 
+                          value={newFilter.value} 
+                          onChange={(e) => setNewFilter({...newFilter, value: e.target.value})} 
+                          placeholder="Значення для пошуку"
+                        />
+                        <Button 
+                          onClick={() => {
+                            if (newFilter.field && newFilter.value) {
+                              const filter: CustomFilter = {
+                                id: `filter_${Date.now()}`,
+                                name: `${newFilter.field.replace('site_', '')}: ${newFilter.value}`,
+                                field: newFilter.field,
+                                value: newFilter.value,
+                                active: true
+                              };
+                              setCustomFilters([...customFilters, filter]);
+                              setNewFilter({ name: '', field: newFilter.field, value: '' });
+                            }
+                          }}
+                        >
+                          Додати фільтр
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={handleSaveChanges}
@@ -2289,7 +2267,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                 >
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <Save className="mr-2 h-4 w-4" />
-                  Зберегти зміни
+                  {t('buttons.save_changes')}
                 </Button>
                 {!isTranslateMode && (
                   <Button
@@ -2298,34 +2276,55 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                     disabled={massGenerating || !templatesState}
                   >
                     {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
+                    {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
                   </Button>
                 )}
-                <Button variant="outline" onClick={fetchData}>
-                  Оновити
+                <Button variant="outline" onClick={fetchData} className="shrink-0">
+                  {t('buttons.update')}
                 </Button>
-              </div>
+                {/* Кнопку аналізу видалено на прохання користувача */}
+                {/* Згенерувати/Перекласти вибрані – завжди остання кнопка у ряду */}
+                <Button
+                  onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
+                  disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
+                  title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
+                  className={!isTranslateMode ? 'bg-red-600 hover:bg-red-700 text-white font-semibold px-4' : ''}
+                  variant={isTranslateMode ? 'outline' : undefined}
+               >
+                  {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isTranslateMode
+                    ? `${t('buttons.translate_selected')}${translateProgress ? ` (${translateProgress})` : ''}`
+                    : `${t('buttons.generate_selected')}${selectedProgress ? ` (${selectedProgress})` : ''}`}
+                </Button>
+              </>
+              {/* Активні фільтри – після кнопок, щоб кнопки не переносились через довгі бейджі */}
+              {customFilters.length > 0 && (
+                <>
+                  {customFilters.map(filter => (
+                    <Badge 
+                      key={filter.id}
+                      variant="outline" 
+                      className={`flex items-center h-8 gap-1 cursor-pointer rounded-md px-2 ${filter.active ? 'bg-[#333] text-white border-[#444]' : 'bg-black text-gray-300 border-[#333]'} hover:bg-[#222]`}
+                      onClick={() => toggleFilterActive(filter.id)}
+                      title={`Поле: ${filter.field}, Значення: ${filter.value}, Статус: ${filter.active ? 'Активний' : 'Неактивний'}`}
+                    >
+                      {filter.field.replace('site_', '')}: {filter.value}
+                      <X 
+                        size={14} 
+                        className="cursor-pointer text-gray-400 hover:text-red-400" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCustomFilter(filter.id);
+                        }} 
+                      />
+                    </Badge>
+                  ))}
+                </>
+              )}
             </div>
             
-            {/* Відображення активних фільтрів */}
-           
             
-            {/* Центральна кнопка для вибраних дій */}
-            <div className="flex justify-center mt-2">
-              <Button
-                onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
-                disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
-                title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
-                className={!isTranslateMode ? 'bg-red-600 hover:bg-red-700 text-white font-semibold px-4' : ''}
-                variant={isTranslateMode ? 'outline' : undefined}
-              >
-                {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isTranslateMode
-                  ? `Перекласти вибрані${translateProgress ? ` (${translateProgress})` : ''}`
-                  : `Згенерувати вибрані${selectedProgress ? ` (${selectedProgress})` : ''}`}
-              </Button>
-            </div>
           </div>
         </div>
       </div>
@@ -3027,8 +3026,8 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                 {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isTranslateMode
-                  ? `Перекласти вибрані${translateProgress ? ` (${translateProgress})` : ''}`
-                  : `Заповнити вибрані${selectedProgress ? ` (${selectedProgress})` : ''}`}
+                  ? `${t('buttons.translate_selected')}${translateProgress ? ` (${translateProgress})` : ''}`
+                  : `${t('buttons.generate_selected')}${selectedProgress ? ` (${selectedProgress})` : ''}`}
               </Button>
               <Button
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -3038,7 +3037,7 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
               >
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <Save className="mr-2 h-4 w-4" />
-                Зберегти зміни
+                {t('buttons.save_changes')}
               </Button>
               {!isTranslateMode && (
                 <Button
@@ -3047,11 +3046,11 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                   disabled={massGenerating || !templatesState}
                 >
                   {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Масова генерація{massGenerating && massProgress ? ` (${massProgress})` : ''}
+                  {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
                 </Button>
               )}
               <Button variant="outline" onClick={fetchData}>
-                Оновити
+                {t('buttons.update')}
               </Button>
             </div>
             {totalPages > 1 && (
@@ -3062,11 +3061,11 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
                       {(() => {
                         const start = totalFiltered > 0 ? (page - 1) * limit + 1 : 0;
                         const end = Math.min(page * limit, totalFiltered);
-                        return `Показано ${start}-${end} з ${totalFiltered} записів`;
+                        return `${t('table.shown')} ${start}-${end} ${t('table.of')} ${totalFiltered} ${t('table.records')}`;
                       })()}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Записів на сторінці</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('table.per_page')}</span>
                       <Select value={limit.toString()} onValueChange={(value) => setLimit(Number(value))}>
                         <SelectTrigger className="w-20">
                           <SelectValue />
@@ -3096,4 +3095,4 @@ export default function AIProductFillerGeneration({ title = 'AI генераці
     </div>
     </AIProductFillerLayout>
   );
-} 
+}

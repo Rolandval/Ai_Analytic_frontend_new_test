@@ -27,6 +27,7 @@ import {
   type SiteContentPrompt,
 } from '@/api/contentPrompts';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
+import { usePFI18n } from './i18n';
 import { toast } from '@/hooks/use-toast';
 
 type FieldConfig<K extends string> = { key: K; label: string };
@@ -54,6 +55,7 @@ const CATEGORY_FIELDS: FieldConfig<keyof CategoryTemplates>[] = [
 ];
 
 export default function AIProductFillerTemplates() {
+  const { t } = usePFI18n();
   // const navigate = useNavigate();
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const [entity, setEntity] = useState<Entity>('product');
@@ -415,11 +417,18 @@ export default function AIProductFillerTemplates() {
   const copyVar = async (v: string) => {
     try {
       await navigator.clipboard.writeText(v);
-      toast({ title: 'Скопійовано в буфер', description: v });
+      toast({ title: t('templates.copied'), description: v });
     } catch {
-      toast({ title: 'Не вдалося скопіювати', description: v, variant: 'destructive' as any });
+      toast({ title: t('templates.copy_failed'), description: v, variant: 'destructive' as any });
     }
   };
+
+  // document.title локалізований
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${t('nav.templates')} — AI Product Filler`;
+    return () => { document.title = prev; };
+  }, [t]);
 
   return (
     <AIProductFillerLayout>
@@ -427,7 +436,7 @@ export default function AIProductFillerTemplates() {
       <div className="sticky top-0 z-10 px-0 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-neutral-900/60 bg-white/80 dark:bg-neutral-900/80 border-b">
         <div className="flex items-center justify-between py-3 px-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-semibold">Шаблони контенту</h1>
+            <h1 className="text-xl md:text-2xl font-semibold">{t('nav.templates')}</h1>
           </div>
           <div className="flex items-center">
             {saving ? (
@@ -436,20 +445,20 @@ export default function AIProductFillerTemplates() {
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500 text-white text-sm opacity-90 cursor-wait"
                 disabled
               >
-                <Loader2 className="h-4 w-4 animate-spin" /> Зберігаємо…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t('buttons.saving')}
               </button>
             ) : hasUnsaved ? (
               <button
                 type="button"
                 onClick={onSave}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500 text-white text-sm shadow hover:bg-emerald-600 transition-colors animate-pulse"
-                title="Є незбережені зміни — натисніть, щоб зберегти"
+                title={t('status.unsaved_changes_hint')}
               >
-                <Save className="h-4 w-4" /> Зберегти
+                <Save className="h-4 w-4" /> {t('buttons.save')}
               </button>
             ) : (
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-emerald-700 bg-emerald-100/70 text-xs">
-                <CheckCircle2 className="h-4 w-4" /> Збережено
+                <CheckCircle2 className="h-4 w-4" /> {t('status.saved')}
               </span>
             )}
           </div>
@@ -460,17 +469,17 @@ export default function AIProductFillerTemplates() {
         {/* Top tabs */}
         <div className="flex flex-wrap gap-2 mb-4">
           <div className="inline-flex rounded-md overflow-hidden">
-          {(['product', 'category'] as Entity[]).map(t => (
+          {(['product', 'category'] as Entity[]).map(ent => (
             <button
-              key={t}
+              key={ent}
               className={`px-3 py-1.5 text-sm ${
-                entity === t
+                entity === ent
                   ? 'bg-emerald-200/70 text-emerald-900'
                   : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800/70'
               }`}
-              onClick={() => setEntity(t)}
+              onClick={() => setEntity(ent)}
             >
-              {t === 'product' ? 'Продукт' : 'Категорія'}
+              {ent === 'product' ? t('tabs.product') : t('tabs.category')}
             </button>
           ))}
         </div>
@@ -495,7 +504,7 @@ export default function AIProductFillerTemplates() {
           {/* Variables (left) */}
           <div className="col-span-1">
             <div className="rounded-xl bg-white/70 w-full dark:bg-neutral-800/40 p-4 shadow-sm">
-              <h3 className="font-medium mb-3">Змінні</h3>
+              <h3 className="font-medium mb-3">{t('templates.variables')}</h3>
               <div className="flex flex-col gap-2">
                 {vars.map((raw) => {
                   const [token, ...rest] = raw.split(' - ');
@@ -505,7 +514,7 @@ export default function AIProductFillerTemplates() {
                       key={raw}
                       type="button"
                       onClick={() => copyVar(token)}
-                      title={`Скопіювати ${token}`}
+                      title={`${t('templates.copy')}: ${token}`}
                       className="w-full text-left text-sm px-3 py-2 rounded-md border bg-neutral-50/80 dark:bg-neutral-900/40 hover:bg-neutral-100 dark:hover:bg-neutral-900 border-neutral-200 dark:border-neutral-700 transition-colors"
                     >
                       <span className="font-mono text-[13px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700">
@@ -525,7 +534,7 @@ export default function AIProductFillerTemplates() {
           {/* Fields (right) */}
           <div className="col-span-1">
             <div className="rounded-xl bg-white/70 w-full dark:bg-neutral-800/40 p-4 shadow-sm">
-              <h3 className="font-medium mb-4">Шаблони {entity === 'product' ? 'продуктів' : 'категорій'}</h3>
+              <h3 className="font-medium mb-4">{entity === 'product' ? t('templates.fields.product') : t('templates.fields.category')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {fields.map(f => (
                   <div key={f.key} id={`field-${f.key}`}>
@@ -545,8 +554,8 @@ export default function AIProductFillerTemplates() {
                                 setHistoryColumn(column);
                                 setHistoryOpen(true);
                               }}
-                              title={`Переглянути історію збережених промптів${list.length ? ` (${list.length})` : ''}`}
-                              aria-label={`Історія${list.length ? ` (${list.length})` : ''}`}
+                              title={`${t('templates.view_history')}${list.length ? ` (${list.length})` : ''}`}
+                              aria-label={`${t('templates.history')}${list.length ? ` (${list.length})` : ''}`}
                             >
                               <History className="h-4 w-4" />
                             </button>
@@ -579,7 +588,7 @@ export default function AIProductFillerTemplates() {
                           if (!column) return null;
                           const checked = enabled[column] !== false; // за замовчуванням true
                           return (
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground" title="Включати цей шаблон у генерацію">
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground" title={t('templates.include_in_generation')}>
                               <Checkbox
                                 checked={checked}
                                 onCheckedChange={(val) => {
@@ -587,7 +596,7 @@ export default function AIProductFillerTemplates() {
                                   persistEnabled({ ...enabled, [column]: value });
                                 }}
                               />
-                              <span className="select-none">В генерацію</span>
+                              <span className="select-none">{t('templates.include_in_generation')}</span>
                             </label>
                           );
                         })()}
@@ -615,7 +624,7 @@ export default function AIProductFillerTemplates() {
                       placeholder="Введіть шаблон..."
                     />
                     <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Довжина: {(() => {
+                      <span>{t('templates.length')}: {(() => {
                         if (entity === 'product') {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
                           if (column) {
@@ -650,21 +659,21 @@ export default function AIProductFillerTemplates() {
                               {isLoading ? (
                                 <span className="inline-flex items-center gap-1.5 text-emerald-700">
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  Зберігаємо…
+                                  {t('buttons.saving')}
                                 </span>
                               ) : status === 'error' ? (
                                 <span className="inline-flex items-center gap-1.5 text-red-600">
                                   <AlertCircle className="h-4 w-4" />
-                                  Помилка збереження
+                                  {t('status.save_error')}
                                 </span>
                               ) : isDirty ? (
                                 <span className="inline-flex items-center gap-1.5 text-amber-600">
-                                  Не збережено
+                                  {t('status.unsaved')}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1.5 text-emerald-700">
                                   <CheckCircle2 className="h-4 w-4" />
-                                  Збережено
+                                  {t('status.saved')}
                                 </span>
                               )}
                             </span>
@@ -727,7 +736,7 @@ export default function AIProductFillerTemplates() {
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              Історія промптів — {historyColumn ? (columnToFieldLabel.get(historyColumn) ?? historyColumn) : ''} ({lang.toUpperCase()})
+              {t('templates.history_title')} — {historyColumn ? (columnToFieldLabel.get(historyColumn) ?? historyColumn) : ''} ({lang.toUpperCase()})
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-[60vh] overflow-auto">
@@ -735,14 +744,14 @@ export default function AIProductFillerTemplates() {
               const l = historyColumn ? (fieldLang[historyColumn] ?? lang) : lang;
               const list = historyColumn ? getPromptsFor(historyColumn, l) : [];
               if (!list.length) {
-                return <div className="text-sm text-neutral-500">Немає збережених промптів</div>;
+                return <div className="text-sm text-neutral-500">{t('templates.history_empty')}</div>;
               }
               return (
                 <div className="space-y-2">
                   {list.map((p: SiteContentPrompt) => (
                     <div key={p.id} className="flex items-center gap-2 text-sm">
                       {p.is_active && (
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">active</span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">{t('templates.badge_active')}</span>
                       )}
                       <span className="truncate" title={p.name || p.prompt}>{p.name || `${historyColumn} #${p.id}`}</span>
                       <span className="text-neutral-400">—</span>
@@ -755,17 +764,17 @@ export default function AIProductFillerTemplates() {
                               className="text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-800 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30 disabled:opacity-50"
                               onClick={() => activatePrompt(historyColumn, p.id)}
                               disabled={!!p.is_active || deletingId === p.id}
-                              title={p.is_active ? 'Вже активний' : 'Зробити активним'}
+                              title={p.is_active ? t('templates.already_active') : t('templates.make_active')}
                             >
-                              Активувати
+                              {t('templates.activate')}
                             </button>
                             <button
                               type="button"
                               className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-red-300 text-red-700 hover:bg-red-50 dark:text-red-300 dark:border-red-600 dark:hover:bg-red-900/20 disabled:opacity-50"
                               onClick={() => historyColumn && deletePrompt(historyColumn, p.id)}
                               disabled={deletingId === p.id}
-                              title="Видалити промпт"
-                              aria-label="Видалити промпт"
+                              title={t('templates.delete_prompt')}
+                              aria-label={t('templates.delete_prompt')}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

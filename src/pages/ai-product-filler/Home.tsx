@@ -1,11 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Wand2, Layers, Languages, Settings, Columns3, CheckCircle2, MousePointer, Zap, Info } from 'lucide-react';
+import { usePFI18n } from './i18n';
 
 export default function AIProductFillerHome() {
+  const { t } = usePFI18n();
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${t('home.title')} — AI Product Filler`;
+    return () => { document.title = prev; };
+  }, [t]);
   return (
     <AIProductFillerLayout>
       <div
@@ -32,11 +39,10 @@ export default function AIProductFillerHome() {
             </div>
             <div>
               <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
-                AI Product Filler
+                {t('home.title')}
               </h1>
               <p className="text-muted-foreground mt-3 max-w-3xl text-base sm:text-lg">
-                Автоматичне заповнення карток товарів: генерація описів, характеристик, тегів та зображень. 
-                Швидко, узгоджено і з підтримкою перекладів.
+                {t('home.subtitle')}
               </p>
             </div>
           </div>
@@ -44,31 +50,31 @@ export default function AIProductFillerHome() {
           {/* CTA кнопки */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             <Button asChild className="h-auto py-3 justify-start gap-2">
-              <Link to="/ai-product-filler/generation"><Wand2 className="w-4 h-4"/> Генерація</Link>
+              <Link to="/ai-product-filler/generation"><Wand2 className="w-4 h-4"/> {t('home.cta.generation')}</Link>
             </Button>
             <Button variant="outline" asChild className="h-auto py-3 justify-start gap-2">
-              <Link to="/ai-product-filler/templates"><Layers className="w-4 h-4"/> Шаблони</Link>
+              <Link to="/ai-product-filler/templates"><Layers className="w-4 h-4"/> {t('home.cta.templates')}</Link>
             </Button>
             <Button variant="outline" asChild className="h-auto py-3 justify-start gap-2">
-              <Link to="/ai-product-filler/translator"><Languages className="w-4 h-4"/> Перекладач</Link>
+              <Link to="/ai-product-filler/translator"><Languages className="w-4 h-4"/> {t('home.cta.translator')}</Link>
             </Button>
             <Button variant="ghost" asChild className="h-auto py-3 justify-start gap-2">
-              <Link to="/ai-product-filler/settings"><Settings className="w-4 h-4"/> Налаштування</Link>
+              <Link to="/ai-product-filler/settings"><Settings className="w-4 h-4"/> {t('home.cta.settings')}</Link>
             </Button>
           </div>
         </section>
 
         {/* Фішки застосунку */}
         <section className="mt-4">
-          <h2 className="text-2xl font-bold mb-4">Фішки AI Product Filler</h2>
+          <h2 className="text-2xl font-bold mb-4">{t('home.features')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             <Card className="p-5 flex items-start gap-3">
               <div className="p-2 rounded-md bg-emerald-100 text-emerald-700">
                 <Columns3 className="w-5 h-5"/>
               </div>
               <div>
-                <div className="font-medium">Ресайз колонок у таблиці</div>
-                <p className="text-sm text-muted-foreground mt-1">Інтерактивні хендли для зміни ширини колонок у розділі "Генерація". Мін. ширина 120px; збережені сортування та вибір.</p>
+                <div className="font-medium">{t('home.feature.resize_title')}</div>
+                <p className="text-sm text-muted-foreground mt-1">{t('home.feature.resize_desc')}</p>
               </div>
             </Card>
 
@@ -77,8 +83,8 @@ export default function AIProductFillerHome() {
                 <MousePointer className="w-5 h-5"/>
               </div>
               <div>
-                <div className="font-medium">Майстер‑чекбокси з розумною логікою</div>
-                <p className="text-sm text-muted-foreground mt-1">У генерації — вибирає тільки порожні клітинки; у перекладі — усі колонки рядка. Є глобальний майстер‑чекбокс для сторінки.</p>
+                <div className="font-medium">{t('home.feature.master_title')}</div>
+                <p className="text-sm text-muted-foreground mt-1">{t('home.feature.master_desc')}</p>
               </div>
             </Card>
 
@@ -87,8 +93,8 @@ export default function AIProductFillerHome() {
                 <Languages className="w-5 h-5"/>
               </div>
               <div>
-                <div className="font-medium">Переклад одразу двома мовами</div>
-                <p className="text-sm text-muted-foreground mt-1">Кнопка "Перекласти вибрані" виконує два виклики бекенду для "ru" та "en", оновлює рядки обох мов і показує прогрес.</p>
+                <div className="font-medium">{t('home.feature.dual_trans_title')}</div>
+                <p className="text-sm text-muted-foreground mt-1">{t('home.feature.dual_trans_desc')}</p>
               </div>
             </Card>
 
@@ -97,8 +103,8 @@ export default function AIProductFillerHome() {
                 <CheckCircle2 className="w-5 h-5"/>
               </div>
               <div>
-                <div className="font-medium">Контроль збереження у перекладачі</div>
-                <p className="text-sm text-muted-foreground mt-1">У режимі перекладу ми не робимо авто‑сейв. Зміни відправляються на бекенд лише після натискання "Зберегти зміни".</p>
+                <div className="font-medium">{t('home.feature.save_ctrl_title')}</div>
+                <p className="text-sm text-muted-foreground mt-1">{t('home.feature.save_ctrl_desc')}</p>
               </div>
             </Card>
 
@@ -107,8 +113,8 @@ export default function AIProductFillerHome() {
                 <Layers className="w-5 h-5"/>
               </div>
               <div>
-                <div className="font-medium">EN‑підтримка для шаблонів і промптів</div>
-                <p className="text-sm text-muted-foreground mt-1">UI шаблонів має перемикач EN, а API create/update передає lang_code — ви можете створювати та редагувати EN‑промпти.</p>
+                <div className="font-medium">{t('home.feature.en_prompts_title')}</div>
+                <p className="text-sm text-muted-foreground mt-1">{t('home.feature.en_prompts_desc')}</p>
               </div>
             </Card>
 
@@ -117,8 +123,8 @@ export default function AIProductFillerHome() {
                 <Info className="w-5 h-5"/>
               </div>
               <div>
-                <div className="font-medium">Зручний UX для виділення</div>
-                <p className="text-sm text-muted-foreground mt-1">Незалежні чекбокси клітинок, очистка вибору після операцій і маркування змінених рядків для подальшого збереження.</p>
+                <div className="font-medium">{t('home.feature.ux_title')}</div>
+                <p className="text-sm text-muted-foreground mt-1">{t('home.feature.ux_desc')}</p>
               </div>
             </Card>
           </div>
@@ -126,19 +132,19 @@ export default function AIProductFillerHome() {
 
         {/* Як це працює */}
         <section className="mt-8">
-          <h2 className="text-2xl font-bold mb-4">Як це працює</h2>
+          <h2 className="text-2xl font-bold mb-4">{t('home.howitworks')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-5">
-              <div className="flex items-center gap-2 font-medium"><Layers className="w-4 h-4"/> 1. Налаштуйте шаблони</div>
-              <p className="text-sm text-muted-foreground mt-2">Створіть/відредагуйте промпти для потрібних мов (UA/EN) і типів контенту.</p>
+              <div className="flex items-center gap-2 font-medium"><Layers className="w-4 h-4"/> {t('home.step1_title')}</div>
+              <p className="text-sm text-muted-foreground mt-2">{t('home.step1_desc')}</p>
             </Card>
             <Card className="p-5">
-              <div className="flex items-center gap-2 font-medium"><Wand2 className="w-4 h-4"/> 2. Виберіть клітинки</div>
-              <p className="text-sm text-muted-foreground mt-2">Позначте порожні або потрібні поля й натисніть "Заповнити вибрані".</p>
+              <div className="flex items-center gap-2 font-medium"><Wand2 className="w-4 h-4"/> {t('home.step2_title')}</div>
+              <p className="text-sm text-muted-foreground mt-2">{t('home.step2_desc')}</p>
             </Card>
             <Card className="p-5">
-              <div className="flex items-center gap-2 font-medium"><CheckCircle2 className="w-4 h-4"/> 3. Переконайтесь і збережіть</div>
-              <p className="text-sm text-muted-foreground mt-2">Перевірте згенерований/перекладений контент. У перекладі — натисніть "Зберегти зміни" для відправки на бекенд.</p>
+              <div className="flex items-center gap-2 font-medium"><CheckCircle2 className="w-4 h-4"/> {t('home.step3_title')}</div>
+              <p className="text-sm text-muted-foreground mt-2">{t('home.step3_desc')}</p>
             </Card>
           </div>
         </section>
@@ -149,12 +155,12 @@ export default function AIProductFillerHome() {
             <div className="flex items-center gap-3 text-foreground">
               <div className="p-2 rounded-md bg-primary/10 text-primary"><Zap className="w-5 h-5"/></div>
               <div>
-                <div className="font-semibold">Готові почати?</div>
-                <p className="text-sm text-muted-foreground">Перейдіть одразу до генерації описів товарів.</p>
+                <div className="font-semibold">{t('home.quick.title')}</div>
+                <p className="text-sm text-muted-foreground">{t('home.quick.desc')}</p>
               </div>
             </div>
             <Button asChild>
-              <Link to="/ai-product-filler/generation">Перейти до генерації</Link>
+              <Link to="/ai-product-filler/generation">{t('home.go_generation')}</Link>
             </Button>
           </Card>
         </section>

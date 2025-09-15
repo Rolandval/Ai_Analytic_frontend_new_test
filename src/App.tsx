@@ -28,6 +28,9 @@ import AIProductFillerGeneration from './pages/ai-product-filler/Generation';
 import Settings from './pages/ai-product-filler/Settings';
 import AIProductFillerTemplates from './pages/ai-product-filler/Templates';
 import AIProductFillerTranslator from './pages/ai-product-filler/Translator';
+import AIProductFillerAnalysis from './pages/ai-product-filler/Analysis';
+import AIProductFillerLogin from './pages/ai-product-filler/Login';
+import AIProductFillerRegister from './pages/ai-product-filler/Register';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -179,7 +182,10 @@ function App() {
           <Route path="/ai-product-filler/generation" element={<AIProductFillerGeneration />} />
           <Route path="/ai-product-filler/templates" element={<AIProductFillerTemplates />} />
           <Route path="/ai-product-filler/translator" element={<AIProductFillerTranslator />} />
+          <Route path="/ai-product-filler/analysis" element={<AIProductFillerAnalysis />} />
           <Route path="/ai-product-filler/settings" element={<Settings/>} />
+          <Route path="/ai-product-filler/login" element={<AIProductFillerLogin />} />
+          <Route path="/ai-product-filler/register" element={<AIProductFillerRegister />} />
 
           {/* AI Supply Manager */}
           <Route path="/ai-supply" element={<ServicePage />} />

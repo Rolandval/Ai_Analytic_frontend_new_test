@@ -1,0 +1,368 @@
+import React, { createContext, useContext, useMemo } from 'react';
+import { useThemeStore } from '@/store/themeStore';
+
+// Minimal i18n for AI Product Filler only
+// Usage: wrap UI with <PFI18nProvider> and call const { t } = usePFI18n(); t('analysis.title')
+
+type Dict = Record<string, string>;
+
+type Lang = 'ua' | 'ru' | 'en';
+
+const DICTS: Record<Lang, Dict> = {
+  ua: {
+    'nav.general': 'Загальне',
+    'nav.generation': 'Генерація',
+    'nav.templates': 'Шаблони',
+    'nav.translator': 'Перекладач',
+    'nav.settings': 'Налаштування',
+    'nav.analysis': 'Аналіз',
+
+    'analysis.title': 'Аналіз порожніх полів',
+    'analysis.total': 'Усього',
+    'analysis.missing_short': '№',
+    'analysis.missing_rows': '№ Порожніх рядків',
+    'analysis.fully_filled': 'Заповнених повністю',
+
+    'buttons.update': 'Оновити',
+    'buttons.recalc': 'Перерахувати',
+    'buttons.save_changes': 'Зберегти зміни',
+    'buttons.save': 'Зберегти',
+    'buttons.saving': 'Зберігаємо…',
+    'buttons.mass_generate': 'Масова генерація',
+    'buttons.translate_selected': 'Перекласти вибрані',
+    'buttons.generate_selected': 'Згенерувати вибрані',
+
+    'controls.search': 'Пошук…',
+    'controls.type': 'Тип товару',
+
+    'type.all': 'Всі типи',
+    'type.solar_panels': 'Сонячні панелі',
+    'type.batteries': 'Акумулятори',
+    'type.inverters': 'Інвертори',
+
+    'field.product': 'Назва',
+    'field.shortname': 'Коротка',
+    'field.short_description': 'Опис',
+    'field.full_description': 'Повний',
+    'field.promo_text': 'Промо',
+    'field.meta_keywords': 'Мета',
+    'field.meta_description': 'Мета-опис',
+    'field.searchwords': 'Пошукові слова',
+    'field.page_title': 'Заголовок',
+
+    'settings.title': 'Налаштування філлер',
+    'settings.subtitle': 'Креди БД та відповідник полів',
+
+    'home.title': 'AI Product Filler',
+    'home.subtitle': 'Автоматичне заповнення карток товарів: генерація описів, характеристик, тегів та зображень. Швидко, узгоджено і з підтримкою перекладів.',
+    'home.features': 'Фішки AI Product Filler',
+    'home.howitworks': 'Як це працює',
+    'home.ready': 'Готові почати?',
+    'home.go_generation': 'Перейти до генерації',
+    'home.cta.generation': 'Генерація',
+    'home.cta.templates': 'Шаблони',
+    'home.cta.translator': 'Перекладач',
+    'home.cta.settings': 'Налаштування',
+    'home.feature.resize_title': 'Ресайз колонок у таблиці',
+    'home.feature.resize_desc': 'Інтерактивні хендли для зміни ширини колонок у розділі "Генерація". Мін. ширина 120px; збережені сортування та вибір.',
+    'home.feature.master_title': 'Майстер‑чекбокси з розумною логікою',
+    'home.feature.master_desc': 'У генерації — вибирає тільки порожні клітинки; у перекладі — усі колонки рядка. Є глобальний майстер‑чекбокс для сторінки.',
+    'home.feature.dual_trans_title': 'Переклад одразу двома мовами',
+    'home.feature.dual_trans_desc': 'Кнопка "Перекласти вибрані" виконує два виклики бекенду для "ru" та "en", оновлює рядки обох мов і показує прогрес.',
+    'home.feature.save_ctrl_title': 'Контроль збереження у перекладачі',
+    'home.feature.save_ctrl_desc': 'У режимі перекладу ми не робимо авто‑сейв. Зміни відправляються на бекенд лише після натискання "Зберегти зміни".',
+    'home.feature.en_prompts_title': 'EN‑підтримка для шаблонів і промптів',
+    'home.feature.en_prompts_desc': 'UI шаблонів має перемикач EN, а API create/update передає lang_code — ви можете створювати та редагувати EN‑промпти.',
+    'home.feature.ux_title': 'Зручний UX для виділення',
+    'home.feature.ux_desc': 'Незалежні чекбокси клітинок, очистка вибору після операцій і маркування змінених рядків для подальшого збереження.',
+    'home.step1_title': '1. Налаштуйте шаблони',
+    'home.step1_desc': 'Створіть/відредагуйте промпти для потрібних мов (UA/EN) і типів контенту.',
+    'home.step2_title': '2. Виберіть клітинки',
+    'home.step2_desc': 'Позначте порожні або потрібні поля й натисніть "Заповнити вибрані".',
+    'home.step3_title': '3. Переконайтесь і збережіть',
+    'home.step3_desc': 'Перевірте згенерований/перекладений контент. У перекладі — натисніть "Зберегти зміни" для відправки на бекенд.',
+    'home.quick.title': 'Готові почати?',
+    'home.quick.desc': 'Перейдіть одразу до генерації описів товарів.',
+
+    'settings.ui_language': 'Мова інтерфейсу',
+
+    // Table/footer
+    'table.shown': 'Показано',
+    'table.of': 'з',
+    'table.records': 'записів',
+    'table.per_page': 'Записів на сторінці',
+
+    // Templates
+    'tabs.product': 'Продукт',
+    'tabs.category': 'Категорія',
+    'templates.variables': 'Змінні',
+    'templates.fields.product': 'Шаблони продуктів',
+    'templates.fields.category': 'Шаблони категорій',
+    'templates.view_history': 'Переглянути історію збережених промптів',
+    'templates.history': 'Історія',
+    'templates.include_in_generation': 'В генерацію',
+    'templates.length': 'Довжина',
+    'templates.copied': 'Скопійовано в буфер',
+    'templates.copy': 'Скопіювати',
+    'templates.copy_failed': 'Не вдалося скопіювати',
+    'templates.history_title': 'Історія промптів',
+    'templates.history_empty': 'Немає збережених промптів',
+    'templates.activate': 'Активувати',
+    'templates.already_active': 'Вже активний',
+    'templates.make_active': 'Зробити активним',
+    'templates.delete_prompt': 'Видалити промпт',
+    'templates.badge_active': 'активний',
+
+    // Status
+    'status.saved': 'Збережено',
+    'status.unsaved': 'Не збережено',
+    'status.save_error': 'Помилка збереження',
+    'status.unsaved_changes_hint': 'Є незбережені зміни — натисніть, щоб зберегти',
+  },
+  ru: {
+    'nav.general': 'Общее',
+    'nav.generation': 'Генерация',
+    'nav.templates': 'Шаблоны',
+    'nav.translator': 'Переводчик',
+    'nav.settings': 'Настройки',
+    'nav.analysis': 'Аналитика',
+
+    'analysis.title': 'Анализ пустых полей',
+    'analysis.total': 'Всего',
+    'analysis.missing_short': '№',
+    'analysis.missing_rows': '№ Пустых строк',
+    'analysis.fully_filled': 'Заполненных полностью',
+
+    'buttons.update': 'Обновить',
+    'buttons.recalc': 'Пересчитать',
+    'buttons.save_changes': 'Сохранить изменения',
+    'buttons.save': 'Сохранить',
+    'buttons.saving': 'Сохраняем…',
+    'buttons.mass_generate': 'Массовая генерация',
+    'buttons.translate_selected': 'Перевести выбранные',
+    'buttons.generate_selected': 'Сгенерировать выбранные',
+
+    'controls.search': 'Поиск…',
+    'controls.type': 'Тип товара',
+
+    'type.all': 'Все типы',
+    'type.solar_panels': 'Солнечные панели',
+    'type.batteries': 'Аккумуляторы',
+    'type.inverters': 'Инверторы',
+
+    'field.product': 'Название',
+    'field.shortname': 'Короткое',
+    'field.short_description': 'Описание',
+    'field.full_description': 'Полное',
+    'field.promo_text': 'Промо',
+    'field.meta_keywords': 'Мета',
+    'field.meta_description': 'Мета-описание',
+    'field.searchwords': 'Поисковые слова',
+    'field.page_title': 'Заголовок',
+
+    'settings.title': 'Настройки филлер',
+    'settings.subtitle': 'Данные БД и соответствие полей',
+
+    'home.title': 'AI Product Filler',
+    'home.subtitle': 'Автоматическое заполнение карточек товаров: генерация описаний, характеристик, тегов и изображений. Быстро, согласованно и с поддержкой переводов.',
+    'home.features': 'Фишки AI Product Filler',
+    'home.howitworks': 'Как это работает',
+    'home.ready': 'Готовы начать?',
+    'home.go_generation': 'Перейти к генерации',
+    'home.cta.generation': 'Генерация',
+    'home.cta.templates': 'Шаблоны',
+    'home.cta.translator': 'Переводчик',
+    'home.cta.settings': 'Настройки',
+    'home.feature.resize_title': 'Изменение ширины колонок',
+    'home.feature.resize_desc': 'Интерактивные хендлы для изменения ширины колонок в разделе "Генерация". Мин. ширина 120px; сохраняются сортировки и выбор.',
+    'home.feature.master_title': 'Мастер‑чекбоксы с умной логикой',
+    'home.feature.master_desc': 'В генерации — выбирает только пустые ячейки; в переводе — все колонки строки. Есть глобальный мастер‑чекбокс.',
+    'home.feature.dual_trans_title': 'Перевод сразу на два языка',
+    'home.feature.dual_trans_desc': 'Кнопка "Перевести выбранные" делает два вызова для "ru" и "en", обновляет строки обеих языков и показывает прогресс.',
+    'home.feature.save_ctrl_title': 'Контроль сохранения в переводчике',
+    'home.feature.save_ctrl_desc': 'В режиме перевода нет авто‑сейва. Изменения отправляются на бэкенд только после нажатия "Сохранить изменения".',
+    'home.feature.en_prompts_title': 'EN‑поддержка шаблонов и промптов',
+    'home.feature.en_prompts_desc': 'UI шаблонов имеет переключатель EN, а API create/update передаёт lang_code — создавайте и редактируйте EN‑промпты.',
+    'home.feature.ux_title': 'Удобный UX для выделения',
+    'home.feature.ux_desc': 'Независимые чекбоксы ячеек, очистка выбора после операций и пометка изменённых строк для последующего сохранения.',
+    'home.step1_title': '1. Настройте шаблоны',
+    'home.step1_desc': 'Создайте/отредактируйте промпты для нужных языков (UA/EN) и типов контента.',
+    'home.step2_title': '2. Выберите ячейки',
+    'home.step2_desc': 'Отметьте пустые или нужные поля и нажмите "Заполнить выбранные".',
+    'home.step3_title': '3. Проверьте и сохраните',
+    'home.step3_desc': 'Проверьте сгенерированный/переведённый контент. В переводе — нажмите "Сохранить изменения" для отправки.',
+    'home.quick.title': 'Готовы начать?',
+    'home.quick.desc': 'Перейдите сразу к генерации описаний товаров.',
+
+    'settings.ui_language': 'Язык интерфейса',
+
+    // Table/footer
+    'table.shown': 'Показано',
+    'table.of': 'из',
+    'table.records': 'записей',
+    'table.per_page': 'Записей на странице',
+
+    // Templates
+    'tabs.product': 'Продукт',
+    'tabs.category': 'Категория',
+    'templates.variables': 'Переменные',
+    'templates.fields.product': 'Шаблоны продуктов',
+    'templates.fields.category': 'Шаблоны категорий',
+    'templates.view_history': 'Просмотреть историю сохранённых промптов',
+    'templates.history': 'История',
+    'templates.include_in_generation': 'В генерацию',
+    'templates.length': 'Длина',
+    'templates.copied': 'Скопировано в буфер',
+    'templates.copy': 'Скопировать',
+    'templates.copy_failed': 'Не удалось скопировать',
+    'templates.history_title': 'История промптов',
+    'templates.history_empty': 'Нет сохранённых промптов',
+    'templates.activate': 'Активировать',
+    'templates.already_active': 'Уже активен',
+    'templates.make_active': 'Сделать активным',
+    'templates.delete_prompt': 'Удалить промпт',
+    'templates.badge_active': 'активен',
+
+    // Status
+    'status.saved': 'Сохранено',
+    'status.unsaved': 'Не сохранено',
+    'status.save_error': 'Ошибка сохранения',
+    'status.unsaved_changes_hint': 'Есть несохранённые изменения — нажмите, чтобы сохранить',
+  },
+  en: {
+    'nav.general': 'Overview',
+    'nav.generation': 'Generation',
+    'nav.templates': 'Templates',
+    'nav.translator': 'Translator',
+    'nav.settings': 'Settings',
+    'nav.analysis': 'Analysis',
+
+    'analysis.title': 'Empty fields analysis',
+    'analysis.total': 'Total',
+    'analysis.missing_short': 'Missing',
+    'analysis.missing_rows': 'Missing rows',
+    'analysis.fully_filled': 'Fully filled',
+
+    'buttons.update': 'Refresh',
+    'buttons.recalc': 'Recalculate',
+    'buttons.save_changes': 'Save changes',
+    'buttons.save': 'Save',
+    'buttons.saving': 'Saving…',
+    'buttons.mass_generate': 'Mass generation',
+    'buttons.translate_selected': 'Translate selected',
+    'buttons.generate_selected': 'Generate selected',
+
+    'controls.search': 'Search…',
+    'controls.type': 'Product type',
+
+    'type.all': 'All types',
+    'type.solar_panels': 'Solar panels',
+    'type.batteries': 'Batteries',
+    'type.inverters': 'Inverters',
+
+    'field.product': 'Name',
+    'field.shortname': 'Short',
+    'field.short_description': 'Description',
+    'field.full_description': 'Full',
+    'field.promo_text': 'Promo',
+    'field.meta_keywords': 'Meta keywords',
+    'field.meta_description': 'Meta description',
+    'field.searchwords': 'Search words',
+    'field.page_title': 'Page title',
+
+    'settings.title': 'Filler settings',
+    'settings.subtitle': 'DB creds and field mapping',
+
+    'home.title': 'AI Product Filler',
+    'home.subtitle': 'Automatic product card filling: descriptions, attributes, tags and images. Fast, consistent and with translation support.',
+    'home.features': 'AI Product Filler highlights',
+    'home.howitworks': 'How it works',
+    'home.ready': 'Ready to start?',
+    'home.go_generation': 'Go to generation',
+    'home.cta.generation': 'Generation',
+    'home.cta.templates': 'Templates',
+    'home.cta.translator': 'Translator',
+    'home.cta.settings': 'Settings',
+    'home.feature.resize_title': 'Resizable table columns',
+    'home.feature.resize_desc': 'Interactive handles to resize columns in "Generation". Min width 120px; sorting and selection are preserved.',
+    'home.feature.master_title': 'Smart master checkboxes',
+    'home.feature.master_desc': 'In generation — selects only empty cells; in translation — all columns of a row. Global master checkbox exists.',
+    'home.feature.dual_trans_title': 'Two-language translation at once',
+    'home.feature.dual_trans_desc': 'The "Translate selected" button performs two calls for "ru" and "en", updates both languages and shows progress.',
+    'home.feature.save_ctrl_title': 'Save control in translator',
+    'home.feature.save_ctrl_desc': 'No auto-save in translation mode. Changes are sent only after pressing "Save changes".',
+    'home.feature.en_prompts_title': 'EN support for templates/prompts',
+    'home.feature.en_prompts_desc': 'Templates UI has EN toggle, and create/update API passes lang_code — create and edit EN prompts.',
+    'home.feature.ux_title': 'Convenient selection UX',
+    'home.feature.ux_desc': 'Independent cell checkboxes, selection clearing after actions, and marking changed rows for saving.',
+    'home.step1_title': '1. Set up templates',
+    'home.step1_desc': 'Create/edit prompts for needed languages (UA/EN) and content types.',
+    'home.step2_title': '2. Select cells',
+    'home.step2_desc': 'Mark empty or required fields and click "Fill selected".',
+    'home.step3_title': '3. Verify and save',
+    'home.step3_desc': 'Check the generated/translated content. In translation — press "Save changes" to send to the backend.',
+    'home.quick.title': 'Ready to start?',
+    'home.quick.desc': 'Jump straight to product description generation.',
+
+    'settings.ui_language': 'UI language',
+
+    // Table/footer
+    'table.shown': 'Shown',
+    'table.of': 'of',
+    'table.records': 'records',
+    'table.per_page': 'Records per page',
+
+    // Templates
+    'tabs.product': 'Product',
+    'tabs.category': 'Category',
+    'templates.variables': 'Variables',
+    'templates.fields.product': 'Product templates',
+    'templates.fields.category': 'Category templates',
+    'templates.view_history': 'View saved prompts history',
+    'templates.history': 'History',
+    'templates.include_in_generation': 'Include in generation',
+    'templates.length': 'Length',
+    'templates.copied': 'Copied to clipboard',
+    'templates.copy': 'Copy',
+    'templates.copy_failed': 'Failed to copy',
+    'templates.history_title': 'Prompts history',
+    'templates.history_empty': 'No saved prompts',
+    'templates.activate': 'Activate',
+    'templates.already_active': 'Already active',
+    'templates.make_active': 'Make active',
+    'templates.delete_prompt': 'Delete prompt',
+    'templates.badge_active': 'active',
+
+    // Status
+    'status.saved': 'Saved',
+    'status.unsaved': 'Not saved',
+    'status.save_error': 'Save error',
+    'status.unsaved_changes_hint': 'Unsaved changes — click to save',
+  },
+};
+
+const I18nCtx = createContext<{ t: (key: string) => string; lang: Lang } | null>(null);
+
+export const PFI18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { uiLanguage } = useThemeStore();
+  const lang: Lang = (['ua', 'ru', 'en'] as const).includes(uiLanguage as Lang) ? (uiLanguage as Lang) : 'ua';
+  const dict = DICTS[lang] || DICTS.ua;
+  const value = useMemo(() => ({
+    lang,
+    t: (key: string) => dict[key] ?? DICTS.ua[key] ?? key,
+  }), [lang, dict]);
+  return <I18nCtx.Provider value={value}>{children}</I18nCtx.Provider>;
+};
+
+export const usePFI18n = () => {
+  // If provider exists, use it; otherwise compute from store directly (graceful fallback)
+  const ctx = useContext(I18nCtx);
+  const { uiLanguage } = useThemeStore();
+  const lang: Lang = (['ua', 'ru', 'en'] as const).includes(uiLanguage as Lang) ? (uiLanguage as Lang) : 'ua';
+  const dict = DICTS[lang] || DICTS.ua;
+  const fallback = useMemo(() => ({
+    lang,
+    t: (key: string) => dict[key] ?? DICTS.ua[key] ?? key,
+  }), [lang, dict]);
+  return ctx ?? fallback;
+};

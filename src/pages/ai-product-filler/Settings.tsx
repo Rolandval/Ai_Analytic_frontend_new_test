@@ -1,178 +1,431 @@
-import React, { useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
 import { Card } from '@/components/ui/Card';
-import { Textarea } from '@/components/ui/Textarea';
-import gptLogo from './img/ChatGPT_logo.svg.png';
+import { Badge } from '@/components/ui/Badge';
+import { AlertTriangle, Database as DatabaseIcon, Plug, Eye, EyeOff, Plus } from 'lucide-react';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
+import { useThemeStore } from '@/store/themeStore';
+import { usePFI18n } from './i18n';
+import { useToast } from '@/hooks/use-toast';
+import {
+  type DatabaseItem,
+  type SqlType,
+  getDatabases,
+  createDatabase,
+  updateDatabase,
+  deleteDatabase,
+  checkDatabaseConnection,
+} from '@/api/databases';
 
 export default function AIProductFillerSettings() {
-  const [apiKey, setApiKey] = useState('sk-None-vhQ3gPR22u5wqQWg3');
-  const [model, setModel] = useState('gpt-5');
-  const [presencePenalty1, setPresencePenalty1] = useState('0');
-  const [temperature, setTemperature] = useState('');
-  const [topP, setTopP] = useState('0');
-  const [presencePenalty2, setPresencePenalty2] = useState('1.0');
-  const [prompt, setPrompt] = useState('');
+  const { toast } = useToast();
+  const { uiLanguage, setUiLanguage } = useThemeStore();
+  const { t } = usePFI18n();
+  // Мок налаштувань підключення до БД
+  const [dbAddress, setDbAddress] = useState('');
+  const [dbLogin, setDbLogin] = useState('');
+  const [dbPassword, setDbPassword] = useState('');
+  const [dbPort, setDbPort] = useState<number | ''>('');
+  const [dbName, setDbName] = useState('');
+  const [dbType, setDbType] = useState<'postgresql' | 'mysql' | 'mssql' | 'sqlite'>('postgresql');
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  const handleSave = () => {
-    console.log('Налаштування збережено:', {
-      apiKey,
-      model,
-      presencePenalty1,
-      temperature,
-      topP,
-      presencePenalty2,
-    });
+  // Список баз
+  const [databases, setDatabases] = useState<DatabaseItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [actionMsg, setActionMsg] = useState<string>('');
+
+  type MappingRow = { id: string; label: string; dbField: string; example: string };
+  const [rows, setRows] = useState<MappingRow[]>([
+    { id: 'name', label: 'Name', dbField: '', example: 'введіть назву товару' },
+    { id: 'description', label: 'Description', dbField: '', example: 'введіть опис товару' },
+    { id: 'code', label: 'Код товару', dbField: '', example: 'введіть код товару' },
+  ]);
+
+  const refreshList = async () => {
+    setLoading(true);
+    setActionMsg('');
+    try {
+      const list = await getDatabases();
+      setDatabases(list);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create a new DB entry from current form values even if an item is selected
+  const onCreateAsNew = async () => {
+    setActionMsg('');
+    try {
+      const payload = {
+        name: dbName,
+        sql_type: dbType,
+        host: dbAddress,
+        port: Number(dbPort || 0),
+        user: dbLogin,
+        password: dbPassword,
+        database: dbName,
+      };
+      await createDatabase(payload);
+      setActionMsg('Створено новий запис успішно');
+      toast({ title: 'Створено нову базу', description: `Базу "${dbName}" створено як новий запис.`, variant: 'default' });
+      // Після створення залишимо форму як є, але оновимо список
+      await refreshList();
+    } catch (e) {
+      setActionMsg('Помилка створення нового запису');
+      toast({ title: 'Помилка створення', description: e instanceof Error ? e.message : 'Не вдалося створити новий запис', variant: 'destructive' });
+    }
+  };
+
+  useEffect(() => {
+    void refreshList();
+  }, []);
+
+  const applySelection = (db: DatabaseItem | null) => {
+    if (!db) {
+      setSelectedId(null);
+      setDbName('');
+      setDbAddress('');
+      setDbPort('');
+      setDbLogin('');
+      setDbPassword('');
+      setDbType('postgresql');
+      setIsConnected(false);
+      return;
+    }
+    setSelectedId(db.id);
+    setDbName(db.name || '');
+    setDbAddress(db.host || '');
+    setDbPort(db.port ?? '');
+    setDbLogin(db.user || '');
+    setDbPassword(db.password || '');
+    // Узгодження типів: бекенд може повертати як 'Postgres'|'MySQL'|'MSSQL', так і нижній регістр
+    const t = (db.sql_type as SqlType | 'Postgres' | 'MySQL' | 'MSSQL' | string) || '';
+    const lower = String(t).toLowerCase();
+    const normalized: 'postgresql' | 'mysql' | 'mssql' | 'sqlite' =
+      lower === 'postgresql' || lower === 'postgres' ? 'postgresql' :
+      lower === 'mysql' ? 'mysql' :
+      lower === 'sqlite' ? 'sqlite' :
+      'mssql';
+    setDbType(normalized);
+  };
+
+  const onCreate = async () => {
+    setActionMsg('');
+    try {
+      const payload = {
+        name: dbName,
+        sql_type: dbType, // нижній регістр: 'postgres' | 'mysql' | 'mssql' | 'sqlite'
+        host: dbAddress,
+        port: Number(dbPort || 0),
+        user: dbLogin,
+        password: dbPassword,
+        database: dbName,
+      };
+      await createDatabase(payload);
+      setActionMsg('Створено успішно');
+      toast({ title: 'Базу створено', description: `Базу "${dbName}" успішно створено.`, variant: 'default' });
+      await refreshList();
+    } catch (e) {
+      setActionMsg('Помилка створення бази');
+      toast({ title: 'Помилка створення', description: e instanceof Error ? e.message : 'Не вдалося створити базу', variant: 'destructive' });
+    }
+  };
+
+  const onUpdate = async () => {
+    if (!selectedId) return;
+    setActionMsg('');
+    try {
+      const payload = {
+        id: selectedId,
+        name: dbName,
+        sql_type: dbType, // нижній регістр
+        host: dbAddress,
+        port: Number(dbPort || 0),
+        user: dbLogin,
+        password: dbPassword,
+        database: dbName,
+      };
+      await updateDatabase(payload);
+      setActionMsg('Оновлено успішно');
+      toast({ title: 'Оновлено базу', description: `Базу "${dbName}" оновлено успішно.`, variant: 'default' });
+      await refreshList();
+    } catch (e) {
+      setActionMsg('Помилка оновлення бази');
+      toast({ title: 'Помилка оновлення', description: e instanceof Error ? e.message : 'Не вдалося оновити базу', variant: 'destructive' });
+    }
+  };
+
+  const onDelete = async () => {
+    if (!selectedId) return;
+    setActionMsg('');
+    try {
+      await deleteDatabase(selectedId);
+      setActionMsg('Видалено успішно');
+      toast({ title: 'Базу видалено', description: `Запис бази видалено.`, variant: 'default' });
+      applySelection(null);
+      await refreshList();
+    } catch (e) {
+      setActionMsg('Помилка видалення бази');
+      toast({ title: 'Помилка видалення', description: e instanceof Error ? e.message : 'Не вдалося видалити базу', variant: 'destructive' });
+    }
+  };
+
+  const checkConnection = async () => {
+    if (!selectedId) return;
+    setChecking(true);
+    setActionMsg('');
+    try {
+      const res = await checkDatabaseConnection(selectedId);
+      setIsConnected(!!res?.ok);
+      setActionMsg(res?.ok ? 'Підключення успішне' : (res?.message || 'Підключення неуспішне'));
+      toast({
+        title: res?.ok ? 'Підключення успішне' : 'Проблема з підключенням',
+        description: res?.message || (res?.ok ? 'Звʼязок із БД встановлено.' : 'Перевірте налаштування доступу.'),
+        variant: res?.ok ? 'default' : 'destructive',
+      });
+    } catch (e) {
+      setIsConnected(false);
+      setActionMsg('Помилка перевірки підключення');
+      toast({ title: 'Помилка перевірки', description: e instanceof Error ? e.message : 'Не вдалося перевірити підключення', variant: 'destructive' });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const autoDetect = (id: string) => {
+    setRows(prev => prev.map(r => (
+      r.id === id
+        ? { ...r, dbField: r.label.toLowerCase().replace(/\s+/g, '_') }
+        : r
+    )));
+  };
+
+  const addRow = () => {
+    const idx = rows.length + 1;
+    setRows(prev => [
+      ...prev,
+      { id: `custom_${idx}`, label: `Нове поле ${idx}`, dbField: '', example: 'введіть назву товару' }
+    ]);
   };
 
   return (
     <AIProductFillerLayout>
-    <div className="w-full px-5 py-5">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">ChatGPT AI Generator</h1>
-        <Button onClick={handleSave} className="bg-emerald-400 hover:bg-blue-600 text-white">
-          Зберегти
-        </Button>
-      </div> 
-      
-      <Card className="p-6 mb-6 bg-gray-50 dark:bg-gray-800">
-        <div className="flex flex-col space-y-3">
-          <Label htmlFor="api-key" className="text-lg font-semibold">API-ключ</Label>
-          <Input
-            id="api-key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="bg-white dark:bg-gray-700"
-          />
-          <p className="text-sm text-muted-foreground">
-            Ключ до API платформи ChatGPT можна отримати тут: https://platform.openai.com/account/api-keys
-          </p>
-        </div>
-      </Card> 
-      <h2 className="text-2xl font-semibold mb-4">Розширені налаштування</h2>
-      <Card className="p-6 mb-6 bg-gray-50 dark:bg-gray-800">
-        <div className="space-y-6">
-          {/* Model */}
-          <div className="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="model" className="font-medium pt-2">Модель</Label>
-            <div className="space-y-2">
-              <Input 
-                id="model" 
-                value={model} 
-                onChange={(e) => setModel(e.target.value)}
-                className="bg-white dark:bg-gray-700"
-              />
-              <p className="text-sm text-muted-foreground">
-                Використаний ідентифікатор моделі, найкращий на даний момент: gpt-3.5-turbo. Ви можете переглянути список моделей тут: https://platform.openai.com/docs/models
-              </p>
+      <div
+        className="w-full px-5 py-5"
+        style={{
+          // Вирівнюємо зелений під сторінки AI Product Filler (як у Home.tsx)
+          '--primary': '142 71% 45%',
+          '--primary-foreground': '210 40% 98%',
+        } as CSSProperties}
+      >
+        {/* Заголовок сторінки (градієнт) + селектор мови інтерфейсу */}
+        <div className="mb-6">
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-sm">
+            <div className="px-5 py-6 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-md bg-white/15 flex items-center justify-center">
+                  <DatabaseIcon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-semibold leading-tight">{t('settings.title')}</h1>
+                  <p className="text-sm/6 text-white/90">{t('settings.subtitle')}</p>
+                </div>
+              </div>
+              <div className="shrink-0">
+                <label className="text-xs block mb-1 text-white/80">{t('settings.ui_language')}</label>
+                <div className="flex items-center gap-2 bg-white/10 rounded-md px-2 py-1">
+                  {(['ua','en','ru'] as const).map((lng) => (
+                    <button
+                      key={lng}
+                      onClick={() => setUiLanguage(lng)}
+                      className={`h-8 px-2 rounded-md text-sm transition-colors ${uiLanguage === lng ? 'bg-white text-emerald-700' : 'text-white/90 hover:bg-white/20'}`}
+                      title={{ua:'Українська',en:'English',ru:'Русский'}[lng]}
+                    >
+                      {lng.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* presence_penalty (first) */}
-          <div className="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="presence1" className="font-medium pt-2">presence_penalty</Label>
-            <div className="space-y-2">
-              <Input 
-                id="presence1" 
-                type="number" 
-                min="-2" 
-                max="2" 
-                step="0.1" 
-                value={presencePenalty1} 
-                onChange={(e) => setPresencePenalty1(e.target.value)}
-                className="bg-white dark:bg-gray-700"
-              />
-              <p className="text-sm text-muted-foreground">
-                Щоб створити зображення, будь ласка, очистіть тему зображення. Як тільки зображення буде створено, ви можете клікнути на нього, щоб скопіювати посилання, яке потім можна використовувати для додавання зображення продукту.
-              </p>
-            </div>
-          </div>
-
-          {/* temperature */}
-          <div className="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="temperature" className="font-medium pt-2">температура</Label>
-            <div className="space-y-2">
-              <Input 
-                id="temperature" 
-                type="number" 
-                min="0" 
-                max="2" 
-                step="0.1" 
-                value={temperature} 
-                onChange={(e) => setTemperature(e.target.value)}
-                className="bg-white dark:bg-gray-700"
-              />
-              <p className="text-sm text-muted-foreground">
-                Яку температуру вибрати, від 0 до 2. Вищі значення, такі як 0.8, зроблять вихід більш випадковим, тоді як нижчі значення, наприклад 0.2, зроблять його більш спрямованим і визначеним. Зазвичай ми рекомендуємо змінювати це або top_p, але не обидва.
-              </p>
-            </div>
-          </div>
-
-          {/* top_p */}
-          <div className="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="topP" className="font-medium pt-2">top_p</Label>
-            <div className="space-y-2">
-              <Input 
-                id="topP" 
-                type="number" 
-                min="0" 
-                max="1" 
-                step="0.1" 
-                value={topP} 
-                onChange={(e) => setTopP(e.target.value)}
-                className="bg-white dark:bg-gray-700"
-              />
-              <p className="text-sm text-muted-foreground">
-                Альтернатива вибірковому вибірковому зразку, відомому як вибірковий зразок ядра, де модель враховує результати токенів з імовірністю top_p. Таким чином, 0.1 означає, що враховуються лише токени, що складають верхній 10% ймовірності. Зазвичай ми рекомендуємо змінювати це або температуру, але не обидва.
-              </p>
-            </div>
-          </div>
-
-          {/* presence_penalty (second) */}
-          <div className="grid grid-cols-1 md:grid-cols-[150px_1fr] gap-4 items-start">
-            <Label htmlFor="presence2" className="font-medium pt-2">presence_penalty</Label>
-            <div className="space-y-2">
-              <Input 
-                id="presence2" 
-                type="number" 
-                min="-2" 
-                max="2" 
-                step="0.1" 
-                value={presencePenalty2} 
-                onChange={(e) => setPresencePenalty2(e.target.value)}
-                className="bg-white dark:bg-gray-700"
-              />
-              <p className="text-sm text-muted-foreground">
-                Число від -2.0 до 2.0. Позитивні значення штрафують нові токени на основі їх входження в текст до цього моменту, збільшуючи ймовірність моделі говорити про нові теми.
-              </p>
-            </div>
+            <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
           </div>
         </div>
-      </Card>
 
-      {/* Chat Section */}
-      <h2 className="text-2xl font-semibold mb-4">ЗАПИТАЙТЕ У ЧАТ GPT</h2>
-      <Card className="p-6 bg-gray-50 dark:bg-gray-800">
-        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="flex-1 space-y-4">
-            <Textarea
-              placeholder="Введіть питання"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[120px] bg-white dark:bg-gray-700"
-            />
-            <Button className="bg-green-900 hover:bg-green-800 text-white">
-              Введіть
-            </Button>
+        {/* Попередження */}
+        <Card className="p-4 mb-6 border border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 text-amber-600 dark:text-amber-300">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="text-base font-semibold">‼️ Попередження‼️</div>
+              <p>Робіть бекапи!</p>
+              <p>Акуратно користуйтесь, щоб не зіпсувати вашу БД.</p>
+              <p>Спочатку зробіть тест на копії або забекапленій базі.</p>
+            </div>
           </div>
-          <div className="w-[50px] h-[50px] flex items-center justify-center">
-             <img src={gptLogo} alt="gpt logo" />
+        </Card>
+
+        {/* Список баз */}
+        <Card className="p-6 mb-6 bg-white/90 dark:bg-neutral-900/60 ring-1 ring-black/5 dark:ring-white/10 rounded-xl">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Ваші бази</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => applySelection(null)}
+                aria-label="Нова база"
+                title="Нова база"
+                className="p-2 h-8 w-8 flex items-center justify-center"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => applySelection(null)}>Очистити форму</Button>
+              <Button variant="outline" size="sm" onClick={() => refreshList()} disabled={loading}>{loading ? 'Оновлюємо…' : 'Оновити список'}</Button>
+            </div>
           </div>
-        </div>
-      </Card>
-    </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {databases.map(db => (
+              <button
+                key={db.id}
+                onClick={() => applySelection(db)}
+                className={`text-left p-3 rounded-lg border transition hover:shadow ${selectedId === db.id ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-gray-200 dark:border-white/10'}`}
+              >
+                <div className="font-medium truncate">{db.name}</div>
+                <div className="text-xs text-muted-foreground truncate">{db.host}:{db.port} • {db.sql_type}</div>
+              </button>
+            ))}
+            {databases.length === 0 && !loading && (
+              <div className="text-sm text-muted-foreground">Список порожній. Додайте першу базу.</div>
+            )}
+          </div>
+        </Card>
+
+        {/* Параметри підключення до БД */}
+        <Card className="p-6 mb-3 bg-white/90 dark:bg-neutral-900/60 ring-1 ring-black/5 dark:ring-white/10 rounded-xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Хост</Label>
+              <Input value={dbAddress} onChange={(e) => setDbAddress(e.target.value)} placeholder="Напр., 172.30.16.1" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Логін</Label>
+              <Input value={dbLogin} onChange={(e) => setDbLogin(e.target.value)} placeholder="Введіть логін" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Пароль</Label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  value={dbPassword}
+                  onChange={(e) => setDbPassword(e.target.value)}
+                  placeholder="Введіть пароль"
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-2 my-auto h-6 w-6 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  aria-label={showPassword ? 'Сховати пароль' : 'Показати пароль'}
+                  title={showPassword ? 'Сховати пароль' : 'Показати пароль'}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Тип БД (postgres, mysql, mssql тощо)</Label>
+              <select
+                className="w-full h-9 rounded-md border border-gray-300 bg-white px-3 text-sm dark:bg-neutral-800 dark:border-neutral-700"
+                value={dbType}
+                onChange={(e) => setDbType(e.target.value as 'postgresql' | 'mysql' | 'mssql' | 'sqlite')}
+              >
+                <option value="postgresql">PostgreSQL</option>
+                <option value="mysql">MySQL</option>
+                <option value="mssql">MS SQL</option>
+                <option value="sqlite">SQLite</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Порт</Label>
+              <Input type="number" value={dbPort} onChange={(e) => setDbPort(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Напр., 5432" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Назва бази</Label>
+              <Input value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="Напр., my_database" />
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Стан БД</span>
+              {isConnected ? (
+                <Badge variant="success" className="gap-1"><Plug className="h-3.5 w-3.5" /> підключена</Badge>
+              ) : (
+                <Badge variant="destructive">не підключена</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedId ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={checkConnection} disabled={checking}>{checking ? 'Перевіряємо…' : 'Перевірити підключення'}</Button>
+                  <Button size="sm" onClick={onUpdate} disabled={!dbAddress || !dbLogin || !dbPort || !dbName}>Оновити базу</Button>
+                  <Button size="sm" variant="secondary" onClick={onCreateAsNew} disabled={!dbAddress || !dbLogin || !dbPort || !dbName}>Зберегти як нову</Button>
+                  <Button size="sm" variant="destructive" onClick={onDelete}>Видалити</Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={onCreate} disabled={!dbAddress || !dbLogin || !dbPort || !dbName}>Створити базу</Button>
+              )}
+            </div>
+          </div>
+          {actionMsg && (
+            <div className="mt-2 text-xs text-muted-foreground">{actionMsg}</div>
+          )}
+        </Card>
+
+        {/* Відповідник полів */}
+        <Card className="p-6 bg-white/90 dark:bg-neutral-900/60 ring-1 ring-black/5 dark:ring-white/10 rounded-xl">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold">Відповідник полів</h2>
+          </div>
+
+          <div className="divide-y divide-gray-200/70 dark:divide-white/10">
+            {rows.map((row) => (
+              <div key={row.id} className="py-2 first:pt-0 last:pb-0">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+                  <div className="shrink-0 min-w-[160px] font-medium text-slate-700 dark:text-slate-200">[{row.label}]</div>
+                  <div className="hidden md:block text-slate-400">=</div>
+                  <div className="flex-1">
+                    <Input
+                      placeholder="поле в бд"
+                      value={row.dbField}
+                      onChange={(e) => setRows(prev => prev.map(r => r.id === row.id ? { ...r, dbField: e.target.value } : r))}
+                    />
+                  </div>
+                  <div className="hidden md:block text-slate-400">|</div>
+                  <div className="flex-1">
+                    <Input placeholder={row.example} disabled />
+                  </div>
+                  <div className="shrink-0">
+                    <Button size="sm" variant="secondary" onClick={() => autoDetect(row.id)}>Визначити</Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <Button variant="outline" size="sm" onClick={addRow}>+ Додати поле</Button>
+          </div>
+        </Card>
+      </div>
     </AIProductFillerLayout>
   );
 }

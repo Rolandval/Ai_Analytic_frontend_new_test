@@ -24,6 +24,10 @@ export const productFillerNavItems: NavItem[] = [
         title: 'Перекладач',
         href: '/ai-product-filler/translator',
       },
+      {
+        title: 'Аналіз',
+        href: '/ai-product-filler/analysis',
+      },
     ],
   },
   {

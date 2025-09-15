@@ -1,22 +1,24 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Wand2, Layers, Settings, Languages } from 'lucide-react';
+import { Home, Wand2, Layers, Settings, Languages, BarChart2 } from 'lucide-react';
 import { FillerThemeSwitcher } from './FillerThemeSwitcher';
 import { ServiceDropdown } from '@/components/layout/ServiceDropdown';
+import { PFI18nProvider, usePFI18n } from '../i18n';
 
 interface Props {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { to: '/ai-product-filler', label: 'Загальне', icon: Home },
-  { to: '/ai-product-filler/generation', label: 'Генерація', icon: Wand2 },
-  { to: '/ai-product-filler/templates', label: 'Шаблони', icon: Layers },
-  { to: '/ai-product-filler/translator', label: 'Перекладач', icon: Languages },
-  { to: '/ai-product-filler/settings', label: 'Налаштування', icon: Settings },
-];
-
-export default function AIProductFillerLayout({ children }: Props) {
+function InnerLayout({ children }: Props) {
+  const { t } = usePFI18n();
+  const navItems = [
+    { to: '/ai-product-filler', label: t('nav.general'), icon: Home },
+    { to: '/ai-product-filler/generation', label: t('nav.generation'), icon: Wand2 },
+    { to: '/ai-product-filler/analysis', label: t('nav.analysis'), icon: BarChart2 },
+    { to: '/ai-product-filler/templates', label: t('nav.templates'), icon: Layers },
+    { to: '/ai-product-filler/translator', label: t('nav.translator'), icon: Languages },
+    { to: '/ai-product-filler/settings', label: t('nav.settings'), icon: Settings },
+  ];
   const [hovered, setHovered] = React.useState(false);
   return (
     <div className="min-h-screen bg-[#FAFDFF] dark:bg-neutral-950">
@@ -120,5 +122,13 @@ export default function AIProductFillerLayout({ children }: Props) {
         />
       </div>
     </div>
+  );
+}
+
+export default function AIProductFillerLayout({ children }: Props) {
+  return (
+    <PFI18nProvider>
+      <InnerLayout>{children}</InnerLayout>
+    </PFI18nProvider>
   );
 }
