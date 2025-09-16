@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -46,6 +46,7 @@ export default function AIProductFillerAnalysis() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProductType, setSelectedProductType] = useState<ProductType | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | string>('all');
 
   const [data, setData] = useState<{ ua: MissingCounts; ru: MissingCounts; en: MissingCounts } | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -66,6 +67,65 @@ export default function AIProductFillerAnalysis() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Витягнути назву категорії з різних можливих полів відповіді бекенду
+  const extractCategory = useCallback((d: any): string | null => {
+    try {
+      const fields = [
+        'category_name',
+        'category',
+        'site_category_name',
+        'site_category',
+        'category_title',
+      ];
+      for (const f of fields) {
+        const v = (d?.[f] ?? '').toString().trim();
+        if (v) return v;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Доступні категорії на основі поточного списку та фільтрів (тип + пошук)
+  const categories = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const list = descriptions.filter((d) => {
+      if (selectedProductType !== 'all' && d.product_type !== selectedProductType) return false;
+      if (q) {
+        const hay = [
+          d.site_product,
+          d.product_name,
+          d.site_shortname,
+          d.site_short_description,
+          d.site_full_description,
+          d.site_meta_keywords,
+          d.site_meta_description,
+          d.site_searchwords,
+          d.site_page_title,
+          d.site_promo_text,
+        ]
+          .map((v) => (v || '').toLowerCase())
+          .join(' ');
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const set = new Set<string>();
+    list.forEach((d) => {
+      const c = extractCategory(d);
+      if (c) set.add(c);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [descriptions, searchQuery, selectedProductType, extractCategory]);
+
+  // Якщо вибрана категорія більше не доступна після зміни фільтрів — скинути на "all"
+  useEffect(() => {
+    if (selectedCategory !== 'all' && !categories.includes(selectedCategory)) {
+      setSelectedCategory('all');
+    }
+  }, [categories, selectedCategory]);
 
   const analyze = useCallback(() => {
     setAnalyzing(true);
@@ -121,7 +181,10 @@ export default function AIProductFillerAnalysis() {
       return true;
     });
 
-    list.forEach((d) => {
+    // category filter (якщо вибрано конкретну категорію)
+    const finalList = selectedCategory === 'all' ? list : list.filter((d) => extractCategory(d) === selectedCategory);
+
+    finalList.forEach((d) => {
       const lk = langKey(d.site_lang_code);
       if (!lk) return;
       const target = acc[lk];
@@ -151,7 +214,7 @@ export default function AIProductFillerAnalysis() {
 
     setData(acc);
     setAnalyzing(false);
-  }, [descriptions, searchQuery, selectedProductType]);
+  }, [descriptions, searchQuery, selectedProductType, selectedCategory, extractCategory]);
 
   // Автоматично перераховувати при вході на сторінку і зміні фільтрів/даних
   useEffect(() => {
@@ -195,6 +258,19 @@ export default function AIProductFillerAnalysis() {
               <SelectItem value="inverters">{t('type.inverters')}</SelectItem>
             </SelectContent>
           </Select>
+          {categories.length > 0 && (
+            <Select value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as any)}>
+              <SelectTrigger className="w-[220px] shrink-0" title="Категорія">
+                <SelectValue placeholder="Категорія" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Всі категорії</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button onClick={load} variant="outline" className="shrink-0">
             <RefreshCcw className="h-4 w-4 mr-2" /> {t('buttons.update')}
           </Button>

@@ -4,15 +4,16 @@ import { aiServices, currentService, type AIService } from '@/config/services';
 interface ServiceState {
   currentServicePath: string;
   setCurrentServicePath: (path: string) => void;
-  getCurrentService: () => AIService;
-  isAnalyticsService: () => boolean;
-  isAccountantService: () => boolean;
-  isContentService: () => boolean;
-  isAdsManagerService: () => boolean;
+  getCurrentService: () => AIService | typeof currentService;
   isCharacterService: () => boolean;
-  isForecastingService: () => boolean;
+  isForecastService: () => boolean;
+  isContentService: () => boolean;
+  isAccountantService: () => boolean;
+  isAdsService: () => boolean;
   isSupplyManagerService: () => boolean;
   isProductFillerService: () => boolean;
+  isPriceBuilderService: () => boolean;
+  isBusinessAgentService: () => boolean;
 }
 
 export const useServiceStore = create<ServiceState>((set, get) => ({
@@ -37,10 +38,7 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
     return path === '/' || 
            path.startsWith('/batteries') || 
            path.startsWith('/solar-panels') || 
-           path.startsWith('/inverters') || 
-           path.startsWith('/prices') || 
-           path.startsWith('/reports') || 
-           path.startsWith('/ai-chat');
+           path.startsWith('/inverters');
   },
 
   isAccountantService: () => {
@@ -53,19 +51,20 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
     return path === '/ai-content' || path.startsWith('/ai-content/');
   },
 
-  isAdsManagerService: () => {
-    const path = get().currentServicePath;
-    return path === '/ai-ads' || path.startsWith('/ai-ads/');
-  },
 
   isCharacterService: () => {
     const path = get().currentServicePath;
     return path === '/ai-character' || path.startsWith('/ai-character/');
   },
 
-  isForecastingService: () => {
+  isForecastService: () => {
     const path = get().currentServicePath;
     return path === '/ai-forecast' || path.startsWith('/ai-forecast/');
+  },
+
+  isAdsService: () => {
+    const path = get().currentServicePath;
+    return path === '/ai-ads' || path.startsWith('/ai-ads/');
   },
 
   isSupplyManagerService: () => {
@@ -76,5 +75,25 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
   isProductFillerService: () => {
     const path = get().currentServicePath;
     return path === '/ai-product-filler' || path.startsWith('/ai-product-filler/');
-  }
+  },
+
+  isPriceBuilderService: () => {
+    const path = get().currentServicePath;
+    return path?.startsWith('/ai-price-builder') || false;
+  },
+
+  isBusinessAgentService: () => {
+    const path = get().currentServicePath;
+    return path?.startsWith('/ai-business-agent') || false;
+  },
 }));
+
+export const isPriceBuilderService = () => {
+  const path = useServiceStore.getState().currentServicePath;
+  return path?.startsWith('/ai-price-builder') || false;
+};
+
+export const isBusinessAgentService = () => {
+  const path = useServiceStore.getState().currentServicePath;
+  return path?.startsWith('/ai-business-agent') || false;
+};

@@ -29,8 +29,14 @@ import Settings from './pages/ai-product-filler/Settings';
 import AIProductFillerTemplates from './pages/ai-product-filler/Templates';
 import AIProductFillerTranslator from './pages/ai-product-filler/Translator';
 import AIProductFillerAnalysis from './pages/ai-product-filler/Analysis';
+import AIProductFillerCharacteristics from './pages/ai-product-filler/Characteristics';
 import AIProductFillerLogin from './pages/ai-product-filler/Login';
 import AIProductFillerRegister from './pages/ai-product-filler/Register';
+import PriceBuilderHome from './pages/ai-price-builder/Home';
+import PriceBuilderGenerate from './pages/ai-price-builder/Generate';
+import BusinessAgentDashboard from './pages/ai-business-agent/Dashboard';
+import BusinessAgentChat from './pages/ai-business-agent/Chat';
+import BusinessAgentReports from './pages/ai-business-agent/Reports';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -183,9 +189,19 @@ function App() {
           <Route path="/ai-product-filler/templates" element={<AIProductFillerTemplates />} />
           <Route path="/ai-product-filler/translator" element={<AIProductFillerTranslator />} />
           <Route path="/ai-product-filler/analysis" element={<AIProductFillerAnalysis />} />
+          <Route path="/ai-product-filler/characteristics" element={<AIProductFillerCharacteristics />} />
           <Route path="/ai-product-filler/settings" element={<Settings/>} />
           <Route path="/ai-product-filler/login" element={<AIProductFillerLogin />} />
           <Route path="/ai-product-filler/register" element={<AIProductFillerRegister />} />
+
+          {/* AI Price Builder */}
+          <Route path="/ai-price-builder" element={<PriceBuilderHome />} />
+          <Route path="/ai-price-builder/generate" element={<PriceBuilderGenerate />} />
+
+          {/* AI Business Agent */}
+          <Route path="/ai-business-agent" element={<BusinessAgentDashboard />} />
+          <Route path="/ai-business-agent/chat" element={<BusinessAgentChat />} />
+          <Route path="/ai-business-agent/reports" element={<BusinessAgentReports />} />
 
           {/* AI Supply Manager */}
           <Route path="/ai-supply" element={<ServicePage />} />

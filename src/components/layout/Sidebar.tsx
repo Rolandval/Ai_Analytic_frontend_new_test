@@ -8,7 +8,9 @@ import { productFillerNavItems } from '@/config/productFillerNav';
 import { adsManagerNavItems } from '@/config/adsManagerNav';
 import { characterNavItems } from '@/config/characterNav';
 import { forecastingNavItems } from '@/config/forecastingNav';
+import { priceBuilderNavItems } from '@/config/priceBuilderNav';
 import { supplyManagerNavItems } from '@/config/supplyManagerNav';
+import { businessAgentNavItems } from '@/config/businessAgentNav';
 import { useThemeStore } from '@/store/themeStore';
 import { useServiceStore } from '@/store/serviceStore';
 import { cn } from '@/lib/utils';
@@ -30,7 +32,8 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
   const [openItem, setOpenItem] = useState('');
   // Використовуємо props для стану згорнення
   const setAccentColor = useThemeStore((state) => state.setAccentColor);
-  const { setCurrentServicePath, getCurrentService, isAnalyticsService, isAccountantService, isContentService, isAdsManagerService, isCharacterService, isForecastingService, isSupplyManagerService, isProductFillerService } = useServiceStore();
+  const { setCurrentServicePath, getCurrentService, isAccountantService, isContentService, isCharacterService, isSupplyManagerService, isProductFillerService, isPriceBuilderService, isBusinessAgentService } = useServiceStore();
+  const isBusinessAgent = isBusinessAgentService();
 
   useEffect(() => {
     // Update current service path
@@ -59,7 +62,25 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
       // For other AI services, apply their specific color
       const service = getCurrentService();
       setAccentColor(service.color);
-      setOpenItem('');
+      // Auto-open Product Filler group based on current sub-route
+      if (isProductFillerService()) {
+        const match = productFillerNavItems.find((group) =>
+          (group.subItems || []).some((sub) => !!sub.href && location.pathname.startsWith(sub.href))
+        );
+        setOpenItem(match ? match.title : '');
+      } else if (isPriceBuilderService()) {
+        const match = priceBuilderNavItems.find((group) =>
+          (group.subItems || []).some((sub) => !!sub.href && location.pathname.startsWith(sub.href))
+        );
+        setOpenItem(match ? match.title : '');
+      } else if (isBusinessAgentService()) {
+        const match = businessAgentNavItems.find((group) =>
+          (group.subItems || []).some((sub) => !!sub.href && location.pathname.startsWith(sub.href))
+        );
+        setOpenItem(match ? match.title : '');
+      } else {
+        setOpenItem('');
+      }
     }
   }, [location.pathname, setAccentColor, setCurrentServicePath, getCurrentService]);
 
@@ -159,7 +180,127 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
             </li>
           ))}
 
+          {isPriceBuilderService() && priceBuilderNavItems.map((item) => (
+            <li key={item.title} className="mb-2">
+              <Link
+                to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}
+                onClick={(e) => {
+                  if (item.subItems && item.subItems.length > 0) {
+                    e.preventDefault();
+                    toggleItem(item.title);
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
+                  item.basePath &&
+                    location.pathname.startsWith(item.basePath) &&
+                    'text-foreground bg-primary/20'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon && <item.icon className="w-5 h-5 stroke-[1.3]" />}
+                  {!collapsed && <span>{item.title}</span>}
+                </div>
+                {!collapsed && item.subItems && item.subItems.length > 0 && (
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 transition-transform',
+                      openItem === item.title && 'rotate-180'
+                    )}
+                  />
+                )}
+              </Link>
+              {!collapsed && (
+              <AnimatePresence>
+                {openItem === item.title && item.subItems && item.subItems.length > 0 && (
+                  <motion.ul
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden mt-1 ml-4 border-l border-border"
+                  >
+                    {item.subItems.map((subItem) => (
+                      <li key={subItem.href}>
+                        <Link
+                          to={subItem.href || '#'}
+                          className={cn(
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
+                            location.pathname === subItem.href && 'text-foreground bg-primary/10'
+                          )}
+                        >
+                          {subItem.icon && <subItem.icon className="w-4 h-4 flex-shrink-0 stroke-[1.3]" />}
+                          <span className="flex-1">{subItem.title}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+              )}
+            </li>
+          ))}
+
           {isProductFillerService() && productFillerNavItems.map((item) => (
+            <li key={item.title} className="mb-2">
+              <Link
+                to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}
+                onClick={(e) => {
+                  if (item.subItems && item.subItems.length > 0) {
+                    e.preventDefault();
+                    toggleItem(item.title);
+                  }
+                }}
+                className={cn(
+                  'w-full flex items-center justify-between p-2 rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-black transition-colors',
+                  item.basePath &&
+                    location.pathname.startsWith(item.basePath) &&
+                    'text-foreground bg-primary/20'
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon && <item.icon className="w-5 h-5 stroke-[1.3]" />}
+                  {!collapsed && <span>{item.title}</span>}
+                </div>
+                {!collapsed && item.subItems && item.subItems.length > 0 && (
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 transition-transform',
+                      openItem === item.title && 'rotate-180'
+                    )}
+                  />
+                )}
+              </Link>
+              {!collapsed && (
+              <AnimatePresence>
+                {openItem === item.title && item.subItems && item.subItems.length > 0 && (
+                  <motion.ul
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden mt-1 ml-4 border-l border-border"
+                  >
+                    {item.subItems.map((subItem) => (
+                      <li key={subItem.href}>
+                        <Link
+                          to={subItem.href || '#'}
+                          className={cn(
+                            'flex items-center gap-3 py-2 px-4 rounded-md text-muted-foreground hover:text-black hover:bg-secondary/80 transition-colors text-sm w-full',
+                            location.pathname === subItem.href && 'text-foreground bg-primary/10'
+                          )}
+                        >
+                          {subItem.icon && <subItem.icon className="w-4 h-4 flex-shrink-0 stroke-[1.3]" />}
+                          <span className="flex-1">{subItem.title}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+              )}
+            </li>
+          ))}
+
+          {isBusinessAgent && businessAgentNavItems.map((item) => (
             <li key={item.title} className="mb-2">
               <Link
                 to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}
@@ -221,7 +362,10 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
 
           
 
-          {isAnalyticsService() && navItems.map((item) => (
+          {(location.pathname === '/' || location.pathname.startsWith('/batteries') || 
+            location.pathname.startsWith('/solar-panels') || location.pathname.startsWith('/inverters') || 
+            location.pathname.startsWith('/prices') || location.pathname.startsWith('/reports') || 
+            location.pathname.startsWith('/ai-chat')) && navItems.map((item) => (
             <li key={item.title} className="mb-2">
               <Link
                 to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}
@@ -413,7 +557,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
             </li>
           ))}
 
-          {isForecastingService() && forecastingNavItems.map((item) => (
+          {(location.pathname.startsWith('/ai-forecast')) && forecastingNavItems.map((item) => (
             <li key={item.title} className="mb-2">
               <Link
                 to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}
@@ -477,7 +621,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
             </li>
           ))}
 
-          {isAdsManagerService() && adsManagerNavItems.map((item) => (
+          {(location.pathname.startsWith('/ai-ads')) && adsManagerNavItems.map((item) => (
             <li key={item.title} className="mb-2">
               <Link
                 to={(item.subItems && item.subItems.length > 0 ? '#' : item.basePath) || '#'}

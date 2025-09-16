@@ -10,7 +10,9 @@ import {
   Store, 
   Video,
   PackageCheck,
-  Package
+  Package,
+  FileSpreadsheet,
+  Brain,
 } from 'lucide-react';
 
 export type AIService = {
@@ -105,7 +107,21 @@ export const aiServices: AIService[] = [
     path: "/ai-product-filler",
     color: "hsl(260, 70%, 55%)",
     icon: Package
-  }
+  },
+  {
+    name: 'Ai - price builder',
+    description: 'Автоматичне формування прайс-листів з урахуванням націнок та регіональних особливостей',
+    icon: FileSpreadsheet,
+    path: '/ai-price-builder',
+    color: '#10b981',
+  },
+  {
+    name: 'AI Business Agent',
+    description: 'Ваш персональний AI-директор: глибока аналітика, стратегічні рекомендації та управління компанією на основі даних',
+    icon: Brain,
+    path: '/ai-business-agent',
+    color: '#6366f1',
+  },
 ];
 
 export const currentService = {

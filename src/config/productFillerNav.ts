@@ -8,7 +8,7 @@ import type { NavItem } from './nav';
 export const productFillerNavItems: NavItem[] = [
   {
     title: 'Генерація контенту',
-    basePath: '/ai-product-filler/generation',
+    basePath: '/ai-product-filler',
     color: 'hsl(210, 80%, 50%)',
     icon: LayoutGrid,
     subItems: [
@@ -27,6 +27,10 @@ export const productFillerNavItems: NavItem[] = [
       {
         title: 'Аналіз',
         href: '/ai-product-filler/analysis',
+      },
+      {
+        title: 'Характеристики',
+        href: '/ai-product-filler/characteristics',
       },
     ],
   },

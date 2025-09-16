@@ -33,8 +33,7 @@ interface ContentDescription {
   description?: string;
   created_at?: string;
   updated_at?: string;
-  // Поля для альтернативного формату відповіді
-  site_lang_code?: string;
+   site_lang_code?: string;
   site_product?: string;
   site_shortname?: string;
   site_short_description?: string | null;
@@ -2148,51 +2147,8 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                     )}
                   </>
                 ) : (
-                  // Режим перекладу + Free: вибір джерела і цільової мови (залишається тут)
-                  <div className="flex items-center gap-2">
-                    <Select value={sourceLang} onValueChange={(value) => setSourceLang(value as 'ua' | 'en' | 'ru')}>
-                      <SelectTrigger className="w-[140px] shrink-0" title="З якої мови">
-                        <SelectValue placeholder="З мови" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ua">ua</SelectItem>
-                        <SelectItem value="en">en</SelectItem>
-                        <SelectItem value="ru">ru</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex items-center gap-1">
-                    <span
-                      aria-hidden
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 border border-amber-300 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/30"
-                      title="Напрямок перекладу"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-amber-600 hover:text-amber-700 shrink-0"
-                      title="Поміняти місцями мови"
-                      onClick={() => {
-                        setSourceLang(targetLang);
-                        setTargetLang(sourceLang);
-                      }}
-                    >
-                      <ArrowLeftRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                    <Select value={targetLang} onValueChange={(value) => setTargetLang(value as 'ua' | 'en' | 'ru')}>
-                      <SelectTrigger className="w-[140px] shrink-0" title="На яку мову">
-                        <SelectValue placeholder="На мову" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ua">ua</SelectItem>
-                        <SelectItem value="en">en</SelectItem>
-                        <SelectItem value="ru">ru</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  // Режим перекладу + Free: селектори мов перенесено перед кнопкою перекладу
+                  <></>
                 )
               )
 }
@@ -2282,6 +2238,66 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                 <Button variant="outline" onClick={fetchData} className="shrink-0">
                   {t('buttons.update')}
                 </Button>
+                {/* Блок вибору мов перенесено сюди – безпосередньо перед кнопкою перекладу */}
+                {isTranslateMode && (
+                  translationEngine === 'free' ? (
+                    <div className="flex items-center gap-2">
+                      <Select value={sourceLang} onValueChange={(value) => setSourceLang(value as 'ua' | 'en' | 'ru')}>
+                        <SelectTrigger className="w-[140px] shrink-0" title="З якої мови">
+                          <SelectValue placeholder="З мови" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ua">ua</SelectItem>
+                          <SelectItem value="en">en</SelectItem>
+                          <SelectItem value="ru">ru</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="flex items-center gap-1">
+                        <span
+                          aria-hidden
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 border border-amber-300 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/30"
+                          title="Напрямок перекладу"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-amber-600 hover:text-amber-700 shrink-0"
+                          title="Поміняти місцями мови"
+                          onClick={() => {
+                            setSourceLang(targetLang);
+                            setTargetLang(sourceLang);
+                          }}
+                        >
+                          <ArrowLeftRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Select value={targetLang} onValueChange={(value) => setTargetLang(value as 'ua' | 'en' | 'ru')}>
+                        <SelectTrigger className="w-[140px] shrink-0" title="На яку мову">
+                          <SelectValue placeholder="На мову" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ua">ua</SelectItem>
+                          <SelectItem value="en">en</SelectItem>
+                          <SelectItem value="ru">ru</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <Select value={targetLang} onValueChange={(value) => setTargetLang(value as 'ua' | 'en' | 'ru')}>
+                      <SelectTrigger className="w-[140px] shrink-0" title="Мова перекладу">
+                        <SelectValue placeholder="Мова перекладу" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ua">ua</SelectItem>
+                        <SelectItem value="en">en</SelectItem>
+                        <SelectItem value="ru">ru</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )
+                )}
                 {/* Кнопку аналізу видалено на прохання користувача */}
                 {/* Згенерувати/Перекласти вибрані – завжди остання кнопка у ряду */}
                 <Button
