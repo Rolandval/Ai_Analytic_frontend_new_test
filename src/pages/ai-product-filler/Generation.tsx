@@ -1009,11 +1009,23 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   // Встановити/зняти вибір для всіх клітинок стовпця на поточній сторінці
   const onColumnCheckedChange = (col: SiteColumnName, checked: boolean | 'indeterminate') => {
     const value = checked === true;
+    // Підрахунок порожніх клітинок у цій колонці на поточній сторінці
+    let emptyCount = 0;
+    const field = mapSiteColumnToContentField[col];
+    pagedDescriptions.forEach((desc) => {
+      const v = (desc as any)[field] as string | null | undefined;
+      if (isEmptyCellValue(v)) emptyCount++;
+    });
+    if (emptyCount === 0) {
+      // Немає що вибирати — показуємо підказку і не перемикаємо стан у "вибрано"
+      toast({ title: 'Немає порожніх клітинок у цій колонці на цій сторінці' });
+      setColumnHeaderChecked(prev => ({ ...prev, [col]: false }));
+      return;
+    }
     setColumnHeaderChecked(prev => ({ ...prev, [col]: value }));
     setSelectedCells(prev => {
       const next = { ...prev };
       // Застосовуємо тільки до порожніх клітинок цієї колонки на поточній сторінці
-      const field = mapSiteColumnToContentField[col];
       pagedDescriptions.forEach((desc, idx) => {
         const v = (desc as any)[field] as string | null | undefined;
         if (!isEmptyCellValue(v)) return;
@@ -1029,17 +1041,29 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
     checked: boolean | 'indeterminate'
   ) => {
     const value = checked === true;
-    setRowCheckedRows(prev => ({ ...prev, [rowKey]: value }));
     // Знайти опис рядка за ключем
     const rowDesc = pagedDescriptions.find((d, idx) => getRowKey(d, idx) === rowKey);
     if (!rowDesc) return;
+    // Перевірити, чи є хоч одна порожня клітинка в цьому рядку
+    let emptyInRow = 0;
+    ROW_GENERATABLE_COLUMNS.forEach(col => {
+      const field = mapSiteColumnToContentField[col];
+      const v = (rowDesc as any)[field] as string | null | undefined;
+      if (isEmptyCellValue(v)) emptyInRow++;
+    });
+    if (emptyInRow === 0) {
+      toast({ title: 'У цьому рядку немає порожніх клітинок на цій сторінці' });
+      setRowCheckedRows(prev => ({ ...prev, [rowKey]: false }));
+      return;
+    }
+    setRowCheckedRows(prev => ({ ...prev, [rowKey]: value }));
     setSelectedCells(prev => {
       const next = { ...prev };
       ROW_GENERATABLE_COLUMNS.forEach(col => {
         const field = mapSiteColumnToContentField[col];
         const v = (rowDesc as any)[field] as string | null | undefined;
-        // У режимі перекладу вибираємо всі колонки рядка; у режимі генерації — лише порожні
-        if (!isTranslateMode && !isEmptyCellValue(v)) return;
+        // Вибираємо лише порожні клітинки рядка (і в генерації, і в перекладі)
+        if (!isEmptyCellValue(v)) return;
         next[`${rowKey}:${col}`] = value;
       });
       return next;
@@ -1055,8 +1079,8 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
       ROW_GENERATABLE_COLUMNS.forEach((col) => {
         const field = mapSiteColumnToContentField[col];
         const v = (desc as any)[field] as string | null | undefined;
-        // У генерації враховуємо лише порожні клітинки; у перекладі — всі
-        if (!isTranslateMode && !isEmptyCellValue(v)) return;
+        // Враховуємо лише порожні клітинки (для обох режимів)
+        if (!isEmptyCellValue(v)) return;
         total++;
         if (selectedCells[`${rowKey}:${col}`]) selected++;
       });
@@ -1091,7 +1115,8 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
         ROW_GENERATABLE_COLUMNS.forEach((col) => {
           const field = mapSiteColumnToContentField[col];
           const v = (desc as any)[field] as string | null | undefined;
-          if (!isTranslateMode && !isEmptyCellValue(v)) return;
+          // Вибираємо лише порожні клітинки (для обох режимів)
+          if (!isEmptyCellValue(v)) return;
           next[`${rowKey}:${col}`] = value;
         });
       });
