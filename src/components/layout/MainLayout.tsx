@@ -8,12 +8,13 @@ import { ThemeToggle } from './ThemeToggle';
 
 export const MainLayout = () => {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const setAccentColor = useThemeStore((state) => state.setAccentColor);
   // Бічна панель завжди розгорнута за замовчуванням
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
-  const hideGlobalSidebar = location.pathname.startsWith('/ai-product-filler');
+  const hideGlobalSidebar = location.pathname.startsWith('/ai-product-filler') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/auth');
   
   // Мобільна перевірка як окрема функція для можливості повторного виклику
   const checkMobile = useCallback(() => {
@@ -52,6 +53,13 @@ export const MainLayout = () => {
       setSidebarOpen(false);
     }
   }, [location.pathname, isMobile]);
+
+  // Нейтральний акцент для профілю та /auth (коли Sidebar прихований)
+  useEffect(() => {
+    if (location.pathname.startsWith('/profile') || location.pathname.startsWith('/auth')) {
+      setAccentColor('221.2 83.2% 53.3%');
+    }
+  }, [location.pathname, setAccentColor]);
 
   return (
     <div 

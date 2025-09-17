@@ -1,10 +1,12 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 import { useEffect } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { useThemeStore } from './store/themeStore';
 import { Toaster } from './components/ui/toaster';
 import { ServicePage } from './components/services/ServicePage';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AuthPage from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
 import BatteriesDirectory from './pages/batteries/Directory';
 import BatteriesLostDirectory from './pages/batteries/LostDirectory';
@@ -30,13 +32,16 @@ import AIProductFillerTemplates from './pages/ai-product-filler/Templates';
 import AIProductFillerTranslator from './pages/ai-product-filler/Translator';
 import AIProductFillerAnalysis from './pages/ai-product-filler/Analysis';
 import AIProductFillerCharacteristics from './pages/ai-product-filler/Characteristics';
-import AIProductFillerLogin from './pages/ai-product-filler/Login';
-import AIProductFillerRegister from './pages/ai-product-filler/Register';
 import PriceBuilderHome from './pages/ai-price-builder/Home';
 import PriceBuilderGenerate from './pages/ai-price-builder/Generate';
 import BusinessAgentDashboard from './pages/ai-business-agent/Dashboard';
 import BusinessAgentChat from './pages/ai-business-agent/Chat';
 import BusinessAgentReports from './pages/ai-business-agent/Reports';
+
+// Profile Pages
+import ProfileDashboard from './pages/profile/ProfileDashboard';
+import ServicesPage from './pages/profile/ServicesPage';
+import ProfileSettings from './pages/profile/ProfileSettings';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -110,7 +115,16 @@ function App() {
       <Toaster />
       <Routes>
         <Route element={<MainLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          {/* Public Auth Route */}
+          <Route path="/auth" element={<AuthPage />} />
+
+          {/* Redirect legacy product-filler auth routes to unified /auth */}
+          <Route path="/ai-product-filler/login" element={<Navigate to="/auth" replace />} />
+          <Route path="/ai-product-filler/register" element={<Navigate to="/auth" replace />} />
+
+          {/* Protected application routes */}
+          <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+            <Route path="/" element={<Dashboard />} />
 
           {/* Prices */}
           <Route path="/prices/batteries" element={<BatteryCurrentPricesPage />} />
@@ -191,8 +205,6 @@ function App() {
           <Route path="/ai-product-filler/analysis" element={<AIProductFillerAnalysis />} />
           <Route path="/ai-product-filler/characteristics" element={<AIProductFillerCharacteristics />} />
           <Route path="/ai-product-filler/settings" element={<Settings/>} />
-          <Route path="/ai-product-filler/login" element={<AIProductFillerLogin />} />
-          <Route path="/ai-product-filler/register" element={<AIProductFillerRegister />} />
 
           {/* AI Price Builder */}
           <Route path="/ai-price-builder" element={<PriceBuilderHome />} />
@@ -210,6 +222,12 @@ function App() {
           <Route path="/ai-supply/supplier-analysis" element={<SupplierAnalysisPage />} />
           <Route path="/ai-supply/orders" element={<OrdersPage />} />
           <Route path="/ai-supply/send-orders" element={<SendOrdersPage />} />
+
+          {/* Profile System */}
+          <Route path="/profile" element={<ProfileDashboard />} />
+          <Route path="/profile/services" element={<ServicesPage />} />
+          <Route path="/profile/settings" element={<ProfileSettings />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

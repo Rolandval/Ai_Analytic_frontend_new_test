@@ -14,7 +14,7 @@ import { businessAgentNavItems } from '@/config/businessAgentNav';
 import { useThemeStore } from '@/store/themeStore';
 import { useServiceStore } from '@/store/serviceStore';
 import { cn } from '@/lib/utils';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, User } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { ServiceDropdown } from './ServiceDropdown';
 
@@ -34,10 +34,17 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
   const setAccentColor = useThemeStore((state) => state.setAccentColor);
   const { setCurrentServicePath, getCurrentService, isAccountantService, isContentService, isCharacterService, isSupplyManagerService, isProductFillerService, isPriceBuilderService, isBusinessAgentService } = useServiceStore();
   const isBusinessAgent = isBusinessAgentService();
+  const isProfile = location.pathname.startsWith('/profile');
 
   useEffect(() => {
     // Update current service path
     setCurrentServicePath(location.pathname);
+    // Profile area: standalone, neutral accent, no service groups
+    if (location.pathname.startsWith('/profile')) {
+      setOpenItem('');
+      setAccentColor('221.2 83.2% 53.3%'); // neutral blue
+      return;
+    }
     
     // If we're in the analytics service, handle nav items as usual
     if (location.pathname === '/' || location.pathname.startsWith('/batteries') || 
@@ -95,25 +102,29 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
     )}>
       <div className="flex items-center gap-2 px-2">
         <div className="flex items-center gap-2">
-          <Link to={getCurrentService().path}>
+          <Link to={isProfile ? '/profile' : getCurrentService().path}>
             <div 
-              className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white transition-colors"
-              style={{ backgroundColor: getCurrentService().color }}
+              className={cn(
+                "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white transition-colors",
+                isProfile && 'bg-black'
+              )}
+              style={!isProfile ? { backgroundColor: getCurrentService().color } : undefined}
             >
-              AI
+              {isProfile ? <User className="w-4 h-4" /> : 'AI'}
             </div>
           </Link>
-          {/* Випадаюче меню сервісів поруч з логотипом (завжди видиме) */}
-          <ServiceDropdown />
+          {/* Випадаюче меню сервісів поруч з логотипом приховуємо у профілі */}
+          {!isProfile && <ServiceDropdown />}
           {!collapsed && (
-            <Link to={getCurrentService().path}>
-              <h1 className="text-xl font-bold text-foreground">{getCurrentService().name.replace('Ai - ', '')}</h1>
+            <Link to={isProfile ? '/profile' : getCurrentService().path}>
+              <h1 className="text-xl font-bold text-foreground">{isProfile ? 'Профіль' : getCurrentService().name.replace('Ai - ', '')}</h1>
             </Link>
           )}
         </div>
         {/* Кнопка згортання прибрана, оскільки цим керує MainLayout */}
       </div>
 
+      {!isProfile && (
       <nav className={cn(collapsed ? 'mt-6' : 'mt-10', 'flex-1')}>
         <ul>
           {isCharacterService() && characterNavItems.map((item) => (
@@ -747,6 +758,7 @@ export const Sidebar = ({ collapsed = false }: SidebarProps) => {
           ))}
         </ul>
       </nav>
+      )}
       {!collapsed && (
         <div className="mt-auto">
           <ThemeToggle />
