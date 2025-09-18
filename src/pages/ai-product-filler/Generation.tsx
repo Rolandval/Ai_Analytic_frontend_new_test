@@ -78,7 +78,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProductType, setSelectedProductType] = useState<ProductType | 'all'>('all');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(50);
   const [customFilters, setCustomFilters] = useState<CustomFilter[]>([]);
   const [newFilter, setNewFilter] = useState<Omit<CustomFilter, 'id' | 'active'>>({ name: '', field: 'site_product', value: '' });
   // Фільтр мови (ua/en/ru), за замовчуванням "ua"
@@ -2644,7 +2644,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                       </div>
                     </div>
                   </TableHead>
-                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl" resizable onResizeStart={onResizeStart('page_title')} style={getColStyle('page_title')}>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" resizable onResizeStart={onResizeStart('page_title')} style={getColStyle('page_title')}>
                     <div className="flex flex-col gap-0.5 items-center justify-center h-full">
                       <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
                         <span className="truncate" title="Заголовок сторінки (page title)">Заголовок</span>
@@ -2669,12 +2669,46 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                       </div>
                     </div>
                   </TableHead>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Відгук користувача">Відгук</span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Відгук"
+                          checked={false}
+                          onCheckedChange={() => {}}
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
+                          disabled={true}
+                        />
+                      </div>
+                    </div>
+                  </TableHead>
+                  <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium rounded-tr-xl" style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
+                    <div className="flex flex-col gap-0.5 items-center justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 w-full overflow-hidden">
+                        <span className="truncate" title="Оцінка якості">Оцінка</span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
+                        <Checkbox
+                          aria-label="Вибрати колонку Оцінка"
+                          checked={false}
+                          onCheckedChange={() => {}}
+                          size="sm"
+                          className="dark:bg-neutral-800/70"
+                          disabled={true}
+                        />
+                      </div>
+                    </div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredDescriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                       Немає даних для відображення
                     </TableCell>
                   </TableRow>
@@ -2920,6 +2954,38 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                             />
                           </div>
                         </TableCell>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                          <div className="flex items-center gap-0.5">
+                            <Checkbox
+                              aria-label="Вибрати клітинку"
+                              checked={false}
+                              onCheckedChange={() => {}}
+                              onClick={(e) => e.stopPropagation()}
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
+                              disabled={true}
+                            />
+                            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+                              —
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
+                          <div className="flex items-center gap-0.5">
+                            <Checkbox
+                              aria-label="Вибрати клітинку"
+                              checked={false}
+                              onCheckedChange={() => {}}
+                              onClick={(e) => e.stopPropagation()}
+                              size="xs"
+                              className="dark:bg-neutral-800/70"
+                              disabled={true}
+                            />
+                            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+                              —
+                            </div>
+                          </div>
+                        </TableCell>
                       </TableRow>
                       {expanded && (
                         ([targetLang] as Array<'ua'|'en'|'ru'>).map((lang) => {
@@ -3042,6 +3108,16 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                                   ) : (
                                     <div className="truncate text-gray-400">-</div>
                                   )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={{ width: '120px', minWidth: '120px', maxWidth: '120px' }}>
+                                <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                                  —
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
+                                <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                                  —
                                 </div>
                               </TableCell>
                             </TableRow>

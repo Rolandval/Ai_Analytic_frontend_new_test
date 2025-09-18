@@ -44,6 +44,8 @@ const PRODUCT_FIELDS: FieldConfig<keyof ProductTemplates>[] = [
   { key: 'age_warning_message', label: 'Age warning message' },
   { key: 'promo_text', label: 'Promo text' },
   { key: 'unit_name', label: 'Unit name' },
+  { key: 'feedback', label: 'Feedback' },
+  { key: 'rating', label: 'Rating' },
 ];
 
 const CATEGORY_FIELDS: FieldConfig<keyof CategoryTemplates>[] = [

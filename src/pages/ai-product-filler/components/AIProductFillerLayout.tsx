@@ -1,9 +1,10 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Home, Wand2, Layers, Settings, Languages, BarChart2, List } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Home, Wand2, Layers, Settings, Languages, BarChart2, List, User, LogOut } from 'lucide-react';
 import { FillerThemeSwitcher } from './FillerThemeSwitcher';
 import { ServiceDropdown } from '@/components/layout/ServiceDropdown';
 import { PFI18nProvider, usePFI18n } from '../i18n';
+import { useAuthStore } from '@/store/authStore';
 
 interface Props {
   children: React.ReactNode;
@@ -11,6 +12,8 @@ interface Props {
 
 function InnerLayout({ children }: Props) {
   const { t } = usePFI18n();
+  const navigate = useNavigate();
+  const { logout } = useAuthStore();
   const navItems = [
     { to: '/ai-product-filler', label: t('nav.general'), icon: Home },
     { to: '/ai-product-filler/generation', label: t('nav.generation'), icon: Wand2 },
@@ -18,6 +21,8 @@ function InnerLayout({ children }: Props) {
     { to: '/ai-product-filler/characteristics', label: t('nav.characteristics'), icon: List },
     { to: '/ai-product-filler/templates', label: t('nav.templates'), icon: Layers },
     { to: '/ai-product-filler/translator', label: t('nav.translator'), icon: Languages },
+    { to: '/profile', label: t('nav.profile'), icon: User },
+    { to: '/auth', label: t('nav.logout'), icon: LogOut, onClick: () => { try { logout(); } finally { navigate('/auth', { replace: true }); } } },
     { to: '/ai-product-filler/settings', label: t('nav.settings'), icon: Settings },
   ];
   const [hovered, setHovered] = React.useState(false);
@@ -70,11 +75,12 @@ function InnerLayout({ children }: Props) {
             <div className='flex h-screen flex-col justify-between'>
             <nav>
               <ul className="py-1">
-                {navItems.map(({ to, label, icon: Icon }) => (
+                {navItems.map(({ to, label, icon: Icon, onClick }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
                       end={to === '/ai-product-filler'}
+                      onClick={onClick as any}
                       className={({ isActive }) =>
                         [
                           'flex items-center h-10 px-3 text-sm transition-colors',

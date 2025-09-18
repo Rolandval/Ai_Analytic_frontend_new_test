@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/Label';
 import { Button } from '@/components/ui/Button';
 import { Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { requestPassword } from '@/api/auth';
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const from = (location.state as any)?.from || '/profile';
 
@@ -43,6 +46,29 @@ export default function AuthPage() {
       navigate(from, { replace: true });
     } catch (e: any) {
       // error handled by store; toast shown in effect
+    }
+  };
+
+  const handleRequestPassword = async () => {
+    try {
+      const targetEmail = (resetEmail || email).trim();
+      if (!targetEmail) {
+        toast({ title: 'Помилка', description: 'Введіть email, щоб скинути пароль', variant: 'destructive' });
+        return;
+      }
+      // Проста валідація email
+      const emailRegex = /.+@.+\..+/;
+      if (!emailRegex.test(targetEmail)) {
+        toast({ title: 'Некоректний email', description: 'Перевірте правильність email', variant: 'destructive' });
+        return;
+      }
+      setResetLoading(true);
+      await requestPassword({ email: targetEmail });
+      toast({ title: 'Лист відправлено', description: 'Якщо email існує, ми надіслали новий пароль на пошту.' });
+    } catch (e: any) {
+      toast({ title: 'Помилка', description: e?.message || 'Не вдалося надіслати лист', variant: 'destructive' });
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -126,6 +152,26 @@ export default function AuthPage() {
                   </>
                 )}
               </Button>
+
+              {/* Reset password section */}
+              <div className="mt-2 border-t pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="resetEmail">Скинути пароль</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="resetEmail"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={resetEmail || email}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                    />
+                    <Button type="button" variant="outline" onClick={handleRequestPassword} disabled={resetLoading}>
+                      {resetLoading ? 'Надсилаємо…' : 'Отримати пароль'}
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Ми надішлемо новий пароль на вашу пошту</div>
+                </div>
+              </div>
 
               <div className="text-xs text-center text-gray-500">
                 Натискаючи кнопку, ви погоджуєтесь з умовами використання

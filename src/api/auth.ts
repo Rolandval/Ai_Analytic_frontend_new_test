@@ -26,7 +26,7 @@ async function postJsonWithFallback(
           'Accept': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email: payload?.email, password: payload?.password }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) return res;
       // If 404 or 405, try next path
@@ -66,5 +66,21 @@ export async function login(payload: Credentials): Promise<AuthResponse> {
     return JSON.parse(text);
   } catch {
     return {} as AuthResponse;
+  }
+}
+
+// Request password reset/new password via email
+export async function requestPassword(payload: { email: string }): Promise<void> {
+  const paths = ['/users/get_password', '/users/get_password/'];
+  await postJsonWithFallback(paths, payload);
+}
+
+// Logout current user (server-side session/cookie invalidation)
+export async function logout(): Promise<void> {
+  const paths = ['/users/logout', '/users/logout/'];
+  try {
+    await postJsonWithFallback(paths, {});
+  } catch (_) {
+    // Even if API not available, proceed to clear client state
   }
 }

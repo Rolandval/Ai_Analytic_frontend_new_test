@@ -58,7 +58,11 @@ export const useAuthStore = create<AuthState>()(
           throw e;
         }
       },
-      logout: () => set({ token: null, user: null }),
+      // Call backend logout as best-effort, then clear local state
+      logout: () => {
+        try { void authApi.logout(); } catch (_) { /* ignore */ }
+        set({ token: null, user: null });
+      },
       clearError: () => set({ error: null }),
     }),
     {

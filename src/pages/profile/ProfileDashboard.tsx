@@ -11,13 +11,17 @@ import {
   Shield, 
   Check,
   ExternalLink,
-  Zap
+  Zap,
+  LogOut
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
 
 import { UserProfile, ServiceSubscription } from '@/api/profileApi';
 
 export default function ProfileDashboard() {
+  const navigate = useNavigate();
+  const { logout } = useAuthStore();
   // Мок-дані користувача
   const [userProfile] = useState<UserProfile>({
     id: 'user-1',
@@ -99,6 +103,10 @@ export default function ProfileDashboard() {
   const toggleService = (serviceId: string) => {
     // TODO: Implement service toggle logic
     console.log('Toggle service:', serviceId);
+  };
+
+  const handleLogout = () => {
+    try { logout(); } finally { navigate('/auth', { replace: true }); }
   };
 
   const activeServicesCount = serviceSubscriptions.filter(sub => sub.isActive).length;
@@ -296,6 +304,11 @@ export default function ProfileDashboard() {
               <Button variant="outline" className="w-full h-16 flex-col gap-2">
                 <Shield className="w-5 h-5" />
                 <span className="text-sm">Безпека</span>
+              </Button>
+
+              <Button onClick={handleLogout} variant="outline" className="w-full h-16 flex-col gap-2">
+                <LogOut className="w-5 h-5" />
+                <span className="text-sm">Вийти</span>
               </Button>
             </div>
           </CardContent>

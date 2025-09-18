@@ -14,7 +14,9 @@ export type ProductFieldKey =
   | 'page_title'
   | 'age_warning_message'
   | 'promo_text'
-  | 'unit_name';
+  | 'unit_name'
+  | 'feedback'
+  | 'rating';
 
 export type CategoryFieldKey =
   | 'age_warning_message'
@@ -47,7 +49,9 @@ const DEFAULTS: TemplatesStore = {
       page_title: '[page_title]',
       age_warning_message: '[age_warning_message]',
       promo_text: '[promo_text]',
-      unit_name: '[unit_name]'
+      unit_name: '[unit_name]',
+      feedback: 'Згенеруй відгук користувача про [product]. Зроби його реалістичним і корисним.',
+      rating: 'Оціни [product] за 5-бальною шкалою та поясни оцінку.'
     },
     ru: {
       name: '[product] — умное название продукта',
@@ -61,7 +65,9 @@ const DEFAULTS: TemplatesStore = {
       page_title: '[page_title]',
       age_warning_message: '[age_warning_message]',
       promo_text: '[promo_text]',
-      unit_name: '[unit_name]'
+      unit_name: '[unit_name]',
+      feedback: 'Сгенерируй отзыв пользователя о [product]. Сделай его реалистичным и полезным.',
+      rating: 'Оцени [product] по 5-балльной шкале и объясни оценку.'
     },
     en: {
       name: '[product] — smart product name',
@@ -75,7 +81,9 @@ const DEFAULTS: TemplatesStore = {
       page_title: '[page_title]',
       age_warning_message: '[age_warning_message]',
       promo_text: '[promo_text]',
-      unit_name: '[unit_name]'
+      unit_name: '[unit_name]',
+      feedback: 'Generate a user review for [product]. Make it realistic and helpful.',
+      rating: 'Rate [product] on a 5-point scale and explain the rating.'
     }
   },
   category: {

@@ -17,6 +17,8 @@ const DICTS: Record<Lang, Dict> = {
     'nav.settings': 'Налаштування',
     'nav.analysis': 'Аналіз',
     'nav.characteristics': 'Характеристики',
+    'nav.profile': 'Профіль',
+    'nav.logout': 'Вийти',
 
     'analysis.title': 'Аналіз порожніх полів',
     'analysis.total': 'Усього',
@@ -181,6 +183,8 @@ const DICTS: Record<Lang, Dict> = {
     'nav.settings': 'Настройки',
     'nav.analysis': 'Аналитика',
     'nav.characteristics': 'Характеристики',
+    'nav.profile': 'Профиль',
+    'nav.logout': 'Выйти',
 
     'analysis.title': 'Анализ пустых полей',
     'analysis.total': 'Всего',
@@ -345,6 +349,8 @@ const DICTS: Record<Lang, Dict> = {
     'nav.settings': 'Settings',
     'nav.analysis': 'Analysis',
     'nav.characteristics': 'Characteristics',
+    'nav.profile': 'Profile',
+    'nav.logout': 'Logout',
 
     'analysis.title': 'Empty fields analysis',
     'analysis.total': 'Total',
