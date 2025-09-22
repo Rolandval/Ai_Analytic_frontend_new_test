@@ -42,6 +42,8 @@ import BusinessAgentReports from './pages/ai-business-agent/Reports';
 import ProfileDashboard from './pages/profile/ProfileDashboard';
 import ServicesPage from './pages/profile/ServicesPage';
 import ProfileSettings from './pages/profile/ProfileSettings';
+import CompanyPulsePage from './pages/profile/CompanyPulsePage';
+import SubscriptionsPage from './pages/profile/SubscriptionsPage';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -226,6 +228,11 @@ function App() {
           {/* Profile System */}
           <Route path="/profile" element={<ProfileDashboard />} />
           <Route path="/profile/services" element={<ServicesPage />} />
+          <Route path="/profile/subscriptions" element={<SubscriptionsPage />} />
+          <Route path="/profile/subscriptions/active" element={<SubscriptionsPage />} />
+          <Route path="/profile/subscriptions/billing" element={<SubscriptionsPage />} />
+          <Route path="/profile/subscriptions/plans" element={<SubscriptionsPage />} />
+          <Route path="/profile/pulse" element={<CompanyPulsePage />} />
           <Route path="/profile/settings" element={<ProfileSettings />} />
           </Route>
         </Route>

@@ -8,7 +8,8 @@ import {
   BarChart3,
   FileText,
   Download,
-  Trash2
+  Trash2,
+  Activity
 } from 'lucide-react';
 
 export interface ProfileNavItem {
@@ -61,6 +62,13 @@ export const profileNavItems: ProfileNavItem[] = [
         description: 'Порівняти та змінити тарифні плани'
       }
     ]
+  },
+  {
+    title: 'Пульс компанії',
+    href: '/profile/pulse',
+    icon: Activity,
+    description: 'Моніторинг MCP з\'єднань та системних сервісів',
+    basePath: '/profile/pulse'
   },
   {
     title: 'Аналітика використання',
