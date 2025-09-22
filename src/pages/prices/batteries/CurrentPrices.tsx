@@ -6,6 +6,7 @@ import { TableColumn } from '@/components/PriceHistoryPage';
 import { BatteryPriceSchema } from '@/types/batteries';
 import { useEffect, useState } from 'react';
 import { ContactIconButton } from '@/components/ui/ContactIconButton';
+import { refreshBatteriesData } from '@/services/dataRefresh.api';
 
 const createColumns = (markup: number = 15): TableColumn<BatteryPriceSchema>[] => [
   { key: 'full_name', header: 'Назва', sortable: true },
@@ -131,6 +132,9 @@ export default function BatteryCurrentPricesPage() {
       columns={createColumns(hook.filters.markup || markup)}
       hook={hook as any}
       compact
+      onRefresh={async () => {
+        await refreshBatteriesData();
+      }}
       chartConfig={{
         getChart: hook.getChart,
         suppliers: (hook as any).supplierOptions ?? [],

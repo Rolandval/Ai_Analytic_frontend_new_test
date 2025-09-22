@@ -1,6 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { refreshInvertersData } from '@/services/dataRefresh.api';
+import { useState, useEffect } from 'react';
 
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
@@ -9,8 +7,7 @@ import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/Popover';
-import { Filter, X, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { X, GripVertical } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -45,7 +42,6 @@ interface Props {
   setFilters: (f: InverterPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
-  settingsButton?: React.ReactNode;
 }
 
 interface DraggableFilterItemProps {
@@ -85,17 +81,15 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
   );
 };
 
-export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
+export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current
   });
-  const [isExpanded, setIsExpanded] = useState(false);
-  const { toast } = useToast();
+  // const [isExpanded, setIsExpanded] = useState(false);
   // Active badges: simple full render without clamping/popover
   
   // Drag and drop state
   const defaultFilterOrder = [
-    'actions',
     'brands',
     'suppliers',
     'power',
@@ -112,8 +106,8 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   const [filterOrder, setFilterOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('inverter-comparison-filters-order');
     const base: string[] = saved ? JSON.parse(saved) : defaultFilterOrder;
-    // Ensure 'full_name' is not rendered in the grid even if present in old saved orders
-    return base.filter((id) => id !== 'full_name');
+    // Ensure legacy keys are removed
+    return base.filter((id) => id !== 'full_name' && id !== 'actions');
   });
   
   const sensors = useSensors(
@@ -158,59 +152,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     // full_name input removed from filters; now rendered externally on the page
-    actions: (
-      <div className="flex flex-col gap-1 h-[60px]">
-        <label className="text-[12px] font-medium text-slate-600">Дії</label>
-        <div className="flex items-end gap-1 h-[60px]">
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-8 px-2 text-xs"
-            onClick={async () => {
-              try {
-                await refreshInvertersData();
-                toast({ title: 'Оновлено', description: 'Дані про наявність оновлено.', duration: 2000 });
-              } catch (e) {
-                toast({ title: 'Помилка', description: 'Не вдалося оновити дані про наявність.', variant: 'destructive' });
-              }
-            }}
-            title="Оновити дані про наявність"
-            aria-label="Оновити дані про наявність"
-          >
-            Оновити
-          </Button>
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-8 px-2 text-xs"
-            onClick={() => {
-              const normalize = (o: Record<string, any>) => {
-                const n: Record<string, any> = {};
-                Object.entries(o).forEach(([k, v]) => {
-                  if (v === '' || v === null) return;
-                  if (Array.isArray(v)) {
-                    if (v.length > 0) n[k] = v.slice();
-                  } else if (v !== undefined) {
-                    n[k] = v;
-                  }
-                });
-                return n;
-              };
-              const payload = normalize({ ...local });
-              const text = JSON.stringify(payload, null, 2);
-              navigator.clipboard.writeText(text)
-                .then(() => toast({ title: 'Скопійовано', description: 'Налаштування фільтрів скопійовано в буфер обміну.', duration: 2000 }))
-                .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати налаштування.', variant: 'destructive' }));
-            }}
-            title="Копіювати налаштування"
-            aria-label="Копіювати налаштування"
-          >
-            Копіювати
-          </Button>
-          {settingsButton}
-        </div>
-      </div>
-    ),
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover
@@ -493,7 +434,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               name="price-sort-comp"
               checked={local.price_sort === 'asc'}
               onChange={() => {
-                const newLocal = { ...local, price_sort: 'asc', page: 1 };
+                const newLocal = { ...local, price_sort: 'asc' as const, page: 1 };
                 setLocal(newLocal);
                 setFilters(newLocal);
               }}
@@ -507,7 +448,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               name="price-sort-comp"
               checked={local.price_sort === 'desc'}
               onChange={() => {
-                const newLocal = { ...local, price_sort: 'desc', page: 1 };
+                const newLocal = { ...local, price_sort: 'desc' as const, page: 1 };
                 setLocal(newLocal);
                 setFilters(newLocal);
               }}
@@ -806,13 +747,10 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
       >
         <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
           <div
-            className={cn(
-              // Always fill full width and auto-wrap; use safe min width to avoid overlap
-              "grid gap-3 sm:gap-5 transition-all duration-200",
-              "[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] [grid-auto-rows:minmax(60px,auto)]",
-              // Respect mobile toggle
-              isExpanded ? "grid" : "hidden md:grid"
-            )}
+            className={
+              "grid gap-3 sm:gap-5 transition-all duration-200 " +
+              "[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] [grid-auto-rows:minmax(60px,auto)]"
+            }
           >
             {filterOrder.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>

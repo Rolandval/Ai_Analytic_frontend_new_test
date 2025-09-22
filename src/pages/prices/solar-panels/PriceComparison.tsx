@@ -10,12 +10,14 @@ import { Pagination } from '@/components/ui/Pagination';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { updateSolarPanelSitePrice, UpdateSitePriceRequest } from '@/services/sitePrice.api';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown, Settings } from 'lucide-react';
+import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
 import { useToast } from '@/hooks/use-toast';
 // removed radio-group imports; using a single native radio input for unified toggle
+import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
+import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -312,7 +314,46 @@ export default function SolarPanelPriceComparison() {
     }
   };
 
-  // buildExport was removed as Copy functionality moved out from this page
+  // Copying state and buildExport for copying the visible table
+  const [copying, setCopying] = useState(false);
+  const buildExport = () => {
+    if (!comparisonData || !comparisonData.panels || comparisonData.panels.length === 0) return '';
+    const headers: string[] = [];
+    // Static columns
+    const staticCols = staticColumns.map(c => c.key);
+    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
+    // Supplier columns
+    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+
+    const rows = sortedPanels.map((panel, idx) => {
+      const cells: string[] = [];
+      if (visibleColumns['index'] !== false) cells.push(String(idx + 1));
+      if (visibleColumns['full_name'] !== false) cells.push(panel.full_name ?? '');
+      if (visibleColumns['brand'] !== false) cells.push(panel.brand ?? '');
+      if (visibleColumns['power'] !== false) cells.push(panel.power?.toString() ?? '');
+      if (visibleColumns['thickness'] !== false) cells.push(panel.thickness?.toString() ?? '');
+      if (visibleColumns['panel_type'] !== false) cells.push(panel.panel_type ?? '');
+      if (visibleColumns['cell_type'] !== false) cells.push(panel.cell_type ?? '');
+      // Suppliers
+      supplierColumns.forEach(s => {
+        if (visibleColumns[`supplier:${s}`] === false) return;
+        const price = getPriceForSupplier(panel, s);
+        cells.push(price !== null ? `${formatPrice(price)}₴` : '-');
+      });
+      if (visibleColumns['recommended'] !== false) {
+        const r = panel.supplier_prices.find(sp => sp.recommended_price !== null)?.recommended_price ?? null;
+        cells.push(r !== null ? `${formatPrice(r)}₴` : '-');
+      }
+      if (visibleColumns['actual'] !== false) {
+        const v = calculateRecommendedPrice(panel);
+        cells.push(v ? `${formatPrice(v)}₴` : '-');
+      }
+      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(panel)));
+      return cells.join('\t');
+    });
+
+    return `${headers.join('\t')}\n${rows.join('\n')}`;
+  };
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -583,8 +624,40 @@ export default function SolarPanelPriceComparison() {
                 setFilters={handleFiltersChange}
                 brands={brands}
                 suppliers={suppliers}
-                settingsButton={settingsButton}
               />
+            </div>
+            {/* Top-right actions toolbar */}
+            <div className="w-full flex items-center justify-end gap-2 mb-2">
+              <RefreshDataButton
+                variant="outline"
+                onRefresh={async () => {
+                  await refreshSolarPanelsData();
+                  await fetchComparisonData();
+                }}
+              />
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-8 px-2 text-xs"
+                title="Копіювати таблицю"
+                aria-label="Копіювати таблицю"
+                onClick={() => {
+                  setCopying(true);
+                  const text = buildExport();
+                  if (!text) {
+                    toast({ title: 'Немає даних', description: 'Немає рядків для копіювання.', variant: 'destructive' });
+                    setCopying(false);
+                    return;
+                  }
+                  navigator.clipboard.writeText(text)
+                    .then(() => toast({ title: 'Скопійовано', description: 'Таблицю скопійовано в буфер обміну.', duration: 2000 }))
+                    .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати таблицю.', variant: 'destructive' }))
+                    .finally(() => setCopying(false));
+                }}
+              >
+                {copying ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+              {settingsButton}
             </div>
             {!filtersApplied ? (
               <div className="text-center py-10 text-gray-500">

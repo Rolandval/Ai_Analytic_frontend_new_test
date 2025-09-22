@@ -46,6 +46,27 @@ export const useInverterCurrentPricesCrud = () => {
   const setPage = (p: number) => setFilters((f) => ({ ...f, page: p }));
   const setPageSize = (size: number) => setFilters((f) => ({ ...f, page_size: size, page: 1 }));
 
+  // Wrap setFilters to normalize payload and trigger refetch
+  const applyFilters = (f: InverterPriceListRequestSchema) => {
+    const normalize = (o: Record<string, any>) => {
+      const n: Record<string, any> = {};
+      Object.entries(o).forEach(([k, v]) => {
+        if (v === '' || v === null || v === undefined) return;
+        if (Array.isArray(v)) {
+          if (v.length > 0) n[k] = v.slice();
+          return;
+        }
+        n[k] = v;
+      });
+      return n as InverterPriceListRequestSchema;
+    };
+    const normalized = normalize(f as any);
+    setFilters(normalized);
+    qc.invalidateQueries({ queryKey: ['inverter-current-prices'] });
+  };
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['inverter-current-prices'] });
+
   return {
     rows: data?.prices ?? [],
     total: data?.total ?? 0,
@@ -55,7 +76,7 @@ export const useInverterCurrentPricesCrud = () => {
     setPage,
     setPageSize,
     filters,
-    setFilters: setFilters as any,
+    setFilters: applyFilters as any,
     createPrice: async (payload: any) => createInverterPrice(payload),
     updatePrice: async (id: number, payload: InverterPriceUpdateSchemaRequest) =>
       updateMut.mutateAsync({ id, payload }),
@@ -65,5 +86,6 @@ export const useInverterCurrentPricesCrud = () => {
     supplierOptions,
     getChart: async (inverterId: number, supplierIds: number[]) =>
       (await import('@/services/priceChart.api')).getInverterPriceChart({ inverter_id: inverterId, include_suppliers: supplierIds }),
+    refresh,
   } as const;
 };

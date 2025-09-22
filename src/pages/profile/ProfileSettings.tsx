@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -10,15 +10,14 @@ import {
   User, 
   Shield, 
   Bell, 
-  Globe, 
   Palette,
   Save,
   Eye,
   EyeOff,
-  Smartphone,
   Mail,
   AlertTriangle
 } from 'lucide-react';
+import ProfileSidebar from '@/components/profile/ProfileSidebar';
 
 interface UserSettings {
   personal: {
@@ -120,7 +119,7 @@ const ProfileSettings = () => {
     }));
   };
 
-  const handleSave = async (section: string) => {
+  const handleSave = async () => {
     setIsLoading(true);
     // Симуляція збереження
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -130,43 +129,32 @@ const ProfileSettings = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Заголовок */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-2xl px-6 py-3 shadow-lg border border-white/20">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
-              <User className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Налаштування профілю
-              </h1>
-              <p className="text-gray-600">Керування особистими налаштуваннями</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Налаштування */}
-        <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
-          <Tabs defaultValue="personal" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="personal" className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Особисте
-              </TabsTrigger>
-              <TabsTrigger value="security" className="flex items-center gap-2">
-                <Shield className="w-4 h-4" />
-                Безпека
-              </TabsTrigger>
-              <TabsTrigger value="notifications" className="flex items-center gap-2">
-                <Bell className="w-4 h-4" />
-                Сповіщення
-              </TabsTrigger>
-              <TabsTrigger value="preferences" className="flex items-center gap-2">
-                <Palette className="w-4 h-4" />
-                Налаштування
-              </TabsTrigger>
-            </TabsList>
+      <div className="max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px,1fr] gap-6">
+          <ProfileSidebar />
+          <div className="space-y-8">
+            {/* Налаштування */}
+            <Card className="bg-white/80 backdrop-blur-sm border-white/20 shadow-lg">
+              <Tabs defaultValue="personal" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="personal" className="flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Особисте
+                  </TabsTrigger>
+                  <TabsTrigger value="security" className="flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    Безпека
+                  </TabsTrigger>
+                  <TabsTrigger value="notifications" className="flex items-center gap-2">
+                    <Bell className="w-4 h-4" />
+                    Сповіщення
+                  </TabsTrigger>
+                  <TabsTrigger value="preferences" className="flex items-center gap-2">
+                    <Palette className="w-4 h-4" />
+                    Налаштування
+                  </TabsTrigger>
+                </TabsList>
+                
 
             {/* Особиста інформація */}
             <TabsContent value="personal" className="space-y-6">
@@ -220,7 +208,7 @@ const ProfileSettings = () => {
                     />
                   </div>
                 </div>
-                <Button onClick={() => handleSave('personal')} disabled={isLoading}>
+                <Button onClick={() => handleSave()} disabled={isLoading}>
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Збереження...' : 'Зберегти зміни'}
                 </Button>
@@ -321,7 +309,7 @@ const ProfileSettings = () => {
                   </div>
                 </div>
 
-                <Button onClick={() => handleSave('security')} disabled={isLoading}>
+                <Button onClick={() => handleSave()} disabled={isLoading}>
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Збереження...' : 'Зберегти зміни'}
                 </Button>
@@ -434,7 +422,7 @@ const ProfileSettings = () => {
                   </div>
                 </div>
 
-                <Button onClick={() => handleSave('notifications')} disabled={isLoading}>
+                <Button onClick={() => handleSave()} disabled={isLoading}>
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Збереження...' : 'Зберегти зміни'}
                 </Button>
@@ -522,7 +510,7 @@ const ProfileSettings = () => {
                   </div>
                 </div>
 
-                <Button onClick={() => handleSave('preferences')} disabled={isLoading}>
+                <Button onClick={() => handleSave()} disabled={isLoading}>
                   <Save className="w-4 h-4 mr-2" />
                   {isLoading ? 'Збереження...' : 'Зберегти зміни'}
                 </Button>
@@ -556,6 +544,8 @@ const ProfileSettings = () => {
             </div>
           </CardContent>
         </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

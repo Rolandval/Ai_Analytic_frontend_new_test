@@ -5,16 +5,14 @@ import { cn } from '@/lib/utils';
 
 interface RefreshDataButtonProps {
   onRefresh: () => Promise<any>;
-  resourceName?: string;
   className?: string;
   variant?: 'default' | 'outline' | 'secondary';
 }
 
 export function RefreshDataButton({ 
   onRefresh, 
-  resourceName = 'дані про наявність',
   className,
-  variant = 'default'
+  variant = 'outline'
 }: RefreshDataButtonProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -43,8 +41,8 @@ export function RefreshDataButton({
         variant={variant}
         size="sm"
         className={cn(
-          "bg-purple-600 hover:bg-purple-700 text-white",
-          "transition-all duration-200 ease-in-out", 
+          "transition-all duration-200 ease-in-out",
+          "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50",
           className
         )}
       >
@@ -57,8 +55,7 @@ export function RefreshDataButton({
         ) : (
           <>
             <RefreshCw className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Оновити {resourceName}</span>
-            <span className="sm:hidden">Оновити</span>
+            <span>Оновити</span>
           </>
         )}
       </Button>

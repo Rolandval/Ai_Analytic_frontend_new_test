@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, User } from 'lucide-react';
 import { aiServices, currentService } from '@/config/services';
 import { useServiceStore } from '@/store/serviceStore';
 import { cn } from '@/lib/utils';
@@ -80,6 +80,23 @@ export const ServiceDropdown = () => {
           className="rounded-lg bg-white dark:bg-neutral-800 shadow-lg border border-white/10 dark:border-neutral-700 overflow-hidden"
         >
           <div className="p-2">
+            {/* Profile pinned at the top */}
+            <div className="p-2 border-b border-white/10 dark:border-neutral-700">
+              <Link
+                to="/profile"
+                className="flex items-center gap-3 p-2 rounded-md hover:bg-secondary/80 transition-colors"
+                onClick={() => {
+                  setIsOpen(false);
+                }}
+              >
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-500"
+                >
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-medium">Профіль</span>
+              </Link>
+            </div>
             {/* Current service at the top */}
             <div className="p-2 border-b border-white/10 dark:border-neutral-700">
               <Link

@@ -34,8 +34,7 @@ const electrolytes = ['AGM', 'EFB', 'GEL'];
 const supplierStatuses = ['ME', 'SUPPLIER', 'COMPETITOR'];
 
 // Default filter order for batteries
-const DEFAULT_BATTERY_FILTER_ORDER = [
-  'actions',
+const DEFAULT_BATTERY_FILTER_ORDER = [ 
   'brands',
   'suppliers',
   'cities',
@@ -55,8 +54,8 @@ const getSavedBatteryFilterOrder = (): string[] => {
   try {
     const saved = localStorage.getItem('batteryFilterOrder');
     const base: string[] = saved ? JSON.parse(saved) : DEFAULT_BATTERY_FILTER_ORDER;
-    // Ensure new tiles like 'actions' are present even with legacy saved orders
-    return base.includes('actions') ? base : ['actions', ...base];
+    // Filter out legacy 'actions' tile if present
+    return base.filter((id) => id !== 'actions');
   } catch {
     return DEFAULT_BATTERY_FILTER_ORDER;
   }
@@ -339,10 +338,10 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
     markup: current.markup !== undefined ? current.markup : 15,
   });
   const [filterOrder, setFilterOrder] = useState<string[]>(getSavedBatteryFilterOrder());
-  // Migrate legacy order on mount to ensure 'actions' exists
+  // Remove legacy 'actions' tile from saved order on mount if still present
   useEffect(() => {
-    if (!filterOrder.includes('actions')) {
-      const next = ['actions', ...filterOrder];
+    if (filterOrder.includes('actions')) {
+      const next = filterOrder.filter((id) => id !== 'actions');
       setFilterOrder(next);
       saveBatteryFilterOrder(next);
     }
@@ -431,14 +430,6 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
-    actions: (
-      <div className="flex flex-col gap-1 h-[60px]">
-        <label className="text-[12px] font-medium text-slate-600">Дії</label>
-        <div className="flex items-end gap-1 h-[60px]">
-          {actionsButtonGroup}
-        </div>
-      </div>
-    ),
     brands: (
       <div className="h-[60px] flex flex-col justify-end">
         <MultiSelectPopover

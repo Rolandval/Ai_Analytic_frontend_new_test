@@ -164,6 +164,10 @@ export default function InverterCurrentPricesPage() {
         columns={createColumns(hook.filters.usd_rate || usdRate, hook.filters.markup || markup)}
         hook={hook as any}
         compact
+        onRefresh={async () => {
+          // Re-apply current filters to trigger refetch
+          hook.setFilters({ ...(hook.filters as any) });
+        }}
         chartConfig={{
           getChart: hook.getChart,
           suppliers: (hook as any).supplierOptions ?? [],

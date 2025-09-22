@@ -10,10 +10,18 @@ export const apiClient = axios.create({
 
 // Додаємо перехоплювач запитів для встановлення токена авторизації
 apiClient.interceptors.request.use((config) => {
-  // Отримуємо токен з localStorage, якщо він там є
-  const token = localStorage.getItem('authToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // Отримуємо токен з Zustand persist store
+  const authStore = localStorage.getItem('auth-storage');
+  if (authStore) {
+    try {
+      const parsed = JSON.parse(authStore);
+      const token = parsed?.state?.token;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('Помилка при парсингу токена з localStorage:', error);
+    }
   }
   return config;
 });
@@ -22,7 +30,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Можна додати логіку обробки помилок (логування, перенаправлення тощо)
+    // Якщо отримали 401, очищуємо токен та перенаправляємо на логін
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth-storage');
+      // Можна додати перенаправлення на сторінку логіну
+      if (window.location.pathname !== '/auth') {
+        window.location.href = '/auth';
+      }
+    }
     return Promise.reject(error);
   }
 );

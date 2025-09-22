@@ -21,11 +21,12 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
 import { PriceUpdateModal } from '@/components/PriceUpdateModal';
 import { useSortableTable } from '@/hooks/useSortableTable';
-import { ChevronUp, ChevronDown, Settings } from 'lucide-react';
+import { ChevronUp, ChevronDown, Settings, Copy, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectTrigger, SelectContent, SelectValue, SelectItem } from '@/components/ui/Select';
 // removed radio-group imports; using a single native radio input for unified toggle
 // removed page-level name search input; now handled inside InverterComparisonFilters
+import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
 
 // Інтерфейс для цін постачальників
 interface SupplierPrice {
@@ -316,7 +317,38 @@ export default function InverterPriceComparison() {
     }
   };
 
-  // buildExport removed (now unused after consolidating actions into filters)
+  // Copying state and buildExport for copying the visible table
+  const [copying, setCopying] = useState(false);
+  const buildExport = () => {
+    if (!comparisonData || !comparisonData.inverters || comparisonData.inverters.length === 0) return '';
+    const headers: string[] = [];
+    staticColumns.forEach(c => { if (visibleColumns[c.key] !== false) headers.push(c.header); });
+    supplierColumns.forEach(s => { if (visibleColumns[`supplier:${s}`] !== false) headers.push(s); });
+
+    const rows = sortedInverters.map((inv, idx) => {
+      const cells: string[] = [];
+      if (visibleColumns['index'] !== false) cells.push(String((page - 1) * pageSize + idx + 1));
+      if (visibleColumns['full_name'] !== false) cells.push(inv.full_name ?? '');
+      if (visibleColumns['brand'] !== false) cells.push(inv.brand ?? '');
+      if (visibleColumns['power'] !== false) cells.push(inv.power?.toString() ?? '');
+      if (visibleColumns['string_count'] !== false) cells.push(inv.string_count?.toString() ?? '');
+      supplierColumns.forEach(s => {
+        if (visibleColumns[`supplier:${s}`] === false) return;
+        const price = getPriceForSupplier(inv, s);
+        cells.push(price !== null ? `${formatPrice(price)}$` : '-');
+      });
+      if (visibleColumns['recommended'] !== false) cells.push(inv.recommendedPrice !== null && inv.recommendedPrice !== undefined ? `${formatPrice(inv.recommendedPrice)}$` : '-');
+      if (visibleColumns['markup'] !== false) cells.push(String(rowMarkup[inv.id] ?? DEFAULT_MARKUP));
+      if (visibleColumns['actual'] !== false) {
+        const v = calculateRecommendedPrice(inv);
+        cells.push(v ? `${formatPrice(v)}$` : '-');
+      }
+      if (visibleColumns['totalAvailability'] !== false) cells.push(String(getTotalAvailability(inv)));
+      return cells.join('\t');
+    });
+
+    return `${headers.join('\t')}\n${rows.join('\n')}`;
+  };
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -485,7 +517,7 @@ export default function InverterPriceComparison() {
       
       
       
-      {/* Top toolbar removed: actions are now inside filters' compact block */}
+      
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="overflow-auto">
@@ -496,8 +528,40 @@ export default function InverterPriceComparison() {
                 setFilters={handleFiltersChange}
                 brands={brands}
                 suppliers={suppliers}
-                settingsButton={settingsButton}
               />
+            </div>
+            {/* Top-right actions toolbar (above table, right aligned) */}
+            <div className="w-full flex items-center justify-end gap-2 mb-2">
+              <RefreshDataButton
+                variant="outline"
+                onRefresh={async () => {
+                  await refreshInvertersData();
+                  await fetchComparisonData();
+                }}
+              />
+              <Button
+                variant="outline"
+                size="xs"
+                className="h-8 px-2 text-xs"
+                title="Копіювати таблицю"
+                aria-label="Копіювати таблицю"
+                onClick={() => {
+                  setCopying(true);
+                  const text = buildExport();
+                  if (!text) {
+                    toast({ title: 'Немає даних', description: 'Немає рядків для копіювання.', variant: 'destructive' });
+                    setCopying(false);
+                    return;
+                  }
+                  navigator.clipboard.writeText(text)
+                    .then(() => toast({ title: 'Скопійовано', description: 'Таблицю скопійовано в буфер обміну.', duration: 2000 }))
+                    .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати таблицю.', variant: 'destructive' }))
+                    .finally(() => setCopying(false));
+                }}
+              >
+                {copying ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+              {settingsButton}
             </div>
             {!filtersApplied ? (
               <div className="text-center py-10 text-gray-500">

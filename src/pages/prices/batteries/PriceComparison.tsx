@@ -616,9 +616,19 @@ export default function BatteryPriceComparison() {
               setFilters={handleFiltersChange}
               brands={brands}
               suppliers={suppliers}
-              settingsButton={settingsButton}
-              copyTableButton={copyTableButton}
             />
+          </div>
+          {/* Top-right actions toolbar (outside of filter drags) */}
+          <div className="w-full flex items-center justify-end gap-2 mb-2">
+            <RefreshDataButton
+              variant="outline"
+              onRefresh={async () => {
+                await refreshBatteriesData();
+                await fetchComparisonData();
+              }}
+            />
+            {copyTableButton}
+            {settingsButton}
           </div>
           {filtersApplied ? (
             <Table className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5">

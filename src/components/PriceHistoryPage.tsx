@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Label } from '@/components/ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { useToast } from '@/hooks/use-toast';
+import { RefreshDataButton } from '@/components/ui/RefreshDataButton';
 
 // Minimal column definition for a generic table
 export interface TableColumn<T> {
@@ -57,6 +58,8 @@ interface PriceHistoryPageProps<T, CreatePayload = any, UpdatePayload = any> {
   chartConfig?: ChartConfig; // optional chart support
   topSearchComponent?: React.ReactNode; // новий компонент для пошуку зверху
   compact?: boolean; // щільний режим відображення без горизонтального скролу
+  onRefresh?: () => Promise<any>; // опційне оновлення даних
+  showCreateButton?: boolean; // показувати кнопку "Додати" у верхньому тулбарі
 }
 
 export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
@@ -348,7 +351,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
         </div>
       )}
       
-      {/* Top controls (filters + action buttons injected into filters) */}
+      {/* Top controls (filters), actions moved to a separate top-right toolbar */}
       <div className="w-full mb-2 flex flex-col gap-2">
         {(() => {
           // Build action buttons group to pass into filters as a prop
@@ -357,6 +360,19 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
               {/* Rows per page selector */}
             
 
+              {props.onRefresh && (
+                <RefreshDataButton
+                  variant="outline"
+                  onRefresh={async () => {
+                    try {
+                      await props.onRefresh?.();
+                    } finally {
+                      // Підштовхнемо оновлення таблиці, перевстановивши ту ж сторінку
+                      setPage(page);
+                    }
+                  }}
+                />
+              )}
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -627,24 +643,39 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
               </div>
                 </PopoverContent>
               </Popover>
-              
-              <button className='px-3 py-1 border border-gray-200 rounded rounded-md' onClick={() => setCreateOpen(true)} title="Додати" aria-label="Додати">Додати</button>
+              {props.showCreateButton && (
+                <button
+                  className='px-3 py-1 border border-gray-200 rounded rounded-md'
+                  onClick={() => setCreateOpen(true)}
+                  title="Додати"
+                  aria-label="Додати"
+                >
+                  Додати
+                </button>
+              )}
             </div>
           );
+          // Do not inject actions into filters anymore; render filters as-is
           const filtersNode = React.isValidElement(filterComponent)
-            ? React.cloneElement(filterComponent as any, { actionsButtonGroup: actionButtons })
+            ? React.cloneElement(filterComponent as any, {})
             : filterComponent;
           return (
-            <div className="flex-1 min-w-0">
-              {filtersNode}
-            </div>
+            <>
+              <div className="flex-1 min-w-0">
+                {filtersNode}
+              </div>
+              {/* Top-right actions toolbar (outside of any dropdowns) */}
+              <div className="w-full flex items-center justify-end gap-2">
+                {actionButtons}
+              </div>
+            </>
           );
         })()}
       </div>
       
       {/* Table */}
-      <div className={`rounded-md border w-full ${compact ? 'overflow-x-hidden pr-8' : 'overflow-x-auto'}`}>
-        <table className={`w-full ${compact ? 'table-fixed text-xs' : 'table-auto'} `} style={{userSelect: 'text'}}>
+      <div className={`rounded-md border w-full overflow-x-auto pr-8`}>
+        <table className={`w-full ${compact ? 'table-auto text-xs' : 'table-auto'} `} style={{userSelect: 'text'}}>
           <thead style={{userSelect: 'none'}}>
             <tr className="bg-muted/50">
               <th className={`${compact ? 'py-1 px-2 text-xs w-10' : 'py-2 px-4 text-sm w-16'} text-center font-medium`} title="№">№</th>
@@ -659,7 +690,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 return (
                   <th
                     key={column.key as string}
-                    className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} ${headerAlignment} font-medium overflow-hidden last:pr-3`}
+                    className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} ${headerAlignment} font-medium overflow-hidden last:pr-3 min-w-[6ch]`}
                     title={column.headerTitle || column.header}
                   >
                     <div className={`flex items-center gap-1 ${justifyContent}`}>
@@ -667,7 +698,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                         className={`hover:bg-muted/50 flex items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} rounded transition-colors flex-nowrap`}
                         onClick={() => handleSortClick(column.key as string, column.sortKey)}
                       >
-                        <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} block`}>{column.header}</span>
+                        <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} min-w-[5ch] block flex-none`}>{column.header}</span>
                         <span className="flex items-center flex-none">
                           {getSortIcon(column.key as string, column.sortKey)}
                         </span>
@@ -676,14 +707,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   </th>
                 );
               })}
-              {hasAnyActionButtons && (
-                <th
-                  className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center font-medium last:pr-3 ${compact ? 'w-[104px] min-w-[104px]' : 'w-[160px] min-w-[160px]'}`}
-                  title="Дії"
-                >
-                  Дії
-                </th>
-              )}
+               
             </tr>
           </thead>
           <tbody>
@@ -714,13 +738,13 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                     const dataAlignment = isTextColumn ? 'text-left' : 'text-center';
                     
                     return (
-                      <td key={column.key as string} className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4'} ${dataAlignment} ${compact ? 'whitespace-nowrap truncate max-w-[180px]' : 'whitespace-nowrap'} last:pr-3`}>
+                      <td key={column.key as string} className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4'} ${dataAlignment} ${compact ? 'whitespace-nowrap truncate max-w-[180px]' : 'whitespace-nowrap'} last:pr-3 min-w-[6ch]`}>
                         {column.render ? column.render(row) : String(value ?? '')}
                       </td>
                     );
                   })}
                   {hasAnyActionButtons && (
-                    <td className={`${compact ? 'py-1 px-2 text-xs min-w-[104px]' : 'py-2 px-4 min-w-[160px]'} text-center last:pr-3`}>
+                    <td className={`${compact ? 'py-1 px-2 text-xs min-w-[104px]' : 'py-2 px-4 min-w-[160px]'} text-center last:pr-3 sticky right-0 bg-white z-10 border-l` }>
                       <div className={`flex items-center justify-center ${compact ? 'gap-1' : 'gap-2'} flex-nowrap`}>
                       {buttonsVisibility.contact && row.phone && (
                         compact ? (

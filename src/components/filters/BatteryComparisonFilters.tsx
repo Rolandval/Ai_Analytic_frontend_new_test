@@ -166,11 +166,9 @@ interface Props {
   setFilters: (f: BatteryPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
-  settingsButton?: React.ReactNode;
-  copyTableButton?: React.ReactNode;
 }
 
-export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton, copyTableButton }) => {
+export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current
   });
@@ -228,7 +226,6 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
       }
     }
     return [
-      'actions',
       'brands',
       'suppliers',
       'volume',
@@ -265,43 +262,6 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
-    actions: (
-      <div className="flex flex-col gap-1 h-[60px]">
-        <label className="text-[12px] font-medium text-slate-600">Дії</label>
-        <div className="flex items-end gap-1 h-[60px]">
-          {copyTableButton}
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-8 px-2 text-xs"
-            onClick={() => {
-              const normalize = (o: Record<string, any>) => {
-                const n: Record<string, any> = {};
-                Object.entries(o).forEach(([k, v]) => {
-                  if (v === '' || v === null) return;
-                  if (Array.isArray(v)) {
-                    if (v.length > 0) n[k] = v.slice();
-                  } else if (v !== undefined) {
-                    n[k] = v;
-                  }
-                });
-                return n;
-              };
-              const payload = normalize({ ...local });
-              const text = JSON.stringify(payload, null, 2);
-              navigator.clipboard.writeText(text)
-                .then(() => toast({ title: 'Скопійовано', description: 'Налаштування фільтрів скопійовано в буфер обміну.', duration: 2000 }))
-                .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати налаштування.', variant: 'destructive' }));
-            }}
-            title="Копіювати налаштування"
-            aria-label="Копіювати налаштування"
-          >
-            Копіювати
-          </Button>
-          {settingsButton}
-        </div>
-      </div>
-    ),
     brands: (
       <div className="h-[60px] flex flex-col justify-end min-w-0">
         <MultiSelectPopover

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { refreshSolarPanelsData } from '@/services/dataRefresh.api';
 import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
 import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
@@ -81,10 +80,9 @@ interface Props {
   setFilters: (f: SolarPanelPriceListRequestSchema) => void;
   brands: string[];
   suppliers: string[];
-  settingsButton?: React.ReactNode;
 }
 
-export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, settingsButton }) => {
+export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<SolarPanelPriceListRequestSchema>({
     ...current
@@ -118,7 +116,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
   // Filter order state
   const defaultFilterOrder = [
-    'actions',
     'brands', 'suppliers', 'cities', 'power', 'price', 'price_per_w', 'thickness',
     'panel_type', 'cell_type', 'panel_color', 'frame_color', 'supplier_status', 'date_range'
   ];
@@ -197,59 +194,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
-    actions: (
-      <div className="flex  flex-col gap-1 h-[60px]">
-        <label className="text-[12px] font-medium text-slate-600">Дії</label>
-        <div className="flex items-end gap-1 h-[60px]">
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-8 px-2 text-xs"
-            onClick={async () => {
-              try {
-                await refreshSolarPanelsData();
-                toast({ title: 'Оновлено', description: 'Дані про наявність оновлено.', duration: 2000 });
-              } catch (e) {
-                toast({ title: 'Помилка', description: 'Не вдалося оновити дані про наявність.', variant: 'destructive' });
-              }
-            }}
-            title="Оновити дані про наявність"
-            aria-label="Оновити дані про наявність"
-          >
-            Оновити
-          </Button>
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-8 px-2 text-xs"
-            onClick={() => {
-              const normalize = (o: Record<string, any>) => {
-                const n: Record<string, any> = {};
-                Object.entries(o).forEach(([k, v]) => {
-                  if (v === '' || v === null) return;
-                  if (Array.isArray(v)) {
-                    if (v.length > 0) n[k] = v.slice();
-                  } else if (v !== undefined) {
-                    n[k] = v;
-                  }
-                });
-                return n;
-              };
-              const payload = normalize({ ...local });
-              const text = JSON.stringify(payload, null, 2);
-              navigator.clipboard.writeText(text)
-                .then(() => toast({ title: 'Скопійовано', description: 'Налаштування фільтрів скопійовано в буфер обміну.', duration: 2000 }))
-                .catch(() => toast({ title: 'Помилка', description: 'Не вдалося скопіювати налаштування.', variant: 'destructive' }));
-            }}
-            title="Копіювати налаштування"
-            aria-label="Копіювати налаштування"
-          >
-            Копіювати
-          </Button>
-          {settingsButton}
-        </div>
-      </div>
-    ),
     brands: (
       <div className="flex flex-col gap-1 h-[60px]">
         <label className="text-[12px] font-medium text-slate-600">Бренди</label>
