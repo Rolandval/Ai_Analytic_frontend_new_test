@@ -16,12 +16,17 @@ import {
 
 export const useInverterCurrentPricesCrud = () => {
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<InverterPriceListRequestSchema>({ page: 1, page_size: 10, supplier_status: ['SUPPLIER'] });
+  const [filters, setFilters] = useState<InverterPriceListRequestSchema>({ page: 1, page_size: 10 });
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
-  const { data, isFetching } = useQuery<PaginatedInverterPricesResponse>({
-    queryKey: ['inverter-current-prices', filters],
-    queryFn: () => listInverterCurrentPrices(filters),
+  // Не викликаємо API до першої взаємодії користувача
+  const shouldFetchData = hasUserInteracted;
+
+  const { data, isFetching, refetch } = useQuery<PaginatedInverterPricesResponse>({
+    queryKey: ['inverter-current-prices', filters, hasUserInteracted],
+    queryFn: () => listInverterCurrentPrices({ ...filters, supplier_status: ['SUPPLIER'] }), // Додаємо supplier_status тільки при запиті
     placeholderData: (prev) => prev,
+    enabled: false, // ПОВНІСТЮ ВІДКЛЮЧАЄМО до взаємодії
   });
 
   const updateMut = useMutation({
@@ -43,11 +48,20 @@ export const useInverterCurrentPricesCrud = () => {
     .map((s: any) => ({ id: s.id, name: s.name }));
   const supplierNames = supplierOptions.map((o)=>o.name);
 
-  const setPage = (p: number) => setFilters((f) => ({ ...f, page: p }));
-  const setPageSize = (size: number) => setFilters((f) => ({ ...f, page_size: size, page: 1 }));
+  const setPage = (p: number) => {
+    setHasUserInteracted(true);
+    setFilters((f) => ({ ...f, page: p }));
+    refetch();
+  };
+  const setPageSize = (size: number) => {
+    setHasUserInteracted(true);
+    setFilters((f) => ({ ...f, page_size: size, page: 1 }));
+    refetch();
+  };
 
   // Wrap setFilters to normalize payload and trigger refetch
   const applyFilters = (f: InverterPriceListRequestSchema) => {
+    setHasUserInteracted(true);
     const normalize = (o: Record<string, any>) => {
       const n: Record<string, any> = {};
       Object.entries(o).forEach(([k, v]) => {
@@ -60,9 +74,9 @@ export const useInverterCurrentPricesCrud = () => {
       });
       return n as InverterPriceListRequestSchema;
     };
-    const normalized = normalize(f as any);
+    const normalized = { ...normalize(f as any), supplier_status: ['SUPPLIER'] };
     setFilters(normalized);
-    qc.invalidateQueries({ queryKey: ['inverter-current-prices'] });
+    refetch();
   };
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['inverter-current-prices'] });
@@ -72,7 +86,7 @@ export const useInverterCurrentPricesCrud = () => {
     total: data?.total ?? 0,
     page: filters.page ?? 1,
     pageSize: filters.page_size ?? 10,
-    loading: isFetching,
+    loading: isFetching && shouldFetchData,
     setPage,
     setPageSize,
     filters,

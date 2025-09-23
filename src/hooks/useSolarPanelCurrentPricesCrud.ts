@@ -16,18 +16,23 @@ import {
 
 export const useSolarPanelCurrentPricesCrud = () => {
   const qc = useQueryClient();
-  const [filters, setFilters] = useState<SolarPanelPriceListRequestSchema>({ page: 1, page_size: 10, supplier_status: ['SUPPLIER'] });
+  const [filters, setFilters] = useState<SolarPanelPriceListRequestSchema>({ page: 1, page_size: 10 });
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
-  const { data, isFetching } = useQuery<PaginatedSolarPanelPricesResponse>({
-    queryKey: ['solar-current-prices', filters],
-    queryFn: () => listSolarPanelCurrentPrices(filters),
+  // Не викликаємо API до першої взаємодії користувача
+  const shouldFetchData = hasUserInteracted;
+
+  const { data, isFetching, refetch } = useQuery<PaginatedSolarPanelPricesResponse>({
+    queryKey: ['solar-panel-current-prices', filters, hasUserInteracted],
+    queryFn: () => listSolarPanelCurrentPrices({ ...filters, supplier_status: ['SUPPLIER'] }), // Додаємо supplier_status тільки при запиті
     placeholderData: (prev) => prev,
+    enabled: false, // ПОВНІСТЮ ВІДКЛЮЧАЄМО до взаємодії
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: SolarPanelPriceUpdateSchemaRequest }) =>
       updateSolarPanelCurrentPrice(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['solar-current-prices'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['solar-panel-current-prices'] }),
   });
 
   const deleteMut = useMutation({
@@ -43,11 +48,20 @@ export const useSolarPanelCurrentPricesCrud = () => {
     .map((s: any) => ({ id: s.id, name: s.name }));
   const supplierNames = supplierOptions.map(o=>o.name);
 
-  const setPage = (p: number) => setFilters((f) => ({ ...f, page: p }));
-  const setPageSize = (size: number) => setFilters((f) => ({ ...f, page_size: size, page: 1 }));
+  const setPage = (p: number) => {
+    setHasUserInteracted(true);
+    setFilters((f) => ({ ...f, page: p }));
+    refetch();
+  };
+  const setPageSize = (size: number) => {
+    setHasUserInteracted(true);
+    setFilters((f) => ({ ...f, page_size: size, page: 1 }));
+    refetch();
+  };
 
   // Wrap setFilters to also invalidate the relevant query so that POST re-executes immediately
   const applyFilters = (f: SolarPanelPriceListRequestSchema) => {
+    setHasUserInteracted(true);
     // Normalize payload to avoid 422 from backend: drop empty strings, null/undefined, and empty arrays
     const normalize = (o: Record<string, any>) => {
       const n: Record<string, any> = {};
@@ -61,9 +75,9 @@ export const useSolarPanelCurrentPricesCrud = () => {
       });
       return n as SolarPanelPriceListRequestSchema;
     };
-    const normalized = normalize(f as any);
+    const normalized = { ...normalize(f as any), supplier_status: ['SUPPLIER'] };
     setFilters(normalized);
-    qc.invalidateQueries({ queryKey: ['solar-current-prices'] });
+    refetch();
   };
 
   return {
@@ -71,7 +85,7 @@ export const useSolarPanelCurrentPricesCrud = () => {
     total: data?.total ?? 0,
     page: filters.page ?? 1,
     pageSize: filters.page_size ?? 10,
-    loading: isFetching,
+    loading: isFetching && shouldFetchData,
     setPage,
     setPageSize,
     filters,

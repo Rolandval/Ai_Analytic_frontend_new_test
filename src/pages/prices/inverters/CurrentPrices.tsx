@@ -144,6 +144,23 @@ export default function InverterCurrentPricesPage() {
     }
   }, [hook.filters.usd_rate, hook.filters.markup]);
 
+  // Відключаємо стовпець дій за замовчуванням для цієї сторінки
+  useEffect(() => {
+    const buttonsVisibilityKey = `buttonsVisibility:Актуальні ціни – Інвертори`;
+    const storedButtonsVisibility = localStorage.getItem(buttonsVisibilityKey);
+    
+    if (!storedButtonsVisibility) {
+      // Якщо немає збережених налаштувань, встановлюємо всі кнопки як приховані
+      const defaultButtonsVisibility = {
+        contact: false,
+        edit: false,
+        delete: false,
+        chart: false
+      };
+      localStorage.setItem(buttonsVisibilityKey, JSON.stringify(defaultButtonsVisibility));
+    }
+  }, []);
+
   const resetFilters = () => {
     const resetFilters = {
       page: 1,

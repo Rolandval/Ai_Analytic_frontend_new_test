@@ -1,0 +1,17 @@
+{
+  "name": "AI Аналітика",
+  "short_name": "AI Analytics",
+  "description": "Система аналізу цін та товарів з використанням штучного інтелекту",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

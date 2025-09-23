@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import ProfileSidebar from '@/components/profile/ProfileSidebar';
+import { useAudioAlert } from '@/hooks/useAudioAlert';
 import { 
   Activity, 
   Heart, 
@@ -15,7 +16,9 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 
 interface MCPConnection {
@@ -30,6 +33,9 @@ interface MCPConnection {
 }
 
 export default function CompanyPulsePage() {
+  const { playDisconnectBeep, playConnectBeep, playAlertBeep } = useAudioAlert();
+  const previousStatusRef = useRef<Map<string, string>>(new Map());
+  
   const [connections, setConnections] = useState<MCPConnection[]>([
     {
       id: '1',
@@ -94,21 +100,64 @@ export default function CompanyPulsePage() {
   ]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // Симуляція оновлення статусів
+  // Ефект для відстеження змін статусу та відтворення звуків
+  useEffect(() => {
+    connections.forEach(conn => {
+      const previousStatus = previousStatusRef.current.get(conn.id);
+      
+      if (previousStatus && previousStatus !== conn.status && soundEnabled) {
+        // Відтворюємо звук залежно від зміни статусу
+        if (conn.status === 'disconnected') {
+          playDisconnectBeep();
+        } else if (conn.status === 'error') {
+          playAlertBeep();
+        } else if (conn.status === 'connected' && (previousStatus === 'disconnected' || previousStatus === 'error')) {
+          playConnectBeep();
+        }
+      }
+      
+      // Оновлюємо попередній статус
+      previousStatusRef.current.set(conn.id, conn.status);
+    });
+  }, [connections, playDisconnectBeep, playConnectBeep, playAlertBeep, soundEnabled]);
+
+  // Симуляція оновлення статусів з можливими відключеннями
   useEffect(() => {
     const interval = setInterval(() => {
       setConnections(prev => prev.map(conn => {
+        // Симулюємо випадкові відключення (5% шанс)
+        const shouldDisconnect = Math.random() < 0.05;
+        
         if (conn.status === 'connected') {
+          if (shouldDisconnect) {
+            return {
+              ...conn,
+              status: Math.random() < 0.7 ? 'disconnected' : 'error' as const,
+              lastPing: new Date()
+            };
+          }
           return {
             ...conn,
             lastPing: new Date(),
             responseTime: Math.floor(Math.random() * 200) + 20
           };
+        } else if (conn.status === 'disconnected' || conn.status === 'error') {
+          // Симулюємо відновлення підключення (30% шанс)
+          const shouldReconnect = Math.random() < 0.3;
+          if (shouldReconnect) {
+            return {
+              ...conn,
+              status: 'connected' as const,
+              lastPing: new Date(),
+              responseTime: Math.floor(Math.random() * 200) + 20
+            };
+          }
         }
         return conn;
       }));
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -205,15 +254,29 @@ export default function CompanyPulsePage() {
                       </CardDescription>
                     </div>
                   </div>
-                  <Button 
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    Оновити
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => setSoundEnabled(!soundEnabled)}
+                      variant="outline"
+                      size="sm"
+                      title={soundEnabled ? 'Вимкнути звук' : 'Увімкнути звук'}
+                    >
+                      {soundEnabled ? (
+                        <Volume2 className="w-4 h-4" />
+                      ) : (
+                        <VolumeX className="w-4 h-4" />
+                      )}
+                    </Button>
+                    <Button 
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      Оновити
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>

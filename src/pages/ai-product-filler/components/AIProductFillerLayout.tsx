@@ -1,10 +1,11 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Wand2, Layers, Settings, Languages, BarChart2, List, User, LogOut } from 'lucide-react';
+import { Home, Wand2, Layers, Settings, Languages, BarChart2, List, LogOut } from 'lucide-react';
 import { FillerThemeSwitcher } from './FillerThemeSwitcher';
 import { ServiceDropdown } from '@/components/layout/ServiceDropdown';
 import { PFI18nProvider, usePFI18n } from '../i18n';
 import { useAuthStore } from '@/store/authStore';
+import { TokenStatusPanel } from '@/components/layout/TokenStatusPanel';
 
 interface Props {
   children: React.ReactNode;
@@ -21,7 +22,6 @@ function InnerLayout({ children }: Props) {
     { to: '/ai-product-filler/characteristics', label: t('nav.characteristics'), icon: List },
     { to: '/ai-product-filler/templates', label: t('nav.templates'), icon: Layers },
     { to: '/ai-product-filler/translator', label: t('nav.translator'), icon: Languages },
-    { to: '/profile', label: t('nav.profile'), icon: User },
     { to: '/auth', label: t('nav.logout'), icon: LogOut, onClick: () => { try { logout(); } finally { navigate('/auth', { replace: true }); } } },
     { to: '/ai-product-filler/settings', label: t('nav.settings'), icon: Settings },
   ];
@@ -128,6 +128,9 @@ function InnerLayout({ children }: Props) {
           className="h-8 w-8 rounded-full border bg-white/90 dark:bg-neutral-900/80 shadow-md ring-1 ring-black/5 dark:ring-white/10 text-neutral-700 dark:text-neutral-200 cursor-pointer"
         />
       </div>
+      
+      {/* Панель статусів токенів та системи - доступна на всіх сторінках AI Product Filler */}
+      <TokenStatusPanel />
     </div>
   );
 }

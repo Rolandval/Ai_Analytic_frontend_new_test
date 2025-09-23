@@ -5,6 +5,7 @@ import { useThemeStore } from '@/store/themeStore';
 import { ArrowLeft, ChevronLeft, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from './ThemeToggle';
+import { TokenStatusPanel } from './TokenStatusPanel';
 
 export const MainLayout = () => {
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -177,6 +178,9 @@ export const MainLayout = () => {
           )}
         </main>
       </div>
+      
+      {/* Панель статусів токенів та системи - доступна на всіх сторінках */}
+      <TokenStatusPanel />
     </div>
   );
 };

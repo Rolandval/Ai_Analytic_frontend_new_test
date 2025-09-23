@@ -1,0 +1,17 @@
+{
+  "name": "AI Product Filler",
+  "short_name": "AI Filler",
+  "description": "Автоматичне заповнення товарів з використанням штучного інтелекту",
+  "start_url": "/ai-product-filler",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/favicon-filler.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { useThemeStore } from './store/themeStore';
 import { Toaster } from './components/ui/toaster';
+import { useFavicon } from './hooks/useFavicon';
 import { ServicePage } from './components/services/ServicePage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import AuthPage from './pages/Auth';
@@ -85,6 +86,12 @@ import SupplierAnalysisPage from './pages/ai-supply/supplier-analysis';
 import OrdersPage from './pages/ai-supply/orders';
 import SendOrdersPage from './pages/ai-supply/send-orders';
 
+// Компонент для favicon логіки всередині Router контексту
+function FaviconHandler() {
+  useFavicon();
+  return null;
+}
+
 function App() {
   const { theme, accentColor } = useThemeStore();
 
@@ -114,6 +121,7 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
+      <FaviconHandler />
       <Toaster />
       <Routes>
         <Route element={<MainLayout />}>

@@ -661,9 +661,12 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
             : filterComponent;
           return (
             <>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 mb-4">
                 {filtersNode}
               </div>
+              {/* Separator line before actions */}
+              <div className="border-t border-gray-200 dark:border-gray-700  mb-3"></div>
+              
               {/* Top-right actions toolbar (outside of any dropdowns) */}
               <div className="w-full flex items-center justify-end gap-2">
                 {actionButtons}
@@ -673,12 +676,15 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
         })()}
       </div>
       
+      {/* Small spacing */}
+      <div className="mt-2 mb-2"></div>
+      
       {/* Table */}
-      <div className={`rounded-md border w-full overflow-x-auto pr-8`}>
-        <table className={`w-full ${compact ? 'table-auto text-xs' : 'table-auto'} `} style={{userSelect: 'text'}}>
-          <thead style={{userSelect: 'none'}}>
-            <tr className="bg-muted/50">
-              <th className={`${compact ? 'py-1 px-2 text-xs w-10' : 'py-2 px-4 text-sm w-16'} text-center font-medium`} title="№">№</th>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <table className={`w-full ${compact ? 'table-fixed text-xs' : 'table-fixed'}`} style={{userSelect: 'text', minWidth: 'max-content', tableLayout: 'fixed'}}>
+          <thead style={{userSelect: 'none'}} className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1 first:[&>tr>th]:rounded-tl-lg last:[&>tr>th]:rounded-tr-lg">
+                  <tr>
+              <th className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} text-center font-medium min-w-[3ch] w-[4ch]`} title="№">№</th>
               {columns.map(column => {
                 if (visibleColumns[column.key as string] === false) {
                   return null;
@@ -690,8 +696,9 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 return (
                   <th
                     key={column.key as string}
-                    className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} ${headerAlignment} font-medium overflow-hidden last:pr-3 min-w-[6ch]`}
+                    className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} ${headerAlignment} font-medium overflow-hidden min-w-[5ch] w-[5ch] sm:w-[8ch] md:w-[12ch] lg:w-auto`}
                     title={column.headerTitle || column.header}
+                    style={{ minWidth: '5ch' }}
                   >
                     <div className={`flex items-center gap-1 ${justifyContent}`}>
                       <button
@@ -710,23 +717,42 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                
             </tr>
           </thead>
-          <tbody>
+          <tbody className="[&>tr:last-child>td:first-child]:rounded-bl-lg [&>tr:last-child>td:last-child]:rounded-br-lg">
             {loading ? (
-              <tr>
-                <td colSpan={totalCols} className="text-center py-4">
-                  Завантаження...
-                </td>
-              </tr>
+              // Skeleton loader з мигаючими стовпцями
+              Array.from({ length: 5 }).map((_, rowIndex) => (
+                <tr key={`skeleton-${rowIndex}`} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800`}>
+                  <td className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} text-center min-w-[3ch] w-[4ch]`}>
+                    <div className="animate-pulse bg-gray-300 dark:bg-gray-600 rounded h-4 w-6 mx-auto"></div>
+                  </td>
+                  {columns.map((column, colIndex) => {
+                    if (visibleColumns[column.key as string] === false) {
+                      return null;
+                    }
+                    return (
+                      <td key={`skeleton-col-${colIndex}`} className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} text-center min-w-[5ch] w-[5ch] sm:w-[8ch] md:w-[12ch] lg:w-auto`}>
+                        <div className="animate-pulse bg-gray-300 dark:bg-gray-600 rounded h-4 w-full"></div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={totalCols} className="text-center py-4">
-                  Немає даних
+                <td colSpan={totalCols} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="text-5xl">🔍</div>
+                    <div className="text-lg font-medium">Виберіть фільтр, щоб показати товари</div>
+                    <div className="text-sm text-gray-400 dark:text-gray-500">
+                      Використовуйте фільтри вище для пошуку потрібних товарів
+                    </div>
+                  </div>
                 </td>
               </tr>
             ) : (
               sortedRows.map((row: any, index: number) => (
-                <tr key={row.id} className="border-t">
-                  <td className={`${compact ? 'py-1 px-2 text-xs w-10' : 'py-2 px-4 w-16'} text-center`}>{(page - 1) * pageSize + index + 1}</td>
+                <tr key={row.id} className={`h-auto min-h-[2px] odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700`}>
+                  <td className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} text-center min-w-[3ch] w-[4ch]`}>{(page - 1) * pageSize + index + 1}</td>
                   {columns.map(column => {
                     if (visibleColumns[column.key as string] === false) {
                       return null;
@@ -738,8 +764,14 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                     const dataAlignment = isTextColumn ? 'text-left' : 'text-center';
                     
                     return (
-                      <td key={column.key as string} className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4'} ${dataAlignment} ${compact ? 'whitespace-nowrap truncate max-w-[180px]' : 'whitespace-nowrap'} last:pr-3 min-w-[6ch]`}>
-                        {column.render ? column.render(row) : String(value ?? '')}
+                      <td 
+                        key={column.key as string} 
+                        className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} ${dataAlignment} whitespace-nowrap truncate min-w-[5ch] w-[5ch] sm:w-[8ch] md:w-[12ch] lg:w-auto`}
+                        style={{ minWidth: '5ch' }}
+                      >
+                        <div className="truncate" title={String(value ?? '')}>
+                          {column.render ? column.render(row) : String(value ?? '')}
+                        </div>
                       </td>
                     );
                   })}
