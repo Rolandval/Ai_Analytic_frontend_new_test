@@ -22,11 +22,11 @@ export const useSolarPanelCurrentPricesCrud = () => {
   // Не викликаємо API до першої взаємодії користувача
   const shouldFetchData = hasUserInteracted;
 
-  const { data, isFetching, refetch } = useQuery<PaginatedSolarPanelPricesResponse>({
+  const { data, isFetching } = useQuery<PaginatedSolarPanelPricesResponse>({
     queryKey: ['solar-panel-current-prices', filters, hasUserInteracted],
     queryFn: () => listSolarPanelCurrentPrices({ ...filters, supplier_status: ['SUPPLIER'] }), // Додаємо supplier_status тільки при запиті
     placeholderData: (prev) => prev,
-    enabled: false, // ПОВНІСТЮ ВІДКЛЮЧАЄМО до взаємодії
+    enabled: shouldFetchData, // Використовуємо shouldFetchData замість false
   });
 
   const updateMut = useMutation({
@@ -46,17 +46,18 @@ export const useSolarPanelCurrentPricesCrud = () => {
   const supplierOptions = (suppliersData as any[])
     .filter((s: any) => typeof s !== 'string' && s.id != null)
     .map((s: any) => ({ id: s.id, name: s.name }));
-  const supplierNames = supplierOptions.map(o=>o.name);
+  
+  // Дедуплікуємо постачальників за назвою
+  const uniqueSupplierNames = [...new Set(supplierOptions.map(o => o.name))];
+  const supplierNames = uniqueSupplierNames;
 
   const setPage = (p: number) => {
     setHasUserInteracted(true);
     setFilters((f) => ({ ...f, page: p }));
-    refetch();
   };
   const setPageSize = (size: number) => {
     setHasUserInteracted(true);
     setFilters((f) => ({ ...f, page_size: size, page: 1 }));
-    refetch();
   };
 
   // Wrap setFilters to also invalidate the relevant query so that POST re-executes immediately
@@ -77,7 +78,7 @@ export const useSolarPanelCurrentPricesCrud = () => {
     };
     const normalized = { ...normalize(f as any), supplier_status: ['SUPPLIER'] };
     setFilters(normalized);
-    refetch();
+    // Query автоматично перезапуститься через зміну filters та hasUserInteracted
   };
 
   return {

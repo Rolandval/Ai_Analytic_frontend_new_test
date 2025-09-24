@@ -139,11 +139,11 @@ export function MultiSelectPopover({
             <div className="py-2 px-3 text-sm text-muted-foreground">Не знайдено</div>
           )}
 
-          {paged.map(opt => {
+          {paged.map((opt, index) => {
             const checked = selected.includes(opt);
             return (
               <label
-                key={opt}
+                key={`${opt}-${index}`}
                 className={cn(
                   'flex items-center gap-2 px-3 py-1 cursor-pointer rounded-md hover:bg-primary/5',
                   checked && 'bg-primary/10'

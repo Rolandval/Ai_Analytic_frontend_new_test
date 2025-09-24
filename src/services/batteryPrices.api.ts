@@ -32,7 +32,21 @@ export const getBatteryBrands = async (): Promise<string[]> => {
 
 // === CURRENT PRICES ===
 export const listBatteryCurrentPrices = async (payload: BatteryPriceListRequestSchema) => {
+  console.log('🚀 API Request - listBatteryCurrentPrices:', {
+    url: `${BASE}/batteries_prices_current/`,
+    payload
+  });
+  
   const { data } = await axios.post(`${BASE}/batteries_prices_current/`, payload);
+  
+  console.log('📦 API Response - listBatteryCurrentPrices:', {
+    hasData: !!data,
+    batteryPricesCount: data?.battery_prices?.length ?? 0,
+    total: data?.total ?? 0,
+    structure: Object.keys(data || {}),
+    firstItem: data?.battery_prices?.[0] || null
+  });
+  
   return data;
 };
 

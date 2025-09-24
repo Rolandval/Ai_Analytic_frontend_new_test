@@ -68,6 +68,18 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   const { title, currencySymbol, columns, hook, filterComponent, createFormComponent, chartConfig } = props;
   const { rows, total, page, pageSize, setPage, setPageSize, loading } = hook;
   const compact = Boolean((props as any).compact);
+
+  // Логування для дебагу таблиці
+  console.log('📋 PriceHistoryPage render:', {
+    title,
+    rowsCount: rows?.length ?? 0,
+    total,
+    page,
+    pageSize,
+    loading,
+    hasRows: Array.isArray(rows),
+    firstRow: rows?.[0] || null
+  });
   
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<{ id: number; price: number } | null>(null);

@@ -18,11 +18,15 @@ export const useBatteryCurrentPricesCrud = () => {
   // Не викликаємо API до першої взаємодії користувача
   const shouldFetchData = hasUserInteracted;
 
-  const { data, isFetching, refetch } = useQuery<PaginatedBatteryPricesResponse>({
+  const { data, isFetching } = useQuery<PaginatedBatteryPricesResponse>({
     queryKey: ['battery-current-prices', filters, hasUserInteracted],
-    queryFn: () => listBatteryCurrentPrices({ ...filters, supplier_status: ['SUPPLIER'] }), // Додаємо supplier_status тільки при запиті
+    queryFn: () => {
+      const queryParams = { ...filters, supplier_status: ['SUPPLIER'] };
+      console.log('🔍 Battery Current Prices Query:', queryParams);
+      return listBatteryCurrentPrices(queryParams);
+    },
     placeholderData: (prev) => prev,
-    enabled: false, // ПОВНІСТЮ ВІДКЛЮЧАЄМО до взаємодії
+    enabled: shouldFetchData, // Використовуємо shouldFetchData замість false
   });
 
   const updateMut = useMutation({
@@ -42,30 +46,49 @@ export const useBatteryCurrentPricesCrud = () => {
   const supplierOptions = (suppliersData as any[]).map((s: any, idx) =>
     typeof s === 'string' ? { id: idx + 1, name: s } : { id: s.id, name: s.name }
   );
-  const supplierNames = supplierOptions.map((o) => o.name);
+  
+  // Дедуплікуємо постачальників за назвою
+  const uniqueSupplierNames = [...new Set(supplierOptions.map(o => o.name))];
+  const supplierNames = uniqueSupplierNames;
 
   const setPage = (p: number) => {
     setHasUserInteracted(true);
     setFilters((f) => ({ ...f, page: p }));
-    refetch();
   };
   const setPageSize = (size: number) => {
     setHasUserInteracted(true);
     setFilters((f) => ({ ...f, page_size: size, page: 1 }));
-    refetch();
   };
 
   // Обгортаємо setFilters для відстеження взаємодії користувача
   const wrappedSetFilters = (newFilters: BatteryPriceListRequestSchema | ((prev: BatteryPriceListRequestSchema) => BatteryPriceListRequestSchema)) => {
+    console.log('🔧 Setting Battery Filters:', newFilters);
     setHasUserInteracted(true);
     if (typeof newFilters === 'function') {
-      setFilters((prev) => ({ ...newFilters(prev), supplier_status: ['SUPPLIER'] }));
+      const updatedFilters = (prev: BatteryPriceListRequestSchema) => {
+        const result = { ...newFilters(prev), supplier_status: ['SUPPLIER'] };
+        console.log('📝 Updated Battery Filters (function):', result);
+        return result;
+      };
+      setFilters(updatedFilters);
     } else {
-      setFilters({ ...newFilters, supplier_status: ['SUPPLIER'] });
+      const result = { ...newFilters, supplier_status: ['SUPPLIER'] };
+      console.log('📝 Updated Battery Filters (direct):', result);
+      setFilters(result);
     }
-    // Ручно викликаємо запит після встановлення фільтрів
-    refetch();
+    // Query автоматично перезапуститься через зміну filters та hasUserInteracted
   };
+
+  // Логування даних для дебагу
+  console.log('📊 Battery Current Prices Data:', {
+    hasData: !!data,
+    rowsCount: data?.battery_prices?.length ?? 0,
+    total: data?.total ?? 0,
+    loading: isFetching && shouldFetchData,
+    hasUserInteracted,
+    shouldFetchData,
+    filters
+  });
 
   return {
     rows: data?.battery_prices ?? [],

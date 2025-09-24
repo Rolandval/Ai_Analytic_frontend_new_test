@@ -109,6 +109,16 @@ export default function BatteryCurrentPricesPage() {
   const hook = useBatteryCurrentPricesCrud();
   const [markup, setMarkup] = useState<number>(15); // Значення націнки за замовчуванням
 
+  // Логування для дебагу
+  console.log('🔄 BatteryCurrentPricesPage render:', {
+    rowsCount: hook.rows?.length ?? 0,
+    total: hook.total,
+    loading: hook.loading,
+    page: hook.page,
+    pageSize: hook.pageSize,
+    filters: hook.filters
+  });
+
   // Оновлення націнки при зміні фільтрів
   useEffect(() => {
     if (hook.filters.markup !== undefined) {
