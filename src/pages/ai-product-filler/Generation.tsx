@@ -1538,7 +1538,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
         product_type: selectedProductType === 'all' ? undefined : selectedProductType,
         page: 1,
         // Забираємо більше елементів за раз, далі фільтруємо і пагінуємо на клієнті
-        limit: 1000,
+        limit: 9999,
       };
       console.log('[Generation] fetchContentDescriptions request (client-side lang filter):', request);
       

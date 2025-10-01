@@ -40,6 +40,16 @@ import BusinessAgentDashboard from './pages/ai-business-agent/Dashboard';
 import BusinessAgentChat from './pages/ai-business-agent/Chat';
 import BusinessAgentReports from './pages/ai-business-agent/Reports';
 
+// AI Photo Editor Pages
+import AIPhotoEditorHome from './pages/ai-photo-editor/Home';
+import AIPhotoEditorUpload from './pages/ai-photo-editor/Upload';
+import AIPhotoEditorGallery from './pages/ai-photo-editor/Gallery';
+import AIPhotoEditorResize from './pages/ai-photo-editor/Resize';
+import AIPhotoEditorRemoveBackground from './pages/ai-photo-editor/RemoveBackground';
+import AIPhotoEditorEnhance from './pages/ai-photo-editor/Enhance';
+import AIPhotoEditorUpscale from './pages/ai-photo-editor/Upscale';
+import AIPhotoEditorAltText from './pages/ai-photo-editor/AltText';
+
 // Profile Pages
 import ProfileDashboard from './pages/profile/ProfileDashboard';
 import ServicesPage from './pages/profile/ServicesPage';
@@ -125,13 +135,33 @@ function App() {
       <FaviconHandler />
       <Toaster />
       <Routes>
-        <Route element={<MainLayout />}>
+        {/* Direct public route to ensure /ai-photo-editor matches */}
+         <Route element={<MainLayout />}>
           {/* Public Auth Route */}
           <Route path="/auth" element={<AuthPage />} />
 
           {/* Redirect legacy product-filler auth routes to unified /auth */}
           <Route path="/ai-product-filler/login" element={<Navigate to="/auth" replace />} />
           <Route path="/ai-product-filler/register" element={<Navigate to="/auth" replace />} />
+
+          {/* AI Photo Editor - public routes */}
+          <Route path="/ai-photo-editor" element={<Outlet />}>
+            <Route index element={<AIPhotoEditorHome />} />
+            <Route path="upload" element={<AIPhotoEditorUpload />} />
+            <Route path="gallery" element={<AIPhotoEditorGallery />} />
+            <Route path="resize" element={<AIPhotoEditorResize />} />
+            <Route path="upscale" element={<AIPhotoEditorUpscale />} />
+            <Route path="optimize" element={<ServicePage />} />
+            <Route path="remove-background" element={<AIPhotoEditorRemoveBackground />} />
+            <Route path="reposition" element={<ServicePage />} />
+            <Route path="watermark-removal" element={<ServicePage />} />
+            <Route path="alt-text" element={<AIPhotoEditorAltText />} />
+            <Route path="rename" element={<ServicePage />} />
+            <Route path="convert" element={<ServicePage />} />
+            <Route path="ai-background" element={<ServicePage />} />
+            <Route path="ai-text" element={<ServicePage />} />
+            <Route path="enhance" element={<AIPhotoEditorEnhance />} />
+          </Route>
 
           {/* Protected application routes */}
           <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
@@ -234,6 +264,8 @@ function App() {
           <Route path="/ai-supply/supplier-analysis" element={<SupplierAnalysisPage />} />
           <Route path="/ai-supply/orders" element={<OrdersPage />} />
           <Route path="/ai-supply/send-orders" element={<SendOrdersPage />} />
+
+          {/* AI Photo Editor - moved to public routes above */}
 
           {/* Profile System */}
           <Route path="/profile" element={<ProfileDashboard />} />

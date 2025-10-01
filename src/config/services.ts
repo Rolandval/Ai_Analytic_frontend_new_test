@@ -13,6 +13,7 @@ import {
   Package,
   FileSpreadsheet,
   Brain,
+  Camera,
 } from 'lucide-react';
 
 export type AIService = {
@@ -128,6 +129,13 @@ export const aiServices: AIService[] = [
     icon: Brain,
     path: '/ai-business-agent',
     color: '#6366f1',
+  },
+  {
+    name: 'AI Photo Editor',
+    description: 'Професійний редактор фото з AI: ресайз, апскейл, оптимізація якості, видалення фону, розташування зображення, видалення водяних знаків, генерація alt підписів, зміна назви файлу, зміна формату, додавання тематичного фону та надписів AI.',
+    icon: Camera,
+    path: '/ai-photo-editor',
+    color: '#f59e0b',
   },
 ];
 

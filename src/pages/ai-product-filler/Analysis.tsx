@@ -55,8 +55,19 @@ export default function AIProductFillerAnalysis() {
     try {
       setLoading(true);
       setError(null);
-      const resp = await fetchContentDescriptions<ContentDescription>({ page: 1, limit: 1000 });
-      setDescriptions(resp.items || []);
+      // Fetch ALL data by paginating until fewer than page-size items are returned
+      const PAGE_SIZE = 2000;
+      let page = 1;
+      let all: ContentDescription[] = [];
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const resp = await fetchContentDescriptions<ContentDescription>({ page, limit: PAGE_SIZE });
+        const items = resp.items || [];
+        all = all.concat(items);
+        if (items.length < (resp.limit ?? PAGE_SIZE)) break;
+        page += 1;
+      }
+      setDescriptions(all);
     } catch (e: any) {
       setError(e?.message || 'Помилка завантаження');
     } finally {

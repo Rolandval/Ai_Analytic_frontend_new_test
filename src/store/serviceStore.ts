@@ -14,6 +14,7 @@ interface ServiceState {
   isProductFillerService: () => boolean;
   isPriceBuilderService: () => boolean;
   isBusinessAgentService: () => boolean;
+  isPhotoEditorService: () => boolean;
 }
 
 export const useServiceStore = create<ServiceState>((set, get) => ({
@@ -85,6 +86,11 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
   isBusinessAgentService: () => {
     const path = get().currentServicePath;
     return path?.startsWith('/ai-business-agent') || false;
+  },
+
+  isPhotoEditorService: () => {
+    const path = get().currentServicePath;
+    return path === '/ai-photo-editor' || path.startsWith('/ai-photo-editor/');
   },
 }));
 
