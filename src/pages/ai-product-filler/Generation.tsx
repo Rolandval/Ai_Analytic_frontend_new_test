@@ -24,6 +24,7 @@ import bgImage from './img/photo_2025-09-02_23-21-26.jpg';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { usePFI18n } from './i18n';
+import { useSiteCategories } from '@/hooks/useSiteCategories';
 
 interface ContentDescription {
   id?: number;
@@ -68,6 +69,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const location = useLocation();
   const { isDarkMode } = useTheme();
   const { t } = usePFI18n();
+  const { data: categories, isLoading: categoriesLoading } = useSiteCategories();
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
@@ -77,6 +79,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProductType, setSelectedProductType] = useState<ProductType | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [customFilters, setCustomFilters] = useState<CustomFilter[]>([]);
@@ -1536,6 +1539,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
     try {
       const request = {
         product_type: selectedProductType === 'all' ? undefined : selectedProductType,
+        category_ids: selectedCategory === 'all' ? [] : [selectedCategory],
         page: 1,
         // Забираємо більше елементів за раз, далі фільтруємо і пагінуємо на клієнті
         limit: 9999,
@@ -1607,7 +1611,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   
   useEffect(() => {
     fetchData();
-  }, [selectedProductType]);
+  }, [selectedProductType, selectedCategory]);
 
   // При зміні пошуку або користувацьких фільтрів переходимо на першу сторінку
   useEffect(() => {
@@ -2115,6 +2119,20 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                   <SelectItem value="solar_panels">Сонячні панелі</SelectItem>
                   <SelectItem value="batteries">Акумулятори</SelectItem>
                   <SelectItem value="inverters">Інвертори</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Категорія */}
+              <Select value={selectedCategory.toString()} onValueChange={(value) => setSelectedCategory(value === 'all' ? 'all' : parseInt(value))}>
+                <SelectTrigger className="w-[200px] shrink-0">
+                  <SelectValue placeholder={categoriesLoading ? 'Завантаження...' : 'Всі категорії'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Всі категорії</SelectItem>
+                  {categories?.map((cat) => (
+                    <SelectItem key={cat.category_id} value={cat.category_id.toString()}>
+                      {cat.category}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {/* Модель/Мови для перекладу */}

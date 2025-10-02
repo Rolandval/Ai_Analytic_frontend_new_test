@@ -28,6 +28,17 @@ export interface SolarPanelPriceListRequestSchema {
   page_size?: number;
   price_sort?: 'asc' | 'desc';
   price_per_w_sort?: 'asc' | 'desc';
+  // Нові фільтри
+  cells_count_min?: number;
+  cells_count_max?: number;
+  width_min?: number;
+  width_max?: number;
+  height_min?: number;
+  height_max?: number;
+  weight_min?: number;
+  weight_max?: number;
+  impp_min?: number;
+  impp_max?: number;
 }
 
 export interface SolarPanelPriceCreateSchemaRequest {

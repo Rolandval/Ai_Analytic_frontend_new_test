@@ -48,6 +48,11 @@ const DEFAULT_FILTER_ORDER = [
   'thickness',
   'price',
   'price_per_w',
+  'cells_count',
+  'width',
+  'height',
+  'weight',
+  'impp',
   'panel_type',
   'cell_type',
   'panel_color',
@@ -303,6 +308,36 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
                 <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, price_per_w_min: undefined, price_per_w_max: undefined }))} />
               </Badge>
             );
+            if (local.cells_count_min || local.cells_count_max) nodes.push(
+              <Badge key={`cells_count`} variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                Елементи: {local.cells_count_min || '∞'}-{local.cells_count_max || '∞'}
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, cells_count_min: undefined, cells_count_max: undefined }))} />
+              </Badge>
+            );
+            if (local.width_min || local.width_max) nodes.push(
+              <Badge key={`width`} variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+                Ширина: {local.width_min || '∞'}-{local.width_max || '∞'} мм
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, width_min: undefined, width_max: undefined }))} />
+              </Badge>
+            );
+            if (local.height_min || local.height_max) nodes.push(
+              <Badge key={`height`} variant="secondary" className="bg-lime-100 text-lime-800 border-lime-200">
+                Висота: {local.height_min || '∞'}-{local.height_max || '∞'} мм
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, height_min: undefined, height_max: undefined }))} />
+              </Badge>
+            );
+            if (local.weight_min || local.weight_max) nodes.push(
+              <Badge key={`weight`} variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                Вага: {local.weight_min || '∞'}-{local.weight_max || '∞'} кг
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, weight_min: undefined, weight_max: undefined }))} />
+              </Badge>
+            );
+            if (local.impp_min || local.impp_max) nodes.push(
+              <Badge key={`impp`} variant="secondary" className="bg-sky-100 text-sky-800 border-sky-200">
+                Impp: {local.impp_min || '∞'}-{local.impp_max || '∞'} А
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, impp_min: undefined, impp_max: undefined }))} />
+              </Badge>
+            );
             // Others
             if (local.usd_rate) nodes.push(
               <Badge key={`usd_rate`} variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
@@ -346,6 +381,16 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
                     price_max: undefined,
                     price_per_w_min: undefined,
                     price_per_w_max: undefined,
+                    cells_count_min: undefined,
+                    cells_count_max: undefined,
+                    width_min: undefined,
+                    width_max: undefined,
+                    height_min: undefined,
+                    height_max: undefined,
+                    weight_min: undefined,
+                    weight_max: undefined,
+                    impp_min: undefined,
+                    impp_max: undefined,
                     usd_rate: undefined,
                     markup: 15,
                     date_min: undefined,
@@ -671,6 +716,120 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
             onChange={(e) => setLocal(p => ({ ...p, price_per_w_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.01"
+          />
+        </div>
+      </div>
+    ),
+    cells_count: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Кількість елементів</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.cells_count_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, cells_count_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.cells_count_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, cells_count_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    width: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Ширина, мм</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.width_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, width_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.width_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, width_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    height: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Висота, мм</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.height_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, height_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.height_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, height_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    weight: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Вага, кг</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.weight_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, weight_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.weight_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, weight_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+        </div>
+      </div>
+    ),
+    impp: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Impp, А</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.impp_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, impp_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.impp_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, impp_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
           />
         </div>
       </div>

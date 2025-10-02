@@ -4,6 +4,7 @@ export type ProductType = 'batteries' | 'solar_panels' | 'inverters';
 
 export interface ContentDescriptionsRequest {
   product_type?: ProductType;
+  category_ids?: number[]; // category filter as array
   page?: number; // 1-based
   limit?: number; // page size
   lang?: string; // language filter (e.g., 'ua' | 'en' | 'ru')
@@ -19,12 +20,19 @@ export interface ContentDescriptionsResponse<T = any> {
 export const fetchContentDescriptions = async <T = any>(
   req: ContentDescriptionsRequest
 ): Promise<ContentDescriptionsResponse<T>> => {
-  const response = await apiClient.post('/content/descriptions', {
+  const payload: any = {
     product_type: req.product_type,
     page: req.page ?? 1,
     limit: req.limit ?? 50,
     lang: req.lang,
-  });
+  };
+  
+  // Завжди додаємо category_ids (порожній масив = всі категорії)
+  if (req.category_ids !== undefined) {
+    payload.category_ids = req.category_ids;
+  }
+  
+  const response = await apiClient.post('/content/descriptions', payload);
   const data = response.data || {};
   // Normalize possible shapes: { items, total, page, limit } OR { result, page, limit }
   const items: T[] = Array.isArray(data.items) ? data.items : (Array.isArray(data.result) ? data.result : []);

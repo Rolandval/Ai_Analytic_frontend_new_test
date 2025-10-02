@@ -98,6 +98,11 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     ((local.price_min !== undefined || local.price_max !== undefined) ? 1 : 0) +
     ((local.price_per_w_min !== undefined || local.price_per_w_max !== undefined) ? 1 : 0) +
     ((local.thickness_min !== undefined || local.thickness_max !== undefined) ? 1 : 0) +
+    ((local.cells_count_min !== undefined || local.cells_count_max !== undefined) ? 1 : 0) +
+    ((local.width_min !== undefined || local.width_max !== undefined) ? 1 : 0) +
+    ((local.height_min !== undefined || local.height_max !== undefined) ? 1 : 0) +
+    ((local.weight_min !== undefined || local.weight_max !== undefined) ? 1 : 0) +
+    ((local.impp_min !== undefined || local.impp_max !== undefined) ? 1 : 0) +
     (local.panel_type ? 1 : 0) +
     (local.cell_type ? 1 : 0) +
     (local.panel_color ? 1 : 0) +
@@ -187,7 +192,43 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   }, [local, setFilters]);
   
   const reset = () => {
-    const base = { page: 1, page_size: current.page_size ?? 10 };
+    const base = {
+      page: 1,
+      page_size: current.page_size ?? 10,
+      full_name: undefined,
+      power_min: undefined,
+      power_max: undefined,
+      thickness_min: undefined,
+      thickness_max: undefined,
+      panel_type: undefined,
+      cell_type: undefined,
+      panel_color: undefined,
+      frame_color: undefined,
+      brands: [],
+      suppliers: [],
+      cities: [],
+      price_min: undefined,
+      price_max: undefined,
+      price_per_w_min: undefined,
+      price_per_w_max: undefined,
+      cells_count_min: undefined,
+      cells_count_max: undefined,
+      width_min: undefined,
+      width_max: undefined,
+      height_min: undefined,
+      height_max: undefined,
+      weight_min: undefined,
+      weight_max: undefined,
+      impp_min: undefined,
+      impp_max: undefined,
+      date_min: undefined,
+      date_max: undefined,
+      supplier_status: [],
+      usd_rate: undefined,
+      markup: undefined,
+      price_sort: undefined,
+      price_per_w_sort: undefined
+    };
     setLocal(base);
     setFilters(base);
   };
@@ -329,6 +370,120 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             value={local.thickness_max || ''}
             onChange={(e) => setLocal(p => ({ ...p, thickness_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    cells_count: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Кількість елементів</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.cells_count_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, cells_count_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.cells_count_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, cells_count_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    width: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Ширина, мм</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.width_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, width_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.width_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, width_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    height: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Висота, мм</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.height_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, height_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.height_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, height_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+          />
+        </div>
+      </div>
+    ),
+    weight: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Вага, кг</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.weight_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, weight_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.weight_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, weight_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+        </div>
+      </div>
+    ),
+    impp: (
+      <div className="flex flex-col gap-1 h-[60px]">
+        <label className="text-[12px] font-medium text-slate-600">Impp, А</label>
+        <div className="flex items-end gap-1 h-[60px]">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.impp_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, impp_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+          <span className="text-muted-foreground">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.impp_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, impp_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
           />
         </div>
       </div>
@@ -600,6 +755,61 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             </Badge>
           )}
           
+          {/* Кількість елементів */}
+          {(local.cells_count_min || local.cells_count_max) && (
+            <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+              Елементи: {local.cells_count_min || '∞'}-{local.cells_count_max || '∞'}
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, cells_count_min: undefined, cells_count_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
+          {/* Ширина */}
+          {(local.width_min || local.width_max) && (
+            <Badge variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+              Ширина: {local.width_min || '∞'}-{local.width_max || '∞'} мм
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, width_min: undefined, width_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
+          {/* Висота */}
+          {(local.height_min || local.height_max) && (
+            <Badge variant="secondary" className="bg-lime-100 text-lime-800 border-lime-200">
+              Висота: {local.height_min || '∞'}-{local.height_max || '∞'} мм
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, height_min: undefined, height_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
+          {/* Вага */}
+          {(local.weight_min || local.weight_max) && (
+            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+              Вага: {local.weight_min || '∞'}-{local.weight_max || '∞'} кг
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, weight_min: undefined, weight_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
+          {/* Impp */}
+          {(local.impp_min || local.impp_max) && (
+            <Badge variant="secondary" className="bg-sky-100 text-sky-800 border-sky-200">
+              Impp: {local.impp_min || '∞'}-{local.impp_max || '∞'} А
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, impp_min: undefined, impp_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
             </div>
             {totalActiveBadges > 14 && (
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0 dark:hidden" />
@@ -658,6 +868,36 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
                         <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
                           Товщина: {local.thickness_min || '∞'}-{local.thickness_max || '∞'} мм
                           <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, thickness_min: undefined, thickness_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.cells_count_min !== undefined || local.cells_count_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                          Елементи: {local.cells_count_min || '∞'}-{local.cells_count_max || '∞'}
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, cells_count_min: undefined, cells_count_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.width_min !== undefined || local.width_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+                          Ширина: {local.width_min || '∞'}-{local.width_max || '∞'} мм
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, width_min: undefined, width_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.height_min !== undefined || local.height_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-lime-100 text-lime-800 border-lime-200">
+                          Висота: {local.height_min || '∞'}-{local.height_max || '∞'} мм
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, height_min: undefined, height_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.weight_min !== undefined || local.weight_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                          Вага: {local.weight_min || '∞'}-{local.weight_max || '∞'} кг
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, weight_min: undefined, weight_max: undefined }))} />
+                        </Badge>
+                      )}
+                      {(local.impp_min !== undefined || local.impp_max !== undefined) && (
+                        <Badge variant="secondary" className="bg-sky-100 text-sky-800 border-sky-200">
+                          Impp: {local.impp_min || '∞'}-{local.impp_max || '∞'} А
+                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, impp_min: undefined, impp_max: undefined }))} />
                         </Badge>
                       )}
                       {local.panel_type && (

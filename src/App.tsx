@@ -49,6 +49,13 @@ import AIPhotoEditorRemoveBackground from './pages/ai-photo-editor/RemoveBackgro
 import AIPhotoEditorEnhance from './pages/ai-photo-editor/Enhance';
 import AIPhotoEditorUpscale from './pages/ai-photo-editor/Upscale';
 import AIPhotoEditorAltText from './pages/ai-photo-editor/AltText';
+import AIPhotoEditorOptimize from './pages/ai-photo-editor/Optimize';
+import AIPhotoEditorReposition from './pages/ai-photo-editor/Reposition';
+import AIPhotoEditorWatermarkRemoval from './pages/ai-photo-editor/WatermarkRemoval';
+import AIPhotoEditorRename from './pages/ai-photo-editor/Rename';
+import AIPhotoEditorConvert from './pages/ai-photo-editor/Convert';
+import AIPhotoEditorAIBackground from './pages/ai-photo-editor/AIBackground';
+import AIPhotoEditorAIText from './pages/ai-photo-editor/AIText';
 
 // Profile Pages
 import ProfileDashboard from './pages/profile/ProfileDashboard';
@@ -151,15 +158,15 @@ function App() {
             <Route path="gallery" element={<AIPhotoEditorGallery />} />
             <Route path="resize" element={<AIPhotoEditorResize />} />
             <Route path="upscale" element={<AIPhotoEditorUpscale />} />
-            <Route path="optimize" element={<ServicePage />} />
+            <Route path="optimize" element={<AIPhotoEditorOptimize />} />
             <Route path="remove-background" element={<AIPhotoEditorRemoveBackground />} />
-            <Route path="reposition" element={<ServicePage />} />
-            <Route path="watermark-removal" element={<ServicePage />} />
+            <Route path="reposition" element={<AIPhotoEditorReposition />} />
+            <Route path="watermark-removal" element={<AIPhotoEditorWatermarkRemoval />} />
             <Route path="alt-text" element={<AIPhotoEditorAltText />} />
-            <Route path="rename" element={<ServicePage />} />
-            <Route path="convert" element={<ServicePage />} />
-            <Route path="ai-background" element={<ServicePage />} />
-            <Route path="ai-text" element={<ServicePage />} />
+            <Route path="rename" element={<AIPhotoEditorRename />} />
+            <Route path="convert" element={<AIPhotoEditorConvert />} />
+            <Route path="ai-background" element={<AIPhotoEditorAIBackground />} />
+            <Route path="ai-text" element={<AIPhotoEditorAIText />} />
             <Route path="enhance" element={<AIPhotoEditorEnhance />} />
           </Route>
 
