@@ -1,14 +1,12 @@
-﻿import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Search, Loader2, Plus, X, Save, ArrowUpDown, ChevronDown, ChevronRight, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { fetchContentDescriptions, ProductType } from '@/api/contentDescriptions';
 import { fetchSiteCategoriesDescriptions, updateSiteCategoriesDescriptions, type SiteCategoryDescription } from '@/api/siteCategoriesDescriptions';
 import { fetchAllColumnPrompts, fetchColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
@@ -24,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover
 import { useLocation } from 'react-router-dom';
 import bgImage from './img/photo_2025-09-02_23-21-26.jpg';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
+import EntityTypeToggle from './components/EntityTypeToggle';
 import { useTheme } from '@/hooks/useTheme';
 import { usePFI18n } from './i18n';
 import { useSiteCategories } from '@/hooks/useSiteCategories';
@@ -76,12 +75,11 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
   // Перемикач між товарами та категоріями
-  const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
-  
+  const [entityType, setEntityType] = useState<'products' | 'categories'>('products');
   const [descriptions, setDescriptions] = useState<ContentDescription[]>([]);
+  const [categoriesDescriptions, setCategoriesDescriptions] = useState<SiteCategoryDescription[]>([]);
   const [initialDescriptions, setInitialDescriptions] = useState<ContentDescription[]>([]);
-  const [categoryDescriptions, setCategoryDescriptions] = useState<SiteCategoryDescription[]>([]);
-  const [initialCategoryDescriptions, setInitialCategoryDescriptions] = useState<SiteCategoryDescription[]>([]);
+  const [initialCategoriesDescriptions, setInitialCategoriesDescriptions] = useState<SiteCategoryDescription[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1612,40 +1610,13 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
       console.error('Error fetching content descriptions:', err);
     } finally {
       setLoading(false);
-    } 
+    }
   };
   
-  const fetchCategoryData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetchSiteCategoriesDescriptions(5, 9999);
-      console.log('[Generation] fetchSiteCategoriesDescriptions response:', {
-        itemsCount: response.items?.length ?? 0,
-        total: response.total,
-        page: response.page,
-        limit: response.limit,
-      });
-      setCategoryDescriptions(response.items || []);
-      setInitialCategoryDescriptions((response.items || []).map(it => ({ ...it })));
-    } catch (err) {
-      setError('Помилка при завантаженні категорій. Спробуйте пізніше.');
-      console.error('Error fetching category descriptions:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
   useEffect(() => {
-    if (activeTab === 'products') {
-      fetchData();
-    } else {
-      fetchCategoryData();
-    }
-  }, [activeTab, selectedCategory]);
-  const handleRefresh = () => {
-    if (activeTab === 'products') fetchData();
-    else fetchCategoryData();
-  };
+    fetchData();
+  }, [selectedCategory]);
+
   // При зміні пошуку або користувацьких фільтрів переходимо на першу сторінку
   useEffect(() => {
     setPage(1);
@@ -2093,18 +2064,6 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold">{mode === 'translation' ? t('nav.translator') : t('nav.generation')}</h1>
-              
-              {/* Перемикач товари/категорії */}
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'products' | 'categories')} className="w-auto">
-                <TabsList className="bg-white/80 dark:bg-neutral-800/80 border border-primary/20">
-                  <TabsTrigger value="products" className="data-[state=active]:bg-primary data-[state=active]:text-white">
-                    Товари
-                  </TabsTrigger>
-                  <TabsTrigger value="categories" className="data-[state=active]:bg-primary data-[state=active]:text-white">
-                    Категорії
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
               {isTranslateMode && (
                 <div className="flex items-center gap-1 bg-white/80 dark:bg-neutral-800/80 border border-amber-200/70 dark:border-neutral-700 rounded-full p-1 text-xs select-none">
                   <button
@@ -2154,6 +2113,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                   <SelectItem value="ru">ru</SelectItem>
                 </SelectContent>
               </Select>
+              )}
               {/* Категорія */}
               <Select value={selectedCategory.toString()} onValueChange={(value) => setSelectedCategory(value === 'all' ? 'all' : parseInt(value))}>
                 <SelectTrigger className="w-[200px] shrink-0">
@@ -2168,6 +2128,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                   ))}
                 </SelectContent>
               </Select>
+              )}
               {/* Модель/Мови для перекладу */}
               {!isTranslateMode ? (
                 // Режим генерації: вибір AI-моделі
@@ -2191,6 +2152,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                       ))}
                     </SelectContent>
                   </Select>
+              )}
                   {modelsError && (
                     <span className="text-xs text-red-500" title={modelsError}>Помилка завантаження моделей</span>
                   )}
@@ -2218,6 +2180,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                         ))}
                       </SelectContent>
                     </Select>
+              )}
                     {modelsError && (
                       <span className="text-xs text-red-500" title={modelsError}>Помилка завантаження моделей</span>
                     )}
@@ -2265,6 +2228,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                             <SelectItem value="site_page_title">Заголовок сторінки</SelectItem>
                           </SelectContent>
                         </Select>
+              )}
                         <Input 
                           value={newFilter.value} 
                           onChange={(e) => setNewFilter({...newFilter, value: e.target.value})} 
@@ -2311,9 +2275,9 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                     {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
                   </Button>
                 )}
-                <Button variant="outline" onClick={handleRefresh} className="shrink-0">
-  {t('buttons.update')}
-</Button>
+                <Button variant="outline" onClick={fetchData} className="shrink-0">
+                  {t('buttons.update')}
+                </Button>
                 {/* Блок вибору мов перенесено сюди – безпосередньо перед кнопкою перекладу */}
                 {isTranslateMode && (
                   translationEngine === 'free' ? (
@@ -2328,6 +2292,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                           <SelectItem value="ru">ru</SelectItem>
                         </SelectContent>
                       </Select>
+              )}
                       <div className="flex items-center gap-1">
                         <span
                           aria-hidden
@@ -2360,6 +2325,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                           <SelectItem value="ru">ru</SelectItem>
                         </SelectContent>
                       </Select>
+              )}
                     </div>
                   ) : (
                     <Select value={targetLang} onValueChange={(value) => setTargetLang(value as 'ua' | 'en' | 'ru')}>
@@ -2372,6 +2338,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                         <SelectItem value="ru">ru</SelectItem>
                       </SelectContent>
                     </Select>
+              )}
                   )
                 )}
                 {/* Кнопку аналізу видалено на прохання користувача */}
@@ -2453,58 +2420,6 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
               className="overflow-x-auto"
             >
               <div className="rounded-t-xl overflow-hidden" style={{ minWidth: "100%" }}>
-              {activeTab === 'categories' ? (
-  <Table className="table-fixed min-w-full">
-    <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
-      <TableRow>
-        <TableHead noClamp className="h-10 sm:h-12 w-24 text-center">№</TableHead>
-        <TableHead noClamp className="h-10 sm:h-12">Категорія</TableHead>
-        <TableHead noClamp className="h-10 sm:h-12">Опис</TableHead>
-        <TableHead noClamp className="h-10 sm:h-12">Meta keywords</TableHead>
-        <TableHead noClamp className="h-10 sm:h-12">Заголовок сторінки</TableHead>
-        <TableHead noClamp className="h-10 sm:h-12 w-24 text-center">Мова</TableHead>
-      </TableRow>
-    </TableHeader>
-    <TableBody>
-      {(() => {
-        const searchLower = (searchQuery || '').toLowerCase();
-        const filtered = (categoryDescriptions || []).filter((c) => {
-          const lang = (c.lang_code || '').toLowerCase();
-          const langMatch = selectedLang === 'ua' ? (lang === 'ua' || lang === 'uk') : lang === selectedLang;
-          const inSearch = !searchLower ||
-            (c.category || '').toLowerCase().includes(searchLower) ||
-            (c.description || '').toLowerCase().includes(searchLower) ||
-            (c.meta_keywords || '').toLowerCase().includes(searchLower) ||
-            (c.page_title || '').toLowerCase().includes(searchLower);
-          return langMatch && inSearch;
-        });
-        const total = filtered.length;
-        const paged = filtered.slice((page - 1) * limit, page * limit);
-
-        if (total === 0) {
-          return (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                Немає даних для відображення
-              </TableCell>
-            </TableRow>
-          );
-        }
-
-        return paged.map((c, idx) => (
-          <TableRow key={`${c.category_id}-${c.lang_code}-${idx}`} className="odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800">
-            <TableCell className="text-center">{(page - 1) * limit + idx + 1}</TableCell>
-            <TableCell className="truncate" title={c.category}>{c.category}</TableCell>
-            <TableCell className="truncate" title={c.description}>{c.description}</TableCell>
-            <TableCell className="truncate" title={c.meta_keywords}>{c.meta_keywords}</TableCell>
-            <TableCell className="truncate" title={c.page_title}>{c.page_title}</TableCell>
-            <TableCell className="text-center uppercase">{(c.lang_code || '').toUpperCase()}</TableCell>
-          </TableRow>
-        ));
-      })()}
-    </TableBody>
-  </Table>
-) : (
               <Table className="table-fixed min-w-full">
               <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
                 <TableRow>
@@ -3233,7 +3148,6 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                 )}
               </TableBody>
               </Table>
-              )}
               </div>
             </div>
             {/* Нижня панель дій (дублікат верхньої) */}
@@ -3270,9 +3184,9 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                   {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
                 </Button>
               )}
-              <Button variant="outline" onClick={handleRefresh}>
-  {t('buttons.update')}
-</Button>
+              <Button variant="outline" onClick={fetchData}>
+                {t('buttons.update')}
+              </Button>
             </div>
             {totalPages > 1 && (
               <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
@@ -3298,6 +3212,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
                           <SelectItem value="100">100</SelectItem>
                         </SelectContent>
                       </Select>
+              )}
                     </div>
                   </div>
                   <Pagination 
@@ -3317,3 +3232,6 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
     </AIProductFillerLayout>
   );
 }
+
+
+

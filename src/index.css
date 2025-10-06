@@ -219,4 +219,91 @@
     line-clamp: 4;
     overflow: hidden;
   }
+
+  /* Thin scrollbar styles */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Select dropdown scrollbar override */
+  [data-radix-select-content] {
+    max-height: 320px !important;
+    overflow-y: auto !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar {
+    width: 6px !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar-track {
+    background: #f1f5f9 !important;
+    border-radius: 3px !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar-thumb {
+    background: #cbd5e1 !important;
+    border-radius: 3px !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+  }
+
+  /* Force scrollbar for select content */
+  .select-content-scroll {
+    max-height: 320px !important;
+    overflow-y: scroll !important;
+    scrollbar-width: thin !important;
+  }
+  .select-content-scroll::-webkit-scrollbar {
+    width: 6px !important;
+    height: 6px !important;
+  }
+  .select-content-scroll::-webkit-scrollbar-track {
+    background: #f8fafc !important;
+    border-radius: 3px !important;
+  }
+  .select-content-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1 !important;
+    border-radius: 3px !important;
+  }
+  .select-content-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+  }
+
+  /* Global select dropdown styles */
+  [data-radix-select-content],
+  [role='listbox'] {
+    max-height: 320px !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar,
+  [role='listbox']::-webkit-scrollbar {
+    width: 6px !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar-track,
+  [role='listbox']::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar-thumb,
+  [role='listbox']::-webkit-scrollbar-thumb {
+    background: #cbd5e1 !important;
+    border-radius: 3px !important;
+  }
+  [data-radix-select-content]::-webkit-scrollbar-thumb:hover,
+  [role='listbox']::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+  }
 }

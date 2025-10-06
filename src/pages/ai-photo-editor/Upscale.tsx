@@ -1,121 +1,161 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, Download, Zap } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { TrendingUp, Download, Upload, X, ArrowLeftRight } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
 import { Progress } from '@/components/ui/Progress';
-import { Badge } from '@/components/ui/Badge';
-import PhotoUpload from './components/PhotoUpload';
+import { useUpscale } from '@/hooks/useUpscale';
 
-interface PhotoFile {
+interface ProcessedImage {
   id: string;
-  file: File;
-  preview: string;
   name: string;
-  size: number;
-  type: string;
-}
-
-interface UpscaleSettings {
-  scale: number;
-  model: string;
-  format: string;
-  quality: number;
-}
-
-interface ProcessedPhoto extends PhotoFile {
-  processedPreview: string;
-  status: 'processing' | 'completed' | 'error';
+  file: File;
+  originalUrl: string;
+  processedUrl: string | null;
+  status: 'pending' | 'processing' | 'completed' | 'error';
   progress: number;
-  originalDimensions: { width: number; height: number };
-  newDimensions: { width: number; height: number };
-  upscaleSettings: UpscaleSettings;
+  error?: string;
 }
 
-const upscaleModels = [
-  { value: 'real-esrgan', label: 'Real-ESRGAN (Універсальний)', description: 'Найкращий для більшості зображень' },
-  { value: 'waifu2x', label: 'Waifu2x (Аніме)', description: 'Оптимізований для аніме та мультфільмів' },
-  { value: 'esrgan', label: 'ESRGAN (Фото)', description: 'Ідеальний для реальних фотографій' },
-  { value: 'srcnn', label: 'SRCNN (Швидкий)', description: 'Швидка обробка з хорошою якістю' }
-];
+// Функція для очищення base64 від пробілів та переносів
+const cleanBase64 = (base64: string): string => {
+  return base64.replace(/\s/g, '');
+};
+
+// Функція для визначення MIME типу з base64
+const detectImageMimeType = (base64: string): string => {
+  const cleaned = cleanBase64(base64);
+  if (cleaned.startsWith('/9j/')) return 'image/jpeg';
+  if (cleaned.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (cleaned.startsWith('R0lGOD')) return 'image/gif';
+  if (cleaned.startsWith('UklGR')) return 'image/webp';
+  if (cleaned.startsWith('Qk')) return 'image/bmp';
+  return 'image/png'; // default fallback
+};
 
 export default function PhotoUpscale() {
-  const [selectedFiles, setSelectedFiles] = useState<PhotoFile[]>([]);
-  const [processedPhotos, setProcessedPhotos] = useState<ProcessedPhoto[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [settings, setSettings] = useState<UpscaleSettings>({
-    scale: 2,
-    model: 'real-esrgan',
-    format: 'png',
-    quality: 95
-  });
+  const [images, setImages] = useState<ProcessedImage[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const upscaleMutation = useUpscale();
 
-  const handleFilesSelected = (files: PhotoFile[]) => {
-    setSelectedFiles(files);
-  };
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  }, []);
 
-  const updateSetting = (key: keyof UpscaleSettings, value: number | string) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-  };
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
 
-  const startProcessing = async () => {
-    if (selectedFiles.length === 0) return;
-    
-    setIsProcessing(true);
-    
-    // Ініціалізуємо оброблені фото
-    const initialProcessed: ProcessedPhoto[] = selectedFiles.map(file => ({
-      ...file,
-      processedPreview: file.preview,
-      status: 'processing' as const,
+    const files = Array.from(e.dataTransfer.files);
+    handleFiles(files);
+  }, []);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      handleFiles(files);
+    }
+  }, []);
+
+  const handleFiles = (files: File[]) => {
+    const validFiles = files.filter(file => 
+      file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024
+    );
+
+    const newImages: ProcessedImage[] = validFiles.map(file => ({
+      id: Math.random().toString(36).substr(2, 9),
+      name: file.name,
+      file: file,
+      originalUrl: URL.createObjectURL(file),
+      processedUrl: null,
+      status: 'pending',
       progress: 0,
-      originalDimensions: { width: 1920, height: 1080 }, // Мок-дані
-      newDimensions: { width: 1920 * settings.scale, height: 1080 * settings.scale },
-      upscaleSettings: { ...settings }
     }));
-    
-    setProcessedPhotos(initialProcessed);
 
-    // Симуляція обробки кожного фото
-    for (let i = 0; i < selectedFiles.length; i++) {
-      for (let progress = 0; progress <= 100; progress += 20) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        setProcessedPhotos(prev => prev.map((photo, index) => 
-          index === i 
-            ? { ...photo, progress }
-            : photo
-        ));
+    setImages(prev => [...prev, ...newImages]);
+
+    // Process each image
+    newImages.forEach(img => {
+      const file = validFiles.find(f => f.name === img.name);
+      if (file) {
+        processImage(img.id, file);
       }
-      
-      // Позначаємо як завершене
-      setProcessedPhotos(prev => prev.map((photo, index) => 
-        index === i 
-          ? { 
-              ...photo, 
-              status: 'completed' as const,
-              progress: 100
-            }
-          : photo
+    });
+  };
+
+  const processImage = async (imageId: string, file: File) => {
+    setImages(prev => prev.map(img => 
+      img.id === imageId 
+        ? { ...img, status: 'processing' as const, progress: 0 }
+        : img
+    ));
+
+    try {
+      const result = await upscaleMutation.mutateAsync({
+        image: file,
+        data: {
+          model_name: 'Claude-Opus ',
+          scale: 2,
+          format: 'png',
+          quality: 95,
+        },
+      });
+
+      if (result.success && result.processed_image) {
+        // Визначаємо MIME тип та формуємо data URL
+        let processedUrl: string;
+        if (result.processed_image.startsWith('data:')) {
+          processedUrl = result.processed_image;
+        } else {
+          const cleanedBase64 = cleanBase64(result.processed_image);
+          const mimeType = detectImageMimeType(result.processed_image);
+          processedUrl = `data:${mimeType};base64,${cleanedBase64}`;
+        }
+
+        setImages(prev => prev.map(img => 
+          img.id === imageId 
+            ? { ...img, status: 'completed' as const, progress: 100, processedUrl }
+            : img
+        ));
+      } else {
+        throw new Error(result.message || 'Обробка не вдалася');
+      }
+    } catch (error: any) {
+      setImages(prev => prev.map(img => 
+        img.id === imageId 
+          ? { ...img, status: 'error' as const, error: error.message }
+          : img
       ));
     }
-    
-    setIsProcessing(false);
   };
 
-  const downloadPhoto = (photo: ProcessedPhoto) => {
-    console.log('Завантаження апскейленого фото:', photo.name);
+  const removeImage = (imageId: string) => {
+    setImages(prev => {
+      const img = prev.find(i => i.id === imageId);
+      if (img) {
+        URL.revokeObjectURL(img.originalUrl);
+        if (img.processedUrl && img.processedUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(img.processedUrl);
+        }
+      }
+      return prev.filter(i => i.id !== imageId);
+    });
   };
 
-  const downloadAll = () => {
-    const completedPhotos = processedPhotos.filter(p => p.status === 'completed');
-    console.log('Завантаження всіх апскейлених фото:', completedPhotos.length);
-  };
-
-  const calculateNewSize = (originalSize: number) => {
-    return (originalSize * Math.pow(settings.scale, 2) / (1024 * 1024)).toFixed(1);
+  const downloadImage = (url: string, name: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `upscaled_${name.replace(/\.[^/.]+$/, '')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
@@ -124,12 +164,9 @@ export default function PhotoUpscale() {
         {/* Header */}
         <div className="flex items-center mb-8">
           <Button variant="ghost" asChild className="mr-4">
-            <Link to="/ai-photo-editor">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Назад
-            </Link>
+            <Link to="/ai-photo-editor">Назад</Link>
           </Button>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-3">
             <div className="p-2 bg-green-500 rounded-lg">
               <TrendingUp className="w-6 h-6 text-white" />
             </div>
@@ -144,313 +181,149 @@ export default function PhotoUpscale() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Завантаження та результати */}
-          <div className="lg:col-span-2">
-            {selectedFiles.length === 0 && processedPhotos.length === 0 ? (
-              <PhotoUpload onFilesSelected={handleFilesSelected} />
-            ) : selectedFiles.length > 0 && processedPhotos.length === 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Завантажені фото ({selectedFiles.length})</CardTitle>
-                  <CardDescription>
-                    Налаштуйте параметри апскейлу та почніть обробку
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                    {selectedFiles.map((file) => (
-                      <div key={file.id} className="relative">
-                        <img
-                          src={file.preview}
-                          alt={file.name}
-                          className="w-full h-32 object-cover rounded-lg"
-                        />
-                        <div className="absolute bottom-2 left-2 right-2">
-                          <div className="bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded truncate">
-                            {file.name}
+        {/* Upload Area */}
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div
+              className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+                dragActive
+                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                  : 'border-gray-300 dark:border-gray-600'
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-lg font-semibold mb-2">
+                Перетягніть зображення сюди
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                або натисніть кнопку нижче
+              </p>
+              <input
+                type="file"
+                id="file-upload"
+                className="hidden"
+                multiple
+                accept="image/*"
+                onChange={handleFileInput}
+              />
+              <Button asChild>
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  Вибрати файли
+                </label>
+              </Button>
+              <p className="text-xs text-gray-400 mt-4">
+                Підтримувані формати: JPG, PNG, WEBP (макс. 10MB)
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Images List */}
+        {images.length > 0 && (
+          <div className="space-y-4">
+            {images.map((image) => (
+              <Card key={image.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    {/* Original Image */}
+                    <div className="flex-1">
+                      <div className="text-sm font-medium mb-2">Оригінал</div>
+                      <img
+                        src={image.originalUrl}
+                        alt={image.name}
+                        className="w-full h-48 object-cover rounded-lg"
+                      />
+                    </div>
+
+                    {/* Arrow */}
+                    {image.processedUrl && (
+                      <div className="flex items-center justify-center pt-8">
+                        <ArrowLeftRight className="w-6 h-6 text-gray-400" />
+                      </div>
+                    )}
+
+                    {/* Processed Image */}
+                    <div className="flex-1">
+                      <div className="text-sm font-medium mb-2">
+                        Апскейлено (2x)
+                      </div>
+                      {image.status === 'processing' && (
+                        <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Обробка...
+                            </p>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      )}
+                      {image.processedUrl && (
+                        <img
+                          src={image.processedUrl}
+                          alt={`Upscaled ${image.name}`}
+                          className="w-full h-48 object-cover rounded-lg"
+                        />
+                      )}
+                      {image.status === 'error' && (
+                        <div className="w-full h-48 bg-red-50 dark:bg-red-900/20 rounded-lg flex items-center justify-center">
+                          <p className="text-sm text-red-600 dark:text-red-400">
+                            {image.error || 'Помилка обробки'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeImage(image.id)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                      {image.processedUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => downloadImage(image.processedUrl!, image.name)}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex space-x-4">
-                    <Button 
-                      onClick={startProcessing} 
-                      disabled={isProcessing}
-                      className="flex-1"
-                    >
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                      {isProcessing ? 'Апскейл...' : 'Почати апскейл'}
-                    </Button>
-                    <Button variant="outline" onClick={() => setSelectedFiles([])}>
-                      Очистити
-                    </Button>
-                  </div>
+                  {/* Progress */}
+                  {image.status === 'processing' && (
+                    <div className="mt-4">
+                      <Progress value={image.progress} className="h-2" />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            ) : (
-              /* Результати обробки */
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                    Апскейлені фото
-                  </h2>
-                  {processedPhotos.every(p => p.status === 'completed') && (
-                    <Button onClick={downloadAll}>
-                      <Download className="w-4 h-4 mr-2" />
-                      Завантажити все
-                    </Button>
-                  )}
-                </div>
-
-                {processedPhotos.map((photo) => (
-                  <Card key={photo.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                          <TrendingUp className="w-5 h-5" />
-                          {photo.name}
-                        </CardTitle>
-                        <div className="flex items-center space-x-2">
-                          <Badge 
-                            variant={photo.status === 'completed' ? 'default' : 'secondary'}
-                            className={
-                              photo.status === 'completed' 
-                                ? 'bg-green-500' 
-                                : photo.status === 'processing' 
-                                ? 'bg-blue-500' 
-                                : 'bg-red-500'
-                            }
-                          >
-                            {photo.status === 'completed' 
-                              ? 'Готово' 
-                              : photo.status === 'processing' 
-                              ? 'Обробка' 
-                              : 'Помилка'
-                            }
-                          </Badge>
-                          {photo.status === 'completed' && (
-                            <Button size="sm" onClick={() => downloadPhoto(photo)}>
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {photo.status === 'processing' && (
-                        <div className="mb-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">Апскейл зображення...</span>
-                            <span className="text-sm text-gray-500">{photo.progress}%</span>
-                          </div>
-                          <Progress value={photo.progress} className="w-full" />
-                        </div>
-                      )}
-
-                      {photo.status === 'completed' && (
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <h4 className="text-sm font-medium mb-2">Оригінал</h4>
-                              <img
-                                src={photo.preview}
-                                alt={`${photo.name} - оригінал`}
-                                className="w-full h-48 object-cover rounded-lg"
-                              />
-                              <p className="text-xs text-gray-500 mt-1">
-                                {photo.originalDimensions.width} × {photo.originalDimensions.height}
-                              </p>
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-medium mb-2">Апскейлено ({photo.upscaleSettings.scale}x)</h4>
-                              <img
-                                src={photo.processedPreview}
-                                alt={`${photo.name} - апскейлено`}
-                                className="w-full h-48 object-cover rounded-lg"
-                              />
-                              <p className="text-xs text-gray-500 mt-1">
-                                {photo.newDimensions.width} × {photo.newDimensions.height}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Статистика */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                            <div className="text-center">
-                              <div className="text-lg font-bold text-green-600">
-                                {photo.upscaleSettings.scale}x
-                              </div>
-                              <div className="text-xs text-gray-500">Масштаб</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-bold text-blue-600">
-                                {calculateNewSize(photo.size)} МБ
-                              </div>
-                              <div className="text-xs text-gray-500">Новий розмір</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-bold text-purple-600">
-                                {photo.upscaleSettings.model.toUpperCase()}
-                              </div>
-                              <div className="text-xs text-gray-500">Модель</div>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-bold text-orange-600">
-                                {photo.upscaleSettings.quality}%
-                              </div>
-                              <div className="text-xs text-gray-500">Якість</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {/* Додати ще фото */}
-                <Card>
-                  <CardContent className="p-6 text-center">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => {
-                        setSelectedFiles([]);
-                        setProcessedPhotos([]);
-                      }}
-                    >
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                      Апскейлити ще фото
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
+            ))}
           </div>
+        )}
 
-          {/* Налаштування */}
-          <div className="space-y-6">
-            {/* Масштаб */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="w-5 h-5" />
-                  Масштаб
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="scale">Коефіцієнт збільшення</Label>
-                  <Select value={settings.scale.toString()} onValueChange={(value) => updateSetting('scale', parseInt(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2">2x (подвоїти)</SelectItem>
-                      <SelectItem value="3">3x (потроїти)</SelectItem>
-                      <SelectItem value="4">4x (почетверити)</SelectItem>
-                      <SelectItem value="6">6x (максимум)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Більший масштаб = довша обробка
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* AI Модель */}
-            <Card>
-              <CardHeader>
-                <CardTitle>AI Модель</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {upscaleModels.map((model) => (
-                    <Button
-                      key={model.value}
-                      variant={settings.model === model.value ? 'default' : 'outline'}
-                      onClick={() => updateSetting('model', model.value)}
-                      className="w-full justify-start h-auto p-4"
-                    >
-                      <div className="text-left">
-                        <div className="font-medium">{model.label}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {model.description}
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Вихідні налаштування */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Вихідні налаштування</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="format">Формат файлу</Label>
-                  <Select value={settings.format} onValueChange={(value) => updateSetting('format', value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="png">PNG (без втрат)</SelectItem>
-                      <SelectItem value="jpg">JPEG (стиснутий)</SelectItem>
-                      <SelectItem value="webp">WEBP (сучасний)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="quality">Якість ({settings.quality}%)</Label>
-                  <input
-                    id="quality"
-                    type="range"
-                    min="60"
-                    max="100"
-                    value={settings.quality}
-                    onChange={(e) => updateSetting('quality', parseInt(e.target.value))}
-                    className="w-full mt-2"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Інформація */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Інформація</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Обрана модель:</span>
-                    <span className="font-medium">
-                      {upscaleModels.find(m => m.value === settings.model)?.label}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Масштаб:</span>
-                    <span className="font-medium">{settings.scale}x</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Формат:</span>
-                    <span className="font-medium">{settings.format.toUpperCase()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Якість:</span>
-                    <span className="font-medium">{settings.quality}%</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        {/* Info Section */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Як це працює</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ol className="list-decimal list-inside space-y-2 text-sm text-gray-600 dark:text-gray-400">
+              <li>Завантажте зображення</li>
+              <li>AI збільшить роздільну здатність в 2 рази</li>
+              <li>Порівняйте результат з оригіналом</li>
+              <li>Завантажте апскейлене зображення у форматі PNG</li>
+            </ol>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

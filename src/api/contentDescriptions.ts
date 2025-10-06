@@ -33,8 +33,8 @@ export const fetchContentDescriptions = async <T = any>(
   }
   
   const response = await apiClient.post('/content/descriptions', payload);
-  const data = response.data || {};
-  // Normalize possible shapes: { items, total, page, limit } OR { result, page, limit }
+  const data = response.data || {}; 
+  
   const items: T[] = Array.isArray(data.items) ? data.items : (Array.isArray(data.result) ? data.result : []);
   const page = typeof data.page === 'number' ? data.page : (req.page ?? 1);
   const limit = typeof data.limit === 'number' ? data.limit : (req.limit ?? 50);

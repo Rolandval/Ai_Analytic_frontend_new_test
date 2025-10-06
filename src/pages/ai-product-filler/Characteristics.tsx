@@ -25,7 +25,7 @@ export default function AIProductFillerCharacteristics() {
   // Локальний (макетний) стан для контролів — без підключення до API
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLang, setSelectedLang] = useState<'ua' | 'en' | 'ru'>('ua');
-  const [selectedProductType, setSelectedProductType] = useState<'all' | 'solar_panels' | 'batteries' | 'inverters'>('all');
+  
   const [selectedChatModel, setSelectedChatModel] = useState<string>('');
   const [modelsLoading] = useState(false);
   const [modelsError] = useState<string | null>(null);
@@ -73,18 +73,6 @@ export default function AIProductFillerCharacteristics() {
                 <SelectItem value="ua">ua</SelectItem>
                 <SelectItem value="en">en</SelectItem>
                 <SelectItem value="ru">ru</SelectItem>
-              </SelectContent>
-            </Select>
-            {/* Тип товару */}
-            <Select value={selectedProductType} onValueChange={(value) => setSelectedProductType(value as any)}>
-              <SelectTrigger className="w-[180px] shrink-0">
-                <SelectValue placeholder="Всі типи" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Всі типи</SelectItem>
-                <SelectItem value="solar_panels">Сонячні панелі</SelectItem>
-                <SelectItem value="batteries">Акумулятори</SelectItem>
-                <SelectItem value="inverters">Інвертори</SelectItem>
               </SelectContent>
             </Select>
             {/* Вибір AI-моделі (статичний) */}
