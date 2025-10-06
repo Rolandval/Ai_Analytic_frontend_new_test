@@ -1619,7 +1619,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchSiteCategoriesDescriptions(5, 9999);
+      const response = await fetchSiteCategoriesDescriptions(1, 9999);
       console.log('[Generation] fetchSiteCategoriesDescriptions response:', {
         itemsCount: response.items?.length ?? 0,
         total: response.total,
