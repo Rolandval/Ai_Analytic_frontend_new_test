@@ -1,0 +1,115 @@
+﻿import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
+import { Badge } from '@/components/ui/Badge';
+import { Search, Loader2, Plus, X, Save, ArrowUpDown, ChevronDown, ChevronRight, ArrowRight, ArrowLeftRight } from 'lucide-react';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { fetchContentDescriptions, ProductType } from '@/api/contentDescriptions';
+import { fetchSiteCategoriesDescriptions, updateSiteCategoriesDescriptions, type SiteCategoryDescription } from '@/api/siteCategoriesDescriptions';
+import { fetchAllColumnPrompts, fetchColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
+import { getTemplates } from '@/api/productFillerMock';
+import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
+import { generateAiDescription } from '@/api/generateAiDescription';
+import { aiTranslateSiteDescriptions, translateSiteDescriptionsFree, type TranslateDescriptionItem } from '@/api/translateSiteDescriptions';
+import { chatApi } from '@/api/chatApi';
+import { updateSiteDescriptions } from '@/api/updateSiteDescriptions';
+import { toast } from '@/hooks/use-toast';
+import { Pagination } from '@/components/ui/Pagination';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
+import { useLocation } from 'react-router-dom';
+import bgImage from './img/photo_2025-09-02_23-21-26.jpg';
+import AIProductFillerLayout from './components/AIProductFillerLayout';
+import { useTheme } from '@/hooks/useTheme';
+import { usePFI18n } from './i18n';
+import { useSiteCategories } from '@/hooks/useSiteCategories';
+
+interface ContentDescription {
+  id?: number;
+  product_id?: number;
+  product_type?: ProductType;
+  product_name?: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+   site_lang_code?: string;
+  site_product?: string;
+  site_shortname?: string;
+  site_short_description?: string | null;
+  site_full_description?: string | null;
+  site_meta_keywords?: string;
+  site_meta_description?: string;
+  site_searchwords?: string | null;
+  site_page_title?: string;
+  site_promo_text?: string | null;
+}
+
+// Модель чату для вибору моделі генерації
+interface ChatModel {
+  id: number;
+  name: string;
+  icon: string;
+  input_tokens_price?: number;
+  output_tokens_price?: number;
+}
+
+interface CustomFilter {
+  id: string;
+  name: string;
+  field: string;
+  value: string;
+  active: boolean;
+}
+
+// Колонку мови видалено — мапа назв мов більше не потрібна
+
+export default function AIProductFillerGeneration({ title: _title = 'AI генерація', mode = 'generation' }: { title?: string; mode?: 'generation' | 'translation' }) {
+  const location = useLocation();
+  const { isDarkMode } = useTheme();
+  const { t } = usePFI18n();
+  const { data: categories, isLoading: categoriesLoading } = useSiteCategories();
+  const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
+  const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
+  const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
+  // Перемикач між товарами та категоріями
+  const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
+  
+  const [descriptions, setDescriptions] = useState<ContentDescription[]>([]);
+  const [initialDescriptions, setInitialDescriptions] = useState<ContentDescription[]>([]);
+  const [categoryDescriptions, setCategoryDescriptions] = useState<SiteCategoryDescription[]>([]);
+  const [initialCategoryDescriptions, setInitialCategoryDescriptions] = useState<SiteCategoryDescription[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [customFilters, setCustomFilters] = useState<CustomFilter[]>([]);
+  const [newFilter, setNewFilter] = useState<Omit<CustomFilter, 'id' | 'active'>>({ name: '', field: 'site_product', value: '' });
+  // Фільтр мови (ua/en/ru), за замовчуванням "ua"
+  const [selectedLang, setSelectedLang] = useState<'ua' | 'en' | 'ru'>('ua');
+  // Мова перекладу (цільова), використовується лише в режимі перекладу
+  const [targetLang, setTargetLang] = useState<'ua' | 'en' | 'ru'>('ru');
+  // Мова джерела для Free перекладу
+  const [sourceLang, setSourceLang] = useState<'ua' | 'en' | 'ru'>('ua');
+  // Моделі чату для вибору моделі генерації
+  const [chatModels, setChatModels] = useState<ChatModel[]>([]);
+  const [selectedChatModel, setSelectedChatModel] = useState<string>('');
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  // Сортування: колонки і напрям
+  const [sortBy, setSortBy] = useState<SiteColumnName | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // refs для синхронізації горизонтальних скролбарів
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const isScrollingRef = useRef(false);
+  // Вибір окремих клітинок
+  const [selectedCells, setSelectedCells] = useState<Record<string, boolean>>({});
+  // Рядки, у яких відбулась AI‑генерація в цій сесії (для селективного збереження)
+  const [generatedRows, setGeneratedRows] = useState<Record<string, boolean>>({});

@@ -44,8 +44,9 @@ export const fetchContentDescriptions = async <T = any>(
 
 export interface GenerateDescriptionRequest {
   site_product: string;
-  site_full_description?: string;
+  site_full_description: string;
   prompt: string;
+  model_name: string;
 }
 
 export interface GenerateDescriptionResponse {
@@ -54,7 +55,7 @@ export interface GenerateDescriptionResponse {
   description?: string;
 }
 
-export const generateAiDescription = async (
+export const generateAiDescriptionLegacy = async (
   body: GenerateDescriptionRequest
 ): Promise<string> => {
   // Вимикаємо автопарсинг JSON, щоб уникнути падіння при некоректному JSON від бекенду
@@ -64,6 +65,66 @@ export const generateAiDescription = async (
   const raw = res.data;
   // Спроба безпечно розпарсити JSON, якщо це строка-схоже-на-JSON
   let data: GenerateDescriptionResponse | any = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      // залишаємо як текст
+    }
+  }
+  // Підтримка різних форм відповіді й повернення строкового результату за замовчуванням
+  if (data && typeof data === 'object') {
+    return data.text ?? data.result ?? data.description ?? '';
+  }
+  return typeof data === 'string' ? data : '';
+};
+
+// Мапінг ключів між категоріями та генерацією
+export const CATEGORY_FIELD_MAPPING = {
+  description: 'site_short_description',
+  meta_keywords: 'site_meta_keywords', 
+  page_title: 'site_page_title',
+  category: 'site_product'
+} as const;
+
+export interface GenerateCategoryRequest {
+  category_id: number;
+  lang_code: string;
+  category: string;
+  site_short_description?: string;
+  site_meta_keywords?: string; 
+  site_page_title?: string;
+  prompt: string;
+  model_name?: string;
+}
+
+export interface GenerateCategoryResponse {
+  text?: string;
+  result?: string;
+  description?: string;
+}
+
+export const generateAiCategoryDescription = async (
+  body: GenerateCategoryRequest
+): Promise<string> => {
+  // Створюємо payload з мапінгом ключів
+  const payload = {
+    site_product: body.category,
+    site_full_description: body.site_short_description || body.category || 'Категорія товарів',
+    site_short_description: body.site_short_description || '',
+    site_meta_keywords: body.site_meta_keywords || '',
+    site_page_title: body.site_page_title || '',
+    prompt: body.prompt,
+    model_name: body.model_name || 'GPT-4o-mini'
+  };
+
+  // Вимикаємо автопарсинг JSON, щоб уникнути падіння при некоректному JSON від бекенду
+  const res = await apiClient.post('/content/generate_ai_description', payload, {
+    transformResponse: [(d) => d],
+  });
+  const raw = res.data;
+  // Спроба безпечно розпарсити JSON, якщо це строка-схоже-на-JSON
+  let data: GenerateCategoryResponse | any = raw;
   if (typeof raw === 'string') {
     try {
       data = JSON.parse(raw);

@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type CSSProperties } from 'react';
+﻿import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -10,8 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Search, Loader2, Plus, X, Save, ArrowUpDown, ChevronDown, ChevronRight, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { fetchContentDescriptions, ProductType, generateAiCategoryDescription, CATEGORY_FIELD_MAPPING } from '@/api/contentDescriptions';
-import { fetchSiteCategoriesDescriptions, updateSiteCategoriesDescriptions, type SiteCategoryDescription, type UpdateSiteCategoryDescriptionRequest } from '@/api/siteCategoriesDescriptions';
+import { fetchContentDescriptions, ProductType } from '@/api/contentDescriptions';
+import { fetchSiteCategoriesDescriptions, updateSiteCategoriesDescriptions, type SiteCategoryDescription } from '@/api/siteCategoriesDescriptions';
 import { fetchAllColumnPrompts, fetchColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
 import { getTemplates } from '@/api/productFillerMock';
 import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
@@ -28,8 +27,6 @@ import AIProductFillerLayout from './components/AIProductFillerLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { usePFI18n } from './i18n';
 import { useSiteCategories } from '@/hooks/useSiteCategories';
-import { useCategoryGeneration } from './useCategoryGeneration';
-import { CATEGORY_COLUMNS, type CategoryColumnName } from './categoryGeneration';
 
 interface ContentDescription {
   id?: number;
@@ -78,7 +75,6 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const STORAGE_KEY_TEMPLATES_STATE = 'aiProductFiller.templatesState';
   const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
-  const STORAGE_KEY_CATEGORY_UNSAVED = 'aiProductFiller.categoryUnsavedDiffs.v1';
   // Перемикач між товарами та категоріями
   const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
   
@@ -114,17 +110,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const isScrollingRef = useRef(false);
   // Вибір окремих клітинок
-  // Вибір окремих клітинок категорій
-const [categorySelectedCells, setCategorySelectedCells] = useState<Record<string, boolean>>({});
-// Стани для категорій
-const [categoryRowCheckedRows, setCategoryRowCheckedRows] = useState<Record<string, boolean>>({});
-const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<Partial<Record<string, boolean>>>({});
   const [selectedCells, setSelectedCells] = useState<Record<string, boolean>>({});
-  // Стан для редагування клітинок категорій (rowKey:column)
-  const [editingCategoryCell, setEditingCategoryCell] = useState<string | null>(null);
-  
-  console.log('🎯 [Generation] Component rendered, selectedCells:', selectedCells);
-  
   // Рядки, у яких відбулась AI‑генерація в цій сесії (для селективного збереження)
   const [generatedRows, setGeneratedRows] = useState<Record<string, boolean>>({});
   const [templatesState, setTemplatesState] = useState<TemplatesState>(null);
@@ -164,7 +150,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const resizingRef = useRef<{ col: SiteColumnName; startX: number; startWidth: number } | null>(null);
   // Промпти керуються на сторінці Templates; тут використовуємо активний з бекенду
   // Restore saved column widths
-   
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_COLUMN_WIDTHS);
@@ -273,54 +258,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         (out as any)[k] = (patch as any)[k];
       });
       return out as ContentDescription;
-    });
-  };
-
-  // ===== ЗБЕРЕЖЕННЯ ЧЕРНЕТКИ КАТЕГОРІЙ В localStorage =====
-  type CategoryUnsavedMap = Record<string, Partial<Pick<SiteCategoryDescription,
-    'category' | 'description' | 'meta_keywords' | 'page_title'>>>;
-
-  const getCategoryStableKey = (cat: SiteCategoryDescription): string => {
-    return `cat_${cat.category_id}_${cat.lang_code}`;
-  };
-
-  const readCategoryUnsaved = (): CategoryUnsavedMap => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_CATEGORY_UNSAVED);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return (parsed && typeof parsed === 'object') ? parsed as CategoryUnsavedMap : {};
-    } catch { return {}; }
-  };
-
-  const writeCategoryUnsaved = (data: CategoryUnsavedMap) => {
-    try { localStorage.setItem(STORAGE_KEY_CATEGORY_UNSAVED, JSON.stringify(data)); } catch {}
-  };
-
-  const clearAllCategoryUnsaved = () => { 
-    try { localStorage.removeItem(STORAGE_KEY_CATEGORY_UNSAVED); } catch {} 
-  };
-
-  const saveCategoryUnsavedField = (cat: SiteCategoryDescription, key: keyof SiteCategoryDescription, value: any) => {
-    const stable = getCategoryStableKey(cat);
-    const map = readCategoryUnsaved();
-    if (!map[stable]) map[stable] = {};
-    map[stable][key as any] = value;
-    writeCategoryUnsaved(map);
-  };
-
-  const applyCategoryUnsavedToItems = (items: SiteCategoryDescription[]): SiteCategoryDescription[] => {
-    const cur = readCategoryUnsaved();
-    if (!cur || Object.keys(cur).length === 0) return items;
-    return items.map((cat) => {
-      const key = getCategoryStableKey(cat);
-      const patch = cur[key] as any;
-      if (!patch) return cat;
-      const out: any = { ...cat };
-      Object.keys(patch).forEach((k) => {
-        (out as any)[k] = (patch as any)[k];
-      });
-      return out as SiteCategoryDescription;
     });
   };
 
@@ -548,116 +485,12 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }
     const uid = String(anyDesc[ROW_UID]);
     const pid = anyDesc.product_id;
+    if (pid != null) return `${pid}|${langCode}|${uid}`;
+    if (desc.id != null) return `${desc.id}|${langCode}|${uid}`;
+    return `${langCode}|${uid}`;
+  };
+  const isCellChecked = (rowKey: string, col: string) => !!selectedCells[`${rowKey}:${col}`];
 
-    // Функції для категорій
-
-    let rowKey: string;
-    if (pid != null) rowKey = `${pid}|${langCode}|${uid}`;
-    else if (desc.id != null) rowKey = `${desc.id}|${langCode}|${uid}`;
-    else rowKey = `${langCode}|${uid}`;
-    
-    // console.log(`[getRowKey] Generated key: ${rowKey} for product: ${desc.site_product || desc.product_name || 'unnamed'}`);
-    return rowKey;
-  };
-  const isCellChecked = (rowKey: string, col: string) => {
-    const cellKey = `${rowKey}:${col}`;
-    const isChecked = !!selectedCells[cellKey];
-    // console.log(`[isCellChecked] ${cellKey}: ${isChecked}`);
-    return isChecked;
-  };
-  const getCategoryRowKey = (cat: SiteCategoryDescription, index: number) => {
-    return `cat_${cat.category_id}_${cat.lang_code}_${index}`;
-  };
-  
-  const isCategoryCellChecked = (rowKey: string, col: string) => !!categorySelectedCells[`${rowKey}:${col}`];
-  
-  const onCategoryCellCheckedChange = (rowKey: string, col: string, checked: boolean | 'indeterminate') => {
-    console.log('✅ [onCategoryCellCheckedChange] CATEGORY CELL CLICKED!', {
-      rowKey,
-      col,
-      checked,
-      cellKey: `${rowKey}:${col}`
-    });
-    setCategorySelectedCells(prev => {
-      const cellKey = `${rowKey}:${col}`;
-      const newState = { ...prev, [cellKey]: checked === true };
-      console.log(`📝 Updated categorySelectedCells: ${cellKey} = ${checked === true}`);
-      console.log('📋 All selected category cells:', Object.keys(newState).filter(k => newState[k]));
-      return newState;
-    });
-  };
-  
-  const getCategoryRowCheckedState = (rowKey: string): boolean => {
-    return !!categoryRowCheckedRows[rowKey];
-  };
-  
-  const onCategoryRowCheckedChange = (rowKey: string, checked: boolean | 'indeterminate') => {
-    setCategoryRowCheckedRows(prev => ({ ...prev, [rowKey]: checked === true }));
-    
-    // Вибираємо всі незаповнені клітинки в рядку
-    if (checked === true) {
-      const category = pagedCategories.find((cat, idx) => getCategoryRowKey(cat, idx) === rowKey);
-      if (category) {
-        const cols: Array<keyof SiteCategoryDescription> = ['category', 'description', 'meta_keywords', 'page_title'];
-        const updates: Record<string, boolean> = {};
-        
-        cols.forEach((col) => {
-          const value = category[col];
-          const isEmpty = !value || String(value).trim() === '';
-          if (isEmpty) {
-            updates[`${rowKey}:${col}`] = true;
-          }
-        });
-        
-        setCategorySelectedCells(prev => ({ ...prev, ...updates }));
-      }
-    } else {
-      // Знімаємо вибір з усіх клітинок рядка
-      setCategorySelectedCells(prev => {
-        const next = { ...prev };
-        const cols = ['category', 'description', 'meta_keywords', 'page_title'];
-        cols.forEach((col) => {
-          delete next[`${rowKey}:${col}`];
-        });
-        return next;
-      });
-    }
-  };
-  
-  const getCategoryColumnCheckedState = (col: string): boolean => {
-    return !!categoryColumnHeaderChecked[col];
-  };
-  
-  const onCategoryColumnCheckedChange = (col: string, checked: boolean | 'indeterminate') => {
-    setCategoryColumnHeaderChecked(prev => ({ ...prev, [col]: checked === true }));
-    
-    // Вибираємо всі незаповнені клітинки в колонці
-    if (checked === true) {
-      const updates: Record<string, boolean> = {};
-      
-      pagedCategories.forEach((cat, idx) => {
-        const rowKey = getCategoryRowKey(cat, idx);
-        const value = cat[col as keyof SiteCategoryDescription];
-        const isEmpty = !value || String(value).trim() === '';
-        
-        if (isEmpty) {
-          updates[`${rowKey}:${col}`] = true;
-        }
-      });
-      
-      setCategorySelectedCells(prev => ({ ...prev, ...updates }));
-    } else {
-      // Знімаємо вибір з усіх клітинок колонки
-      setCategorySelectedCells(prev => {
-        const next = { ...prev };
-        pagedCategories.forEach((cat, idx) => {
-          const rowKey = getCategoryRowKey(cat, idx);
-          delete next[`${rowKey}:${col}`];
-        });
-        return next;
-      });
-    }
-  };
   // Стабільний ключ рядка: product_id+lang (канонічна), інакше id+lang, інакше lang|product
   const getStableKey = (d: ContentDescription) => {
     const anyD: any = d as any;
@@ -666,53 +499,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     if (anyD.id != null) return `${String(anyD.id)}|${lang}`;
     return `${lang}|${d.site_product ?? d.product_name ?? ''}`;
   };
-  // Фільтрація та пагінація категорій (винесено з рендеру таблиці)
-  const filteredCategories = useMemo(() => {
-    const searchLower = (searchQuery || '').toLowerCase();
-    return (categoryDescriptions || []).filter((c) => {
-      const lang = (c.lang_code || '').toLowerCase();
-      const langMatch = selectedLang === 'ua' ? (lang === 'ua' || lang === 'uk') : lang === selectedLang;
-      const inSearch = !searchLower ||
-        (c.category || '').toLowerCase().includes(searchLower) ||
-        (c.description || '').toLowerCase().includes(searchLower) ||
-        (c.meta_keywords || '').toLowerCase().includes(searchLower) ||
-        (c.page_title || '').toLowerCase().includes(searchLower);
-      return langMatch && inSearch;
-    });
-  }, [categoryDescriptions, searchQuery, selectedLang]);
-
-  const pagedCategories = useMemo(() => {
-    return filteredCategories.slice((page - 1) * limit, page * limit);
-  }, [filteredCategories, page, limit]);
-
-  const categoryGeneration = useCategoryGeneration(
-    pagedCategories, // Передаємо тільки категорії поточної сторінки!
-    setCategoryDescriptions,
-    templatesState?.prompts || {},
-    selectedLang,
-    selectedChatModel || 'GPT-4o-mini',
-    getCategoryRowKey,
-    saveCategoryUnsavedField // Передаємо функцію збереження в localStorage
-  );
-
-  // Обгортка для handleCategoryUpdate, щоб зберігати зміни в localStorage
-  const originalHandleCategoryUpdate = categoryGeneration.handleCategoryUpdate;
-  const wrappedHandleCategoryUpdate = useCallback((updatedCategory: SiteCategoryDescription) => {
-    console.log('[wrappedHandleCategoryUpdate] Called with:', updatedCategory);
-    
-    // Зберігаємо зміни в localStorage
-    const fields: Array<keyof SiteCategoryDescription> = ['category', 'description', 'meta_keywords', 'page_title'];
-    fields.forEach((field) => {
-      if (updatedCategory[field] !== undefined) {
-        console.log('[wrappedHandleCategoryUpdate] Saving to localStorage:', field, updatedCategory[field]);
-        saveCategoryUnsavedField(updatedCategory, field, updatedCategory[field]);
-      }
-    });
-    
-    // Викликаємо оригінальний обробник
-    console.log('[wrappedHandleCategoryUpdate] Calling original handler');
-    originalHandleCategoryUpdate(updatedCategory);
-  }, [originalHandleCategoryUpdate]);
 
   // Базова мапа початкових даних для визначення "брудних" клітинок (незбережені зміни)
   const initialByStableKey = useMemo(() => {
@@ -723,15 +509,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     return m;
   }, [initialDescriptions]);
 
-  // Базова мапа початкових даних категорій для визначення "брудних" клітинок
-  const initialCategoryByStableKey = useMemo(() => {
-    const m = new Map<string, SiteCategoryDescription>();
-    try {
-      initialCategoryDescriptions.forEach((cat) => m.set(getCategoryStableKey(cat), cat));
-    } catch {}
-    return m;
-  }, [initialCategoryDescriptions]);
-
   const isCellDirty = useCallback((desc: ContentDescription, col: SiteColumnName) => {
     const base = initialByStableKey.get(getStableKey(desc));
     if (!base) return false;
@@ -740,14 +517,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     const current = (desc as any)[field];
     return String(before ?? '') !== String(current ?? '');
   }, [initialByStableKey]);
-
-  const isCategoryCellDirty = useCallback((cat: SiteCategoryDescription, col: keyof SiteCategoryDescription) => {
-    const base = initialCategoryByStableKey.get(getCategoryStableKey(cat));
-    if (!base) return false;
-    const before = (base as any)[col];
-    const current = (cat as any)[col];
-    return String(before ?? '') !== String(current ?? '');
-  }, [initialCategoryByStableKey]);
 
   // Позначка, що для рядка було виконано хоча б одну AI‑генерацію
   const markRowGenerated = (desc: ContentDescription) => {
@@ -1015,9 +784,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           site_page_title: String((it as any).site_page_title ?? ''),
           site_promo_text: String((it as any).site_promo_text ?? ''),
         }));
-        const model_name = selectedChatModel?.trim() || 'GPT-4o-mini';
         const res = (translationEngine === 'ai')
-          ? await aiTranslateSiteDescriptions({ model_name, descriptions: normalized })
+          ? await aiTranslateSiteDescriptions({ model_name: selectedChatModel || 'GPT-4o-mini', descriptions: normalized })
           : await translateSiteDescriptionsFree({ lang_code: lang, descriptions: normalized });
         const list: any[] = Array.isArray(res)
           ? res
@@ -1221,19 +989,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     desc: ContentDescription,
     checked: boolean | 'indeterminate'
   ) => {
-    console.log('✅ [onCellCheckedChangeWithLog] CELL CLICKED!', {
-      rowKey,
-      col,
-      checked,
-      cellKey: `${rowKey}:${col}`,
+    setSelectedCells(prev => ({ ...prev, [`${rowKey}:${col}`]: checked === true }));
+    console.log({
       site_product: desc.site_product || desc.product_name || '-',
-    });
-    setSelectedCells(prev => {
-      const cellKey = `${rowKey}:${col}`;
-      const newState = { ...prev, [cellKey]: checked === true };
-      console.log(`📝 Updated selectedCells: ${cellKey} = ${checked === true}`);
-      console.log('📋 All selected cells:', Object.keys(newState).filter(k => newState[k]));
-      return newState;
+      site_full_description: desc.site_full_description || desc.description || '-',
+      cell: col,
     });
     // Тільки перемикаємо вибір. Генерація виконується кнопкою "Заповнити вибрані".
   };
@@ -1242,18 +1002,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const ROW_GENERATABLE_COLUMNS: SiteColumnName[] = SITE_COLUMNS as SiteColumnName[];
   // Хелпер: визначити, чи значення клітинки вважається порожнім (у т.ч. плейсхолдер '-')
   const isEmptyCellValue = (v: string | null | undefined): boolean => {
-    if (v === null || v === undefined) {
-      console.log(`[isEmptyCellValue] null/undefined -> true`);
-      return true;
-    }
+    if (v === null || v === undefined) return true;
     const s = String(v).trim();
-    if (s.length === 0) {
-      console.log(`[isEmptyCellValue] empty string -> true`);
-      return true;
-    }
-    const isEmpty = s === '-' || s === '—' || s === '–';
-    console.log(`[isEmptyCellValue] "${s}" -> ${isEmpty}`);
-    return isEmpty;
+    if (s.length === 0) return true;
+    return s === '-' || s === '—' || s === '–';
   };
   // Стан чекбокса рядка — тільки з незалежного стану, не змінюється від вибору колонок
   const getRowCheckedState = (rowKey: string): boolean | 'indeterminate' => {
@@ -1301,31 +1053,14 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     const value = checked === true;
     // Знайти опис рядка за ключем
     const rowDesc = pagedDescriptions.find((d, idx) => getRowKey(d, idx) === rowKey);
-    if (!rowDesc) {
-      console.warn('[onRowGenerateCheckedChange] Row not found:', rowKey);
-      return;
-    }
-    
+    if (!rowDesc) return;
     // Перевірити, чи є хоч одна порожня клітинка в цьому рядку
     let emptyInRow = 0;
-    const cellStates: Record<string, { field: string; value: any; isEmpty: boolean }> = {};
-    
     ROW_GENERATABLE_COLUMNS.forEach(col => {
       const field = mapSiteColumnToContentField[col];
       const v = (rowDesc as any)[field] as string | null | undefined;
-      const isEmpty = isEmptyCellValue(v);
-      cellStates[col] = { field, value: v, isEmpty };
-      if (isEmpty) emptyInRow++;
+      if (isEmptyCellValue(v)) emptyInRow++;
     });
-    
-    console.log('[onRowGenerateCheckedChange]', {
-      rowKey,
-      checked,
-      emptyInRow,
-      cellStates,
-      site_product: rowDesc.site_product || rowDesc.product_name || '-'
-    });
-    
     if (emptyInRow === 0) {
       toast({ title: 'У цьому рядку немає порожніх клітинок на цій сторінці' });
       setRowCheckedRows(prev => ({ ...prev, [rowKey]: false }));
@@ -1349,30 +1084,17 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const getMasterCheckedState = (): boolean | 'indeterminate' => {
     let total = 0;
     let selected = 0;
-    console.log('[getMasterCheckedState] Starting check...');
-    
     pagedDescriptions.forEach((desc, idx) => {
       const rowKey = getRowKey(desc, idx);
-      console.log(`[getMasterCheckedState] Row ${idx} (${rowKey}):`);
-      
       ROW_GENERATABLE_COLUMNS.forEach((col) => {
         const field = mapSiteColumnToContentField[col];
         const v = (desc as any)[field] as string | null | undefined;
-        const isEmpty = isEmptyCellValue(v);
-        const cellKey = `${rowKey}:${col}`;
-        const isSelected = !!selectedCells[cellKey];
-        
-        console.log(`  ${col} (${field}): "${v}" -> isEmpty: ${isEmpty}, selected: ${isSelected}`);
-        
         // Враховуємо лише порожні клітинки (для обох режимів)
-        if (!isEmpty) return;
+        if (!isEmptyCellValue(v)) return;
         total++;
-        if (isSelected) selected++;
+        if (selectedCells[`${rowKey}:${col}`]) selected++;
       });
     });
-    
-    console.log(`[getMasterCheckedState] Result: ${selected}/${total}`);
-    
     if (total === 0) return false;
     if (selected === 0) return false;
     if (selected === total) return true;
@@ -1381,14 +1103,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
 
   const onMasterCheckedChange = (checked: boolean | 'indeterminate') => {
     const value = checked === true;
-    console.log(`[onMasterCheckedChange] Setting all to: ${value}`);
-    
     // Оновлюємо незалежні візуальні стани для рядків та заголовків колонок
     setRowCheckedRows(prev => {
       const next: Record<string, boolean> = { ...prev };
       pagedDescriptions.forEach((desc, idx) => {
         const rowKey = getRowKey(desc, idx);
-        console.log(`[onMasterCheckedChange] Setting row ${rowKey} to: ${value}`);
         next[rowKey] = value;
       });
       return next;
@@ -1403,21 +1122,12 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       const next = { ...prev };
       pagedDescriptions.forEach((desc, idx) => {
         const rowKey = getRowKey(desc, idx);
-        console.log(`[onMasterCheckedChange] Processing row ${idx} (${rowKey}):`);
-        
         ROW_GENERATABLE_COLUMNS.forEach((col) => {
           const field = mapSiteColumnToContentField[col];
           const v = (desc as any)[field] as string | null | undefined;
-          const isEmpty = isEmptyCellValue(v);
-          const cellKey = `${rowKey}:${col}`;
-          
-          console.log(`  ${col}: "${v}" -> isEmpty: ${isEmpty}`);
-          
           // Вибираємо лише порожні клітинки (для обох режимів)
-          if (!isEmpty) return;
-          
-          next[cellKey] = value;
-          console.log(`  Set ${cellKey} = ${value}`);
+          if (!isEmptyCellValue(v)) return;
+          next[`${rowKey}:${col}`] = value;
         });
       });
       return next;
@@ -1426,13 +1136,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
 
   // Генерація для вибраних клітинок на поточній сторінці
   const handleGenerateSelected = async () => {
-    console.log('🚀 [handleGenerateSelected] BUTTON CLICKED!');
-    console.log('Current state:', {
-      templatesState: !!templatesState,
-      selectedCells,
-      pagedDescriptions: pagedDescriptions.length
-    });
-    
     if (!templatesState) {
       console.warn('[GenerateSelected] Шаблони ще не готові');
       return;
@@ -1444,22 +1147,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       type Job = { globalIdx: number; row: ContentDescription; rowKey: string; col: SiteColumnName };
       const jobs: Job[] = [];
       // Виконуємо тільки для поточної сторінки
-      console.log('[GenerateSelected] Processing rows:', {
-        pagedDescriptions: pagedDescriptions.length,
-        selectedCells: Object.keys(selectedCells).filter(k => selectedCells[k]),
-        allSelectedCells: selectedCells
-      });
-      
       pagedDescriptions.forEach((desc, idx) => {
         const rowKey = getRowKey(desc, idx);
-        console.log(`[GenerateSelected] Processing row ${idx}:`, {
-          rowKey,
-          product_id: (desc as any).product_id,
-          site_lang_code: desc.site_lang_code,
-          site_product: desc.site_product,
-          product_name: desc.product_name
-        });
-        
         // Переважно використовуємо стабільне співпадіння за посиланням
         let globalIdx = descriptions.indexOf(desc as any);
         if (globalIdx === -1) {
@@ -1475,20 +1164,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
             return itLang === targetLang && itName === targetName;
           });
         }
-        
         // Генеруємо лише для реально вибраних клітинок
         cols.forEach((col) => {
-          const cellKey = `${rowKey}:${col}`;
-          const isSelected = selectedCells[cellKey];
-          
-          if (isSelected) {
+          if (selectedCells[`${rowKey}:${col}`]) {
             jobs.push({ globalIdx, row: desc, rowKey, col });
-            console.log(`✅ [GenerateSelected] Added job for ${cellKey} (row ${idx})`);
           }
         });
       });
-      console.log('[GenerateSelected] Created jobs:', jobs.length, jobs.map(j => ({ rowKey: j.rowKey, col: j.col })));
-      
       if (jobs.length === 0) {
         setSelectedProgress('Нічого не вибрано');
         return;
@@ -1526,27 +1208,12 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       }
       // Генерування для product виконуємо останнім, щоб не змінювати ідентифікатор рядка до заповнення інших колонок
       jobs.sort((a, b) => (a.col === 'product' ? 1 : 0) - (b.col === 'product' ? 1 : 0));
-      console.log('[GenerateSelected] Starting generation for jobs:', jobs.map(j => ({ rowKey: j.rowKey, col: j.col })));
       let done = 0;
       for (const job of jobs) {
-        console.log(`🔄 [GenerateSelected] Processing job ${done + 1}/${jobs.length}:`, { 
-          rowKey: job.rowKey, 
-          col: job.col,
-          globalIdx: job.globalIdx 
-        });
         try {
           const desc = job.row;
           const site_product = desc.site_product || desc.product_name || '';
-          const site_full_description = desc.site_full_description || desc.description || desc.site_product || desc.product_name || 'Товар';
-          
-          console.log(`📝 [GenerateSelected] Job data:`, {
-            site_product,
-            site_full_description: site_full_description.substring(0, 50) + '...',
-            col: job.col,
-            product_id: (desc as any).product_id,
-            site_lang_code: (desc as any).site_lang_code
-          });
-          
+          const site_full_description = desc.site_full_description || desc.description || '';
           // Дозволяємо генерувати 'product' навіть якщо назва порожня; інші колонки вимагають назву
           if (job.col !== 'product' && !site_product) {
             console.warn('[GenerateSelected] Skip: empty site_product for col', job.col, 'row:', {
@@ -1557,14 +1224,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
             });
             done++; setSelectedProgress(`${done}/${jobs.length}`); continue;
           }
-          // Перевіряємо, що site_full_description не порожній
-          if (!site_full_description.trim()) {
-            console.warn('[GenerateSelected] Skip: empty site_full_description for col', job.col, 'row:', {
-              product_id: (desc as any).product_id,
-              site_lang_code: (desc as any).site_lang_code,
-            });
-            done++; setSelectedProgress(`${done}/${jobs.length}`); continue;
-          }
           const prompt = localPromptsByCol
             ? resolvePromptForColumnFrom(localPromptsByCol, job.col)
             : resolvePromptForColumn(job.col);
@@ -1572,18 +1231,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
             console.warn('[GenerateSelected] Skip: no prompt resolved for col', job.col, 'lang:', selectedLang);
             done++; setSelectedProgress(`${done}/${jobs.length}`); continue;
           }
-          const model_name = selectedChatModel?.trim() || 'GPT-4o-mini';
-          const payload = { site_product, site_full_description, prompt, model_name } as const;
-          
-          console.log(`🚀 [GenerateSelected] About to call API for job ${done + 1}/${jobs.length}`);
-          console.log(`📡 [GenerateSelected] API payload:`, payload);
-          
+          const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
+          console.debug('[GenerateSelected] POST /content/generate_ai_description', { col: job.col, payload });
           const genKey = `${job.rowKey}:${job.col}`;
           setCellGenerating(prev => ({ ...prev, [genKey]: true }));
-          
-          console.log(`⏳ [GenerateSelected] Calling generateAiDescription...`);
           const res = await generateAiDescription(payload);
-          console.log(`✅ [GenerateSelected] API response received:`, res?.substring(0, 100) + '...');
           const generated = extractGeneratedText(res);
           if (generated && typeof generated === 'string') {
             const field = mapSiteColumnToContentField[job.col];
@@ -1607,16 +1259,14 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
             markRowGenerated(job.row);
           }
         } catch (e) {
-          console.error(`❌ [GenerateSelected] Error in job ${done + 1}/${jobs.length}:`, e);
+          console.error('[GenerateSelected] Помилка', e);
         } finally {
           const genKey = `${job.rowKey}:${job.col}`;
           setCellGenerating(prev => { const next = { ...prev }; delete next[genKey]; return next; });
           done++;
           setSelectedProgress(`${done}/${jobs.length}`);
-          console.log(`✅ [GenerateSelected] Completed job ${done}/${jobs.length} (${job.rowKey}:${job.col})`);
         }
       }
-      console.log(`🏁 [GenerateSelected] All jobs completed! Total: ${done}/${jobs.length}`);
     } finally {
       setSelectedGenerating(false);
       // Після генерації очищаємо вибір, щоб прибрати галочки у № та хедерах колонок
@@ -1687,16 +1337,14 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       for (const job of jobs) {
         const desc = job.row;
         const site_product = desc.site_product || desc.product_name || '';
-        const site_full_description = desc.site_full_description || desc.description || desc.site_product || desc.product_name || 'Товар';
+        const site_full_description = desc.site_full_description || desc.description || '';
         if (!site_product) { done++; setMassProgress(`${done}/${jobs.length}`); continue; }
-        if (!site_full_description.trim()) { done++; setMassProgress(`${done}/${jobs.length}`); continue; }
         const prompt = localPromptsByCol2
           ? resolvePromptForColumnFrom(localPromptsByCol2, job.col)
           : resolvePromptForColumn(job.col);
         if (!prompt) { done++; setMassProgress(`${done}/${jobs.length}`); continue; }
         try {
-          const model_name = selectedChatModel?.trim() || 'GPT-4o-mini';
-          const payload = { site_product, site_full_description, prompt, model_name } as const;
+          const payload = { site_product, site_full_description, prompt, model_name: selectedChatModel || 'GPT-4o-mini' } as const;
           const genKey = `${job.rowKey}:${job.col}`;
           setCellGenerating(prev => ({ ...prev, [genKey]: true }));
           const res = await generateAiDescription(payload);
@@ -1741,46 +1389,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       setMassGenerating(false);
     }
   };
-  const handleGenerateSelectedCategories = async () => {
-    console.log('🚀 [handleGenerateSelectedCategories] BUTTON CLICKED!');
-    console.log('Current category state:', {
-      templatesState: !!templatesState,
-      categorySelectedCells,
-      categorySelectedCellsKeys: Object.keys(categorySelectedCells),
-      categorySelectedCellsTrue: Object.keys(categorySelectedCells).filter(k => categorySelectedCells[k]),
-      categoryDescriptions: (categoryDescriptions || []).length
-    });
-    
-    if (!templatesState) {
-      console.warn('[GenerateSelectedCategories] Шаблони ще не готові');
-      return;
-    }
-    
-    await categoryGeneration.handleGenerateSelectedCategories(
-      categorySelectedCells,
-      onCategoryCellCheckedChange,
-      () => {
-        setCategorySelectedCells({});
-        setCategoryRowCheckedRows({});
-        setCategoryColumnHeaderChecked({});
-      }
-    );
-  };
-  
-  // Масова генерація категорій
-  const handleMassGenerateCategories = async () => {
-    if (!templatesState) {
-      console.warn('[MassGenerateCategories] Шаблони ще не готові');
-      return;
-    }
-    
-    await categoryGeneration.handleMassGenerateCategories(
-      (key: string, selected: boolean) => {
-        setCategorySelectedCells(prev => ({ ...prev, [key]: selected }));
-      }
-    );
-  };
-  
+
   // Збереження лише змінених рядків у бекенд
   const handleSaveChanges = async () => {
     try {
@@ -1931,83 +1540,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }
   };
 
-  // Збереження змінених категорій у бекенд
-  const handleSaveCategoryChanges = async () => {
-    try {
-      setSaving(true);
-      
-      console.log('[SaveCategoryChanges] Starting save...');
-      console.log('[SaveCategoryChanges] Current categories:', categoryDescriptions.length);
-      console.log('[SaveCategoryChanges] Initial categories:', initialCategoryDescriptions.length);
-      
-      const payload: UpdateSiteCategoryDescriptionRequest[] = [];
-      
-      // Перевіряємо всі категорії на зміни
-      categoryDescriptions.forEach((cat) => {
-        const stableKey = getCategoryStableKey(cat);
-        const initial = initialCategoryDescriptions.find(
-          c => c.category_id === cat.category_id && c.lang_code === cat.lang_code
-        );
-        
-        if (!initial) {
-          console.log('[SaveCategoryChanges] No initial found for:', stableKey);
-          return;
-        }
-        
-        // Перевіряємо, чи є зміни в будь-якому полі
-        const hasChanges = 
-          cat.category !== initial.category ||
-          cat.description !== initial.description ||
-          cat.meta_keywords !== initial.meta_keywords ||
-          cat.page_title !== initial.page_title;
-        
-        if (hasChanges) {
-          console.log('[SaveCategoryChanges] Changes detected for:', stableKey, {
-            category: cat.category !== initial.category,
-            description: cat.description !== initial.description,
-            meta_keywords: cat.meta_keywords !== initial.meta_keywords,
-            page_title: cat.page_title !== initial.page_title
-          });
-          
-          payload.push({
-            category_id: cat.category_id,
-            lang_code: cat.lang_code,
-            category: cat.category,
-            description: cat.description,
-            meta_keywords: cat.meta_keywords,
-            page_title: cat.page_title
-          });
-        }
-      });
-      
-      if (payload.length === 0) {
-        console.log('[SaveCategoryChanges] No changes detected');
-        toast({ title: 'Немає змін для збереження' });
-        return;
-      }
-      
-      console.log('[SaveCategoryChanges] Saving categories:', payload);
-      console.log('[SaveCategoryChanges] Payload JSON:', JSON.stringify(payload, null, 2));
-      
-      const response = await updateSiteCategoriesDescriptions(payload);
-      console.log('[SaveCategoryChanges] Response:', response);
-      
-      toast({ title: `Успішно збережено ${payload.length} категорій` });
-      
-      // Очищаємо локальні чернетки
-      clearAllCategoryUnsaved();
-      
-      // Перезавантажуємо категорії з сервера
-      await fetchCategoryData();
-      
-    } catch (e) {
-      console.error('[SaveCategoryChanges] Failed', e);
-      toast({ title: 'Помилка збереження', variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -2094,11 +1626,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         page: response.page,
         limit: response.limit,
       });
-      
-      // Застосовуємо незбережені дані з localStorage
-      const itemsWithUnsaved = applyCategoryUnsavedToItems(response.items || []);
-      
-      setCategoryDescriptions(itemsWithUnsaved);
+      setCategoryDescriptions(response.items || []);
       setInitialCategoryDescriptions((response.items || []).map(it => ({ ...it })));
     } catch (err) {
       setError('Помилка при завантаженні категорій. Спробуйте пізніше.');
@@ -2131,13 +1659,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
 
   // Очищення вибору клітинок при зміні джерела даних (page/filters/search/limit/productType/lang)
   useEffect(() => {
-    console.log('[Generation] Data source changed, clearing selections');
     setSelectedCells({});
     setRowCheckedRows({});
     setColumnHeaderChecked({});
   }, [page, limit, searchQuery, customFilters, selectedLang]);
-
-  // Логування стану даних - перенесено після оголошення pagedDescriptions
 
   // Прибрано вимірювання ширини таблиці — покладаємось на overflow-x-auto
 
@@ -2256,17 +1781,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const totalFiltered = filteredDescriptions.length;
   const pagedDescriptions = sortedDescriptions.slice((page - 1) * limit, page * limit);
   const totalPages = Math.ceil(totalFiltered / limit);
-  
-  // Логування стану даних
-  console.log('🔍 [Generation] Current state:', {
-    pagedDescriptions: pagedDescriptions.length,
-    totalDescriptions: descriptions.length,
-    selectedCells: Object.keys(selectedCells).length,
-    filteredDescriptions: filteredDescriptions.length,
-    page,
-    limit
-  });
-  
   // Масове розгортання/згортання рядків (лише у режимі перекладу). Визначено тут, після pagedDescriptions.
   const getExpandAllCheckedState = useCallback((): boolean | 'indeterminate' => {
     if (!isTranslateMode) return false;
@@ -2582,11 +2096,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
               
               {/* Перемикач товари/категорії */}
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'products' | 'categories')} className="w-auto">
-                <TabsList className="bg-white/80 dark:bg-neutral-800/80 border border-emerald-500/20">
-                  <TabsTrigger value="products" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                <TabsList className="bg-white/80 dark:bg-neutral-800/80 border border-primary/20">
+                  <TabsTrigger value="products" className="data-[state=active]:bg-primary data-[state=active]:text-white">
                     Товари
                   </TabsTrigger>
-                  <TabsTrigger value="categories" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                  <TabsTrigger value="categories" className="data-[state=active]:bg-primary data-[state=active]:text-white">
                     Категорії
                   </TabsTrigger>
                 </TabsList>
@@ -2779,9 +2293,9 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 </Popover>
                 <Button
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={activeTab === 'categories' ? handleSaveCategoryChanges : handleSaveChanges}
+                  onClick={handleSaveChanges}
                   disabled={saving}
-                  title={activeTab === 'categories' ? 'Зберегти змінені категорії' : 'Надіслати лише змінені рядки до бекенду'}
+                  title="Надіслати лише змінені рядки до бекенду"
                 >
                   {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <Save className="mr-2 h-4 w-4" />
@@ -2790,8 +2304,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 {!isTranslateMode && (
                   <Button
                     className="bg-purple-600 hover:bg-purple-700 text-white"
-                    onClick={activeTab === 'categories' ? handleMassGenerateCategories : handleMassGenerate}
-                    disabled={activeTab === 'categories' ? (categoryGeneration.categoryMassGenerating || !templatesState) : (massGenerating || !templatesState)}
+                    onClick={handleMassGenerate}
+                    disabled={massGenerating || !templatesState}
                   >
                     {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
@@ -2863,30 +2377,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 {/* Кнопку аналізу видалено на прохання користувача */}
                 {/* Згенерувати/Перекласти вибрані – завжди остання кнопка у ряду */}
                 <Button
-                  onClick={
-    isTranslateMode 
-      ? handleTranslateSelected 
-      : (activeTab === 'categories' ? handleGenerateSelectedCategories : handleGenerateSelected)
-  }
-                  disabled={
-    isTranslateMode 
-      ? translating 
-      : (activeTab === 'categories' 
-          ? (categoryGeneration.categorySelectedGenerating || !templatesState)
-          : (selectedGenerating || !templatesState))
-  }
-                  title={
-    isTranslateMode 
-      ? 'Перекласти вибрані клітинки поточної сторінки' 
-      : (activeTab === 'categories' 
-          ? 'Згенерувати AI-контент для вибраних категорій'
-          : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки')
-  }
+                  onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
+                  disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
+                  title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
                   className={!isTranslateMode ? 'bg-red-600 hover:bg-red-700 text-white font-semibold px-4' : ''}
                   variant={isTranslateMode ? 'outline' : undefined}
                >
-                  {(!isTranslateMode && (activeTab === 'categories' ? categoryGeneration.categorySelectedGenerating : selectedGenerating)) && 
-    <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isTranslateMode
                     ? `${t('buttons.translate_selected')}${translateProgress ? ` (${translateProgress})` : ''}`
@@ -2960,88 +2457,29 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   <Table className="table-fixed min-w-full">
     <TableHeader className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 first:[&>tr>th]:rounded-tl-xl last:[&>tr>th]:rounded-tr-xl [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1">
       <TableRow>
-        <TableHead noClamp className="h-10 sm:h-12 w-32 text-center text-gray-700 dark:text-gray-300 font-medium">
-          <div className="relative h-full flex items-center justify-center px-2">
-            <span className="leading-none">№</span>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
-              <Checkbox
-                aria-label="Вибрати всі рядки категорій"
-                checked={false}
-                onCheckedChange={() => {}}
-                size="md"
-                className="align-middle dark:bg-neutral-800/70 hover:shadow-md"
-                disabled={massGenerating || translating}
-              />
-            </div>
-          </div>
-        </TableHead>
-        <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
-          <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-            <span className="truncate" title="Категорія">Категорія</span>
-            <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-              <Checkbox
-                aria-label="Вибрати колонку Категорія"
-                checked={getCategoryColumnCheckedState('category')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('category', checked)}
-                size="sm"
-                className="dark:bg-neutral-800/70"
-                disabled={massGenerating || translating}
-              />
-            </div>
-          </div>
-        </TableHead>
-        <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
-          <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-            <span className="truncate" title="Опис">Опис</span>
-            <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-              <Checkbox
-                aria-label="Вибрати колонку Опис"
-                checked={getCategoryColumnCheckedState('description')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('description', checked)}
-                size="sm"
-                className="dark:bg-neutral-800/70"
-                disabled={massGenerating || translating}
-              />
-            </div>
-          </div>
-        </TableHead>
-        <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
-          <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-            <span className="truncate" title="Meta keywords">Meta keywords</span>
-            <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-              <Checkbox
-                aria-label="Вибрати колонку Meta keywords"
-                checked={getCategoryColumnCheckedState('meta_keywords')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('meta_keywords', checked)}
-                size="sm"
-                className="dark:bg-neutral-800/70"
-                disabled={massGenerating || translating}
-              />
-            </div>
-          </div>
-        </TableHead>
-        <TableHead noClamp className="h-10 sm:h-12 text-center text-gray-700 dark:text-gray-300 font-medium">
-          <div className="flex flex-col gap-0.5 items-center justify-center h-full">
-            <span className="truncate" title="Заголовок сторінки">Заголовок</span>
-            <div className="flex items-center gap-1 mt-0.5" title="Вибрати/зняти вибір усіх клітинок у колонці">
-              <Checkbox
-                aria-label="Вибрати колонку Заголовок"
-                checked={getCategoryColumnCheckedState('page_title')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('page_title', checked)}
-                size="sm"
-                className="dark:bg-neutral-800/70"
-                disabled={massGenerating || translating}
-              />
-            </div>
-          </div>
-        </TableHead>
-        <TableHead noClamp className="h-10 sm:h-12 w-24 text-center text-gray-700 dark:text-gray-300 font-medium">Мова</TableHead>
+        <TableHead noClamp className="h-10 sm:h-12 w-24 text-center">№</TableHead>
+        <TableHead noClamp className="h-10 sm:h-12">Категорія</TableHead>
+        <TableHead noClamp className="h-10 sm:h-12">Опис</TableHead>
+        <TableHead noClamp className="h-10 sm:h-12">Meta keywords</TableHead>
+        <TableHead noClamp className="h-10 sm:h-12">Заголовок сторінки</TableHead>
+        <TableHead noClamp className="h-10 sm:h-12 w-24 text-center">Мова</TableHead>
       </TableRow>
     </TableHeader>
     <TableBody>
       {(() => {
-        const total = filteredCategories.length;
-        const paged = pagedCategories;
+        const searchLower = (searchQuery || '').toLowerCase();
+        const filtered = (categoryDescriptions || []).filter((c) => {
+          const lang = (c.lang_code || '').toLowerCase();
+          const langMatch = selectedLang === 'ua' ? (lang === 'ua' || lang === 'uk') : lang === selectedLang;
+          const inSearch = !searchLower ||
+            (c.category || '').toLowerCase().includes(searchLower) ||
+            (c.description || '').toLowerCase().includes(searchLower) ||
+            (c.meta_keywords || '').toLowerCase().includes(searchLower) ||
+            (c.page_title || '').toLowerCase().includes(searchLower);
+          return langMatch && inSearch;
+        });
+        const total = filtered.length;
+        const paged = filtered.slice((page - 1) * limit, page * limit);
 
         if (total === 0) {
           return (
@@ -3053,212 +2491,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           );
         }
 
-        console.log('📊 [Categories] Rendering categories table:', {
-          total: total,
-          paged: paged.length,
-          categoryDescriptions: (categoryDescriptions || []).length,
-          page,
-          limit
-        });
-
-        return paged.map((c, idx) => {
-          const rowKey = getCategoryRowKey(c, idx);
-          console.log(`🔑 [Categories] Row ${idx}: rowKey = ${rowKey}, category = ${c.category}`);
-          return (
-            <TableRow key={rowKey} className="odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800">
-              <TableCell className="py-0   text-center w-32">
-                <div className="relative flex items-center justify-center text-gray-700 dark:text-gray-300 px-2 h-full">
-                  <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center tabular-nums text-gray-500">
-                    {(page - 1) * limit + idx + 1}
-                  </span>
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                    <Checkbox
-                      aria-label="Вибрати весь рядок категорії"
-                      checked={getCategoryRowCheckedState(rowKey)}
-                      onCheckedChange={(checked) => onCategoryRowCheckedChange(rowKey, checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      size="md"
-                      className="dark:bg-neutral-800/70"
-                    />
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="py-0   px-1">
-                <div className="flex items-center gap-0.5">
-                  <Checkbox
-                    aria-label="Вибрати клітинку категорії"
-                    checked={isCategoryCellChecked(rowKey, 'category')}
-                    onCheckedChange={(checked) => {
-                      console.log(`🖱️ [Category Checkbox] Click on ${rowKey}:category, checked=${checked}`);
-                      onCategoryCellCheckedChange(rowKey, 'category', checked);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    size="xs"
-                    className="dark:bg-neutral-800/70"
-                  />
-                  <span className="truncate" title={c.category}>{c.category}</span>
-                </div>
-              </TableCell>
-              <TableCell className="py-0 px-0" style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}>
-                <div className="relative">
-                  {!isTranslateMode && (
-                    <Checkbox
-                      aria-label="Вибрати клітинку опису"
-                      checked={isCategoryCellChecked(rowKey, 'description')}
-                      onCheckedChange={(checked) => onCategoryCellCheckedChange(rowKey, 'description', checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      size="xs"
-                      className="absolute left-0 top-0 z-10 dark:bg-neutral-800/70"
-                    />
-                  )}
-                  <Popover 
-                    open={editingCategoryCell === `${rowKey}:description`}
-                    onOpenChange={(open) => {
-                      if (!open) setEditingCategoryCell(null);
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <div
-                        onClick={() => setEditingCategoryCell(`${rowKey}:description`)}
-                        className={`cursor-pointer text-xs leading-tight py-0.5 px-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[24px] ${!isTranslateMode ? 'pl-6' : ''}`}
-                      >
-                        <span className={`line-clamp-1 truncate ${isCategoryCellDirty(c, 'description') ? 'text-orange-600 dark:text-orange-400' : ''}`}>{c.description || 'Клікніть для редагування...'}</span>
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-96 p-3" align="start">
-                      <Textarea
-                        value={c.description || ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value;
-                          setCategoryDescriptions(prev => prev.map(cat => 
-                            cat.category_id === c.category_id && cat.lang_code === c.lang_code 
-                              ? { ...cat, description: newValue }
-                              : cat
-                          ));
-                          saveCategoryUnsavedField(c, 'description', newValue);
-                        }}
-                        className="w-full min-h-[120px] text-sm"
-                        placeholder="Опис категорії..."
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {categoryGeneration.categoryCellGenerating[`${rowKey}:description`] && (
-                    <div className="absolute inset-0 bg-blue-50/80 dark:bg-blue-900/20 flex items-center justify-center rounded">
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                      <span className="ml-2 text-xs text-blue-600">генерую…</span>
-                    </div>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="py-0 px-0" style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}>
-                <div className="relative">
-                  {!isTranslateMode && (
-                    <Checkbox
-                      aria-label="Вибрати клітинку meta keywords"
-                      checked={isCategoryCellChecked(rowKey, 'meta_keywords')}
-                      onCheckedChange={(checked) => onCategoryCellCheckedChange(rowKey, 'meta_keywords', checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      size="xs"
-                      className="absolute left-0 top-0 z-10 dark:bg-neutral-800/70"
-                    />
-                  )}
-                  <Popover 
-                    open={editingCategoryCell === `${rowKey}:meta_keywords`}
-                    onOpenChange={(open) => {
-                      if (!open) setEditingCategoryCell(null);
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <div
-                        onClick={() => setEditingCategoryCell(`${rowKey}:meta_keywords`)}
-                        className={`cursor-pointer text-xs leading-tight py-0.5 px-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[24px] ${!isTranslateMode ? 'pl-6' : ''}`}
-                      >
-                        <span className={`line-clamp-1 truncate ${isCategoryCellDirty(c, 'meta_keywords') ? 'text-orange-600 dark:text-orange-400' : ''}`}>{c.meta_keywords || 'Клікніть для редагування...'}</span>
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-96 p-3" align="start">
-                      <Textarea
-                        value={c.meta_keywords || ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value;
-                          setCategoryDescriptions(prev => prev.map(cat => 
-                            cat.category_id === c.category_id && cat.lang_code === c.lang_code 
-                              ? { ...cat, meta_keywords: newValue }
-                              : cat
-                          ));
-                          saveCategoryUnsavedField(c, 'meta_keywords', newValue);
-                        }}
-                        className="w-full min-h-[120px] text-sm"
-                        placeholder="Ключові слова..."
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {categoryGeneration.categoryCellGenerating[`${rowKey}:meta_keywords`] && (
-                    <div className="absolute inset-0 bg-blue-50/80 dark:bg-blue-900/20 flex items-center justify-center rounded">
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                      <span className="ml-2 text-xs text-blue-600">генерую…</span>
-                    </div>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="py-0 px-0" style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }}>
-                <div className="relative">
-                  {!isTranslateMode && (
-                    <Checkbox
-                      aria-label="Вибрати клітинку заголовка"
-                      checked={isCategoryCellChecked(rowKey, 'page_title')}
-                      onCheckedChange={(checked) => onCategoryCellCheckedChange(rowKey, 'page_title', checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      size="xs"
-                      className="absolute left-0 top-0 z-10 dark:bg-neutral-800/70"
-                    />
-                  )}
-                  <Popover 
-                    open={editingCategoryCell === `${rowKey}:page_title`}
-                    onOpenChange={(open) => {
-                      if (!open) setEditingCategoryCell(null);
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <div
-                        onClick={() => setEditingCategoryCell(`${rowKey}:page_title`)}
-                        className={`cursor-pointer text-xs leading-tight py-0.5 px-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[24px] ${!isTranslateMode ? 'pl-6' : ''}`}
-                      >
-                        <span className={`line-clamp-1 truncate ${isCategoryCellDirty(c, 'page_title') ? 'text-orange-600 dark:text-orange-400' : ''}`}>{c.page_title || 'Клікніть для редагування...'}</span>
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-96 p-3" align="start">
-                      <Textarea
-                        value={c.page_title || ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value;
-                          setCategoryDescriptions(prev => prev.map(cat => 
-                            cat.category_id === c.category_id && cat.lang_code === c.lang_code 
-                              ? { ...cat, page_title: newValue }
-                              : cat
-                          ));
-                          saveCategoryUnsavedField(c, 'page_title', newValue);
-                        }}
-                        className="w-full min-h-[120px] text-sm"
-                        placeholder="Заголовок сторінки..."
-                        autoFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {categoryGeneration.categoryCellGenerating[`${rowKey}:page_title`] && (
-                    <div className="absolute inset-0 bg-blue-50/80 dark:bg-blue-900/20 flex items-center justify-center rounded">
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                      <span className="ml-2 text-xs text-blue-600">генерую…</span>
-                    </div>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="text-center uppercase">{(c.lang_code || '').toUpperCase()}</TableCell>
-            </TableRow>
-          );
-        });
+        return paged.map((c, idx) => (
+          <TableRow key={`${c.category_id}-${c.lang_code}-${idx}`} className="odd:bg-[#F5FAFD] even:bg-white odd:dark:bg-gray-900 even:dark:bg-gray-800">
+            <TableCell className="text-center">{(page - 1) * limit + idx + 1}</TableCell>
+            <TableCell className="truncate" title={c.category}>{c.category}</TableCell>
+            <TableCell className="truncate" title={c.description}>{c.description}</TableCell>
+            <TableCell className="truncate" title={c.meta_keywords}>{c.meta_keywords}</TableCell>
+            <TableCell className="truncate" title={c.page_title}>{c.page_title}</TableCell>
+            <TableCell className="text-center uppercase">{(c.lang_code || '').toUpperCase()}</TableCell>
+          </TableRow>
+        ));
       })()}
     </TableBody>
   </Table>
@@ -3567,14 +2809,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(() => {
-                  console.log('📊 [TableBody] Rendering table body:', {
-                    filteredDescriptions: filteredDescriptions.length,
-                    pagedDescriptions: pagedDescriptions.length,
-                    descriptions: descriptions.length
-                  });
-                  return null;
-                })()}
                 {filteredDescriptions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={12} className="text-center py-8 text-gray-500">
@@ -3584,8 +2818,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 ) : (
                   pagedDescriptions.map((desc, index) => {
                     const rowKey = getRowKey(desc, index);
-                    console.log(`🔑 [Render] Row ${index}: rowKey = ${rowKey}, product = ${desc.site_product || desc.product_name || 'unnamed'}`);
-                    
                     // У режимі перекладу: якщо користувач вручну перемкнув (chevron),
                     // використовуємо це значення. Інакше — розкриваємо за станом чекбокса рядка.
                     const manualExpand = expandedRowKeys[rowKey];
@@ -3632,10 +2864,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'product')}
-                              onCheckedChange={(checked) => {
-                                console.log(`🖱️ [Checkbox] Click on ${rowKey}:product, checked=${checked}`);
-                                onCellCheckedChangeWithLog(rowKey, 'product', desc, checked);
-                              }}
+                              onCheckedChange={(checked) => onCellCheckedChangeWithLog(rowKey, 'product', desc, checked)}
                               onClick={(e) => e.stopPropagation()}
                               size="xs"
                               className="dark:bg-neutral-800/70"
@@ -4011,28 +3240,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
             <div className="flex flex-wrap items-center gap-2 justify-start px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <Button
                 variant="outline"
-                onClick={
-    isTranslateMode 
-      ? handleTranslateSelected 
-      : (activeTab === 'categories' ? handleGenerateSelectedCategories : handleGenerateSelected)
-  }
-                disabled={
-    isTranslateMode 
-      ? translating 
-      : (activeTab === 'categories' 
-          ? (categoryGeneration.categorySelectedGenerating || !templatesState)
-          : (selectedGenerating || !templatesState))
-  }
-                title={
-    isTranslateMode 
-      ? 'Перекласти вибрані клітинки поточної сторінки' 
-      : (activeTab === 'categories' 
-          ? 'Згенерувати AI-контент для вибраних категорій'
-          : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки')
-  }
+                onClick={isTranslateMode ? handleTranslateSelected : handleGenerateSelected}
+                disabled={isTranslateMode ? translating : (selectedGenerating || !templatesState)}
+                title={isTranslateMode ? 'Перекласти вибрані клітинки поточної сторінки' : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки'}
               >
-                {(!isTranslateMode && (activeTab === 'categories' ? categoryGeneration.categorySelectedGenerating : selectedGenerating)) && 
-    <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {(!isTranslateMode && selectedGenerating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {(isTranslateMode && translating) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isTranslateMode
                   ? `${t('buttons.translate_selected')}${translateProgress ? ` (${translateProgress})` : ''}`
@@ -4051,8 +3263,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
               {!isTranslateMode && (
                 <Button
                   className="bg-purple-600 hover:bg-purple-700 text-white"
-                  onClick={activeTab === 'categories' ? handleMassGenerateCategories : handleMassGenerate}
-                  disabled={activeTab === 'categories' ? (categoryGeneration.categoryMassGenerating || !templatesState) : (massGenerating || !templatesState)}
+                  onClick={handleMassGenerate}
+                  disabled={massGenerating || !templatesState}
                 >
                   {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
