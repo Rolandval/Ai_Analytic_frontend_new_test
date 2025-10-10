@@ -1,8 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, Wand2, Layers, Settings, Languages, BarChart2, List, LogOut, Droplets } from 'lucide-react';
-import { FillerThemeSwitcher } from './FillerThemeSwitcher';
-import { ServiceDropdown } from '@/components/layout/ServiceDropdown';
+ import { ServiceDropdown } from '@/components/layout/ServiceDropdown';
 import { PFI18nProvider, usePFI18n } from '../i18n';
 import { useAuthStore } from '@/store/authStore';
 import { TokenStatusPanel } from '@/components/layout/TokenStatusPanel';
@@ -123,12 +122,7 @@ function InnerLayout({ children }: Props) {
         </div>
       </div>
       {/* Floating theme switcher (bottom-left) */}
-      <div className="fixed left-1 bottom-1 z-[9999]">
-        <FillerThemeSwitcher
-          mode="toggle"
-          className="h-8 w-8 rounded-full border bg-white/90 dark:bg-neutral-900/80 shadow-md ring-1 ring-black/5 dark:ring-white/10 text-neutral-700 dark:text-neutral-200 cursor-pointer"
-        />
-      </div>
+
       
       {/* Панель статусів токенів та системи - доступна на всіх сторінках AI Product Filler */}
       <TokenStatusPanel />

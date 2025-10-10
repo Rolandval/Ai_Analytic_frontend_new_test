@@ -1,9 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useThemeStore } from '@/store/themeStore';
 
-// Minimal i18n for AI Product Filler only
-// Usage: wrap UI with <PFI18nProvider> and call const { t } = usePFI18n(); t('analysis.title')
-
 type Dict = Record<string, string>;
 
 type Lang = 'ua' | 'ru' | 'en';

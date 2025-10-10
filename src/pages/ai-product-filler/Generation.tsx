@@ -30,6 +30,7 @@ import { usePFI18n } from './i18n';
 import { useSiteCategories } from '@/hooks/useSiteCategories';
 import { useCategoryGeneration } from './useCategoryGeneration';
 import { CATEGORY_COLUMNS, type CategoryColumnName } from './categoryGeneration';
+import { dataCache } from '@/utils/dataCache';
 
 interface ContentDescription {
   id?: number;
@@ -79,8 +80,9 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const STORAGE_KEY_COLUMN_WIDTHS = 'aiProductFiller.columnWidths.v1';
   const STORAGE_KEY_UNSAVED = 'aiProductFiller.unsavedDiffs.v1';
   const STORAGE_KEY_CATEGORY_UNSAVED = 'aiProductFiller.categoryUnsavedDiffs.v1';
-  // Перемикач між товарами та категоріями
+
   const [activeTab, setActiveTab] = useState<'products' | 'categories'>('products');
+  const [isDataFromCache, setIsDataFromCache] = useState(false);
   
   const [descriptions, setDescriptions] = useState<ContentDescription[]>([]);
   const [initialDescriptions, setInitialDescriptions] = useState<ContentDescription[]>([]);
@@ -235,8 +237,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     e.stopPropagation();
   };
 
-  // ===== ЗБЕРЕЖЕННЯ ЧЕРНЕТКИ В localStorage ДО ЗБЕРЕЖЕННЯ =====
-  type UnsavedMap = Record<string, Partial<Pick<ContentDescription,
+    type UnsavedMap = Record<string, Partial<Pick<ContentDescription,
     'site_lang_code' | 'site_product' | 'site_shortname' | 'site_short_description' | 'site_full_description' | 'site_meta_keywords' | 'site_meta_description' | 'site_searchwords' | 'site_page_title' | 'site_promo_text'>>>;
 
   const readUnsaved = (): UnsavedMap => {
@@ -2008,10 +2009,34 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (showLoader: boolean = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
     setError(null);
+    
     try {
+      // Спробуємо отримати дані з кешу (тільки якщо показуємо лоадер - перший раз)
+      if (showLoader) {
+        console.log('[Generation] Checking cache for products...');
+        const cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
+        
+        if (cachedData && cachedData.length > 0) {
+          console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.length} cached products`);
+          const withUnsaved = applyUnsavedToItems(cachedData);
+          setDescriptions(withUnsaved);
+          setInitialDescriptions(cachedData.map(it => ({ ...it })));
+          setIsDataFromCache(true);
+          setLoading(false);
+          
+          // Запускаємо фонове оновлення
+          console.log('[Generation] Starting background refresh for products...');
+          setTimeout(() => fetchData(false), 100);
+          return;
+        }
+        console.log('[Generation] ❌ Cache miss. Fetching from API...');
+      }
+      
       const request = {
         category_ids: selectedCategory === 'all' ? [] : [selectedCategory],
         page: 1,
@@ -2029,6 +2054,28 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         sampleLangs: (response.items || []).slice(0, 5).map((x: any) => x?.site_lang_code)
       });
       const serverItems = response.items;
+      
+      // Фільтруємо товари по мові перед збереженням в кеш
+      const itemsForCurrentLang = serverItems.filter((item: any) => {
+        const lang = (item.site_lang_code || '').toLowerCase();
+        return selectedLang === 'ua' 
+          ? (lang === 'ua' || lang === 'uk')
+          : lang === selectedLang;
+      });
+      
+      console.log(`[Generation] Total items from API: ${serverItems?.length ?? 0}, items for lang '${selectedLang}': ${itemsForCurrentLang.length}`);
+      
+      // Зберігаємо у кеш (перші 50 товарів для поточної мови)
+      try {
+        await dataCache.cacheProducts(itemsForCurrentLang, selectedLang);
+        console.log(`[Generation] Successfully cached ${Math.min(50, itemsForCurrentLang.length)} products for lang '${selectedLang}'`);
+      } catch (cacheError) {
+        console.warn('[Generation] Failed to cache products:', cacheError);
+      }
+      
+      // Дані з API - прибираємо індикатор кешу
+      setIsDataFromCache(false);
+      
       // Якщо щойно виконали збереження — беремо чисті серверні дані без мерджу
       if (preferServerOnceRef.current) {
         preferServerOnceRef.current = false;
@@ -2083,10 +2130,34 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     } 
   };
   
-  const fetchCategoryData = async () => {
-    setLoading(true);
+  const fetchCategoryData = async (showLoader: boolean = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
     setError(null);
+    
     try {
+      // Спробуємо отримати дані з кешу (тільки якщо показуємо лоадер - перший раз)
+      if (showLoader) {
+        console.log('[Generation] Checking cache for categories...');
+        const cachedData = await dataCache.getCachedCategories<SiteCategoryDescription>(selectedLang);
+        
+        if (cachedData && cachedData.length > 0) {
+          console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.length} cached categories`);
+          const withUnsaved = applyCategoryUnsavedToItems(cachedData);
+          setCategoryDescriptions(withUnsaved);
+          setInitialCategoryDescriptions(cachedData.map(it => ({ ...it })));
+          setIsDataFromCache(true);
+          setLoading(false);
+          
+          // Запускаємо фонове оновлення
+          console.log('[Generation] Starting background refresh for categories...');
+          setTimeout(() => fetchCategoryData(false), 100);
+          return;
+        }
+        console.log('[Generation] ❌ Cache miss. Fetching from API...');
+      }
+      
       const response = await fetchSiteCategoriesDescriptions(1, 9999);
       console.log('[Generation] fetchSiteCategoriesDescriptions response:', {
         itemsCount: response.items?.length ?? 0,
@@ -2094,6 +2165,28 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         page: response.page,
         limit: response.limit,
       });
+      
+      // Фільтруємо категорії по мові перед збереженням в кеш
+      const allItems = response.items || [];
+      const itemsForCurrentLang = allItems.filter((item: any) => {
+        const lang = (item.lang_code || '').toLowerCase();
+        return selectedLang === 'ua' 
+          ? (lang === 'ua' || lang === 'uk')
+          : lang === selectedLang;
+      });
+      
+      console.log(`[Generation] Total categories from API: ${allItems.length}, items for lang '${selectedLang}': ${itemsForCurrentLang.length}`);
+      
+      // Зберігаємо у кеш (перші 50 категорій для поточної мови)
+      try {
+        await dataCache.cacheCategories(itemsForCurrentLang, selectedLang);
+        console.log(`[Generation] Successfully cached ${Math.min(50, itemsForCurrentLang.length)} categories for lang '${selectedLang}'`);
+      } catch (cacheError) {
+        console.warn('[Generation] Failed to cache categories:', cacheError);
+      }
+      
+      // Дані з API - прибираємо індикатор кешу
+      setIsDataFromCache(false);
       
       // Застосовуємо незбережені дані з localStorage
       const itemsWithUnsaved = applyCategoryUnsavedToItems(response.items || []);
@@ -2109,11 +2202,32 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   };
   useEffect(() => {
     if (activeTab === 'products') {
-      fetchData();
+      // Завантажуємо тільки якщо немає даних
+      if (descriptions.length === 0) {
+        console.log('[Generation] Loading products - no data yet');
+        fetchData();
+      } else {
+        console.log('[Generation] Products already loaded, skipping fetch');
+      }
     } else {
-      fetchCategoryData();
+      // Завантажуємо тільки якщо немає даних
+      if (categoryDescriptions.length === 0) {
+        console.log('[Generation] Loading categories - no data yet');
+        fetchCategoryData();
+      } else {
+        console.log('[Generation] Categories already loaded, skipping fetch');
+      }
     }
-  }, [activeTab, selectedCategory]);
+  }, [activeTab]);
+  
+  // Окремий useEffect для зміни категорії (тільки для товарів)
+  useEffect(() => {
+    if (activeTab === 'products' && descriptions.length > 0) {
+      console.log('[Generation] Category changed, reloading products');
+      fetchData();
+    }
+  }, [selectedCategory]);
+  
   const handleRefresh = () => {
     if (activeTab === 'products') fetchData();
     else fetchCategoryData();
@@ -2797,9 +2911,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                     {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
                   </Button>
                 )}
-                <Button variant="outline" onClick={handleRefresh} className="shrink-0">
-  {t('buttons.update')}
-</Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={handleRefresh} className="shrink-0">
+                    {t('buttons.update')}
+                  </Button>
+                  {isDataFromCache && (
+                    <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" title="Дані завантажено з кешу. Оновлення у фоновому режимі...">
+                      📦 Кеш
+                    </Badge>
+                  )}
+                </div>
                 {/* Блок вибору мов перенесено сюди – безпосередньо перед кнопкою перекладу */}
                 {isTranslateMode && (
                   translationEngine === 'free' ? (
@@ -4058,9 +4179,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                   {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
                 </Button>
               )}
-              <Button variant="outline" onClick={handleRefresh}>
-  {t('buttons.update')}
-</Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleRefresh}>
+                  {t('buttons.update')}
+                </Button>
+                {isDataFromCache && (
+                  <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" title="Дані завантажено з кешу. Оновлення у фоновому режимі...">
+                    📦 Кеш
+                  </Badge>
+                )}
+              </div>
             </div>
             {totalPages > 1 && (
               <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
