@@ -85,6 +85,10 @@ export default defineConfig({
         target: BACKEND_ORIGIN,
         changeOrigin: true,
       },
+      '/auth': {
+        target: BACKEND_ORIGIN,
+        changeOrigin: true,
+      },
       '/ads_manager': {
         target: BACKEND_ORIGIN,
         changeOrigin: true,
