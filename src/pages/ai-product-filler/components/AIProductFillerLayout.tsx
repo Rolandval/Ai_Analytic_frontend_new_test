@@ -5,6 +5,7 @@ import { Home, Wand2, Layers, Settings, Languages, BarChart2, List, LogOut, Drop
 import { PFI18nProvider, usePFI18n } from '../i18n';
 import { useAuthStore } from '@/store/authStore';
 import { TokenStatusPanel } from '@/components/layout/TokenStatusPanel';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 interface Props {
   children: React.ReactNode;
@@ -111,6 +112,10 @@ function InnerLayout({ children }: Props) {
               </ul>
             </nav>
              
+            {/* Theme toggle at bottom */}
+            <div className="pb-4 px-3 border-t border-neutral-200 dark:border-neutral-800 pt-2">
+              <ThemeToggle className="w-full justify-start" />
+            </div>
             </div>
 
           </aside>

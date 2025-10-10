@@ -89,6 +89,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const [categoryDescriptions, setCategoryDescriptions] = useState<SiteCategoryDescription[]>([]);
   const [initialCategoryDescriptions, setInitialCategoryDescriptions] = useState<SiteCategoryDescription[]>([]);
   const [loading, setLoading] = useState(false);
+  const [backgroundLoading, setBackgroundLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -2016,111 +2017,71 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     setError(null);
     
     try {
-      // Спробуємо отримати дані з кешу (тільки якщо показуємо лоадер - перший раз)
-      if (showLoader) {
-        console.log('[Generation] Checking cache for products...');
-        const cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
+      // Завжди перевіряємо кеш спочатку перед викликом API
+      console.log('[Generation] Checking cache for products...');
+      const cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
+      
+      if (cachedData && cachedData.data.length > 0) {
+        console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.data.length} cached products (isFull=${cachedData.isFull})`);
+        const withUnsaved = applyUnsavedToItems(cachedData.data);
+        setDescriptions(withUnsaved);
+        setInitialDescriptions(cachedData.data.map(item => ({ ...item })));
+        setIsDataFromCache(true);
+        setLoading(false);
         
-        if (cachedData && cachedData.length > 0) {
-          console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.length} cached products`);
-          const withUnsaved = applyUnsavedToItems(cachedData);
-          setDescriptions(withUnsaved);
-          setInitialDescriptions(cachedData.map(it => ({ ...it })));
-          setIsDataFromCache(true);
-          setLoading(false);
-          
-          // Запускаємо фонове оновлення
-          console.log('[Generation] Starting background refresh for products...');
-          setTimeout(() => fetchData(false), 100);
-          return;
+        if (!cachedData.isFull) {
+          console.log('[Generation] Cached products are partial, scheduling background refresh...');
+          scheduleProductsBackgroundFetch();
+        } else {
+          console.log('[Generation] Using cached data, skipping API call');
         }
-        console.log('[Generation] ❌ Cache miss. Fetching from API...');
+        return;
       }
       
-      const request = {
+      console.log('[Generation] ❌ Cache miss. Fetching from API...');
+      
+      // ЕТАП 1: Швидко завантажуємо перші 300 товарів
+      const quickRequest = {
         category_ids: selectedCategory === 'all' ? [] : [selectedCategory],
         page: 1,
-        // Забираємо більше елементів за раз, далі фільтруємо і пагінуємо на клієнті
-        limit: 9999,
+        limit: 300,
       };
-      console.log('[Generation] fetchContentDescriptions request (client-side lang filter):', request);
+      console.log('[Generation] STEP 1: Quick fetch - 300 products:', quickRequest);
       
-      const response = await fetchContentDescriptions<ContentDescription>(request);
-      console.log('[Generation] fetchContentDescriptions response:', {
-        itemsCount: response.items?.length ?? 0,
-        total: response.total,
-        page: response.page,
-        limit: response.limit,
-        sampleLangs: (response.items || []).slice(0, 5).map((x: any) => x?.site_lang_code)
+      const quickResponse = await fetchContentDescriptions<ContentDescription>(quickRequest);
+      console.log('[Generation] STEP 1 response:', {
+        itemsCount: quickResponse.items?.length ?? 0,
+        total: quickResponse.total,
       });
-      const serverItems = response.items;
       
-      // Фільтруємо товари по мові перед збереженням в кеш
-      const itemsForCurrentLang = serverItems.filter((item: any) => {
+      // Фільтруємо перші 300 товарів по мові
+      const quickItems = quickResponse.items || [];
+      const quickItemsForLang = quickItems.filter((item: any) => {
         const lang = (item.site_lang_code || '').toLowerCase();
         return selectedLang === 'ua' 
           ? (lang === 'ua' || lang === 'uk')
           : lang === selectedLang;
       });
       
-      console.log(`[Generation] Total items from API: ${serverItems?.length ?? 0}, items for lang '${selectedLang}': ${itemsForCurrentLang.length}`);
+      console.log(`[Generation] STEP 1: Filtered ${quickItemsForLang.length} items for lang '${selectedLang}'`);
       
-      // Зберігаємо у кеш (перші 50 товарів для поточної мови)
-      try {
-        await dataCache.cacheProducts(itemsForCurrentLang, selectedLang);
-        console.log(`[Generation] Successfully cached ${Math.min(50, itemsForCurrentLang.length)} products for lang '${selectedLang}'`);
-      } catch (cacheError) {
-        console.warn('[Generation] Failed to cache products:', cacheError);
-      }
-      
-      // Дані з API - прибираємо індикатор кешу
+      // Показуємо перші 300 товарів користувачу
+      const withUnsaved = applyUnsavedToItems(quickItemsForLang);
+      setDescriptions(withUnsaved);
+      setInitialDescriptions(quickItemsForLang.map(it => ({ ...it })));
       setIsDataFromCache(false);
+      setLoading(false);
       
-      // Якщо щойно виконали збереження — беремо чисті серверні дані без мерджу
-      if (preferServerOnceRef.current) {
-        preferServerOnceRef.current = false;
-        setDescriptions(applyUnsavedToItems(serverItems as any));
-      } else {
-        // Зливаймо серверні дані з локальними незбереженими змінами
-        setDescriptions(prev => {
-          try {
-            const prevByKey = new Map(prev.map(d => [getStableKey(d), d]));
-            const fields: Array<keyof ContentDescription> = [
-              'site_lang_code' as any,
-              'site_product' as any,
-              'site_shortname',
-              'site_short_description',
-              'site_full_description',
-              'site_meta_keywords',
-              'site_meta_description',
-              'site_searchwords',
-              'site_page_title',
-              'site_promo_text',
-            ];
-            const merged = serverItems.map((serverItem: any) => {
-              const key = getStableKey(serverItem);
-              const local = prevByKey.get(key) as any;
-              if (!local) return serverItem as ContentDescription;
-              const out: any = { ...serverItem };
-              for (const f of fields) {
-                const localVal = local?.[f] ?? null;
-                const serverVal = serverItem?.[f] ?? null;
-                // Якщо локальне значення відрізняється від серверного (unsaved change) — лишаємо локальне
-                if (String(serverVal ?? '') !== String(localVal ?? '')) {
-                  out[f] = localVal;
-                }
-              }
-              return out as ContentDescription;
-            });
-            return applyUnsavedToItems(merged);
-          } catch {
-            // У разі помилки мерджу — повертаємо серверні дані як є
-            return applyUnsavedToItems(serverItems as any);
-          }
-        });
+      // Зберігаємо перші 300 в кеш
+      try {
+        await dataCache.cacheProducts(quickItemsForLang, selectedLang);
+        console.log(`[Generation] STEP 1: Cached ${quickItemsForLang.length} products`);
+      } catch (cacheError) {
+        console.warn('[Generation] STEP 1: Failed to cache:', cacheError);
       }
-      // Базовий стан завжди дорівнює серверу (не включає локальні незбережені зміни)
-      setInitialDescriptions(serverItems.map(it => ({ ...it })));
+      
+      // ЕТАП 2: Фоново завантажуємо всі товари (9999)
+      scheduleProductsBackgroundFetch();
       // total рахуємо після клієнтської фільтрації
     } catch (err) {
       setError('Помилка при завантаженні даних. Спробуйте пізніше.');
@@ -2137,62 +2098,65 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     setError(null);
     
     try {
-      // Спробуємо отримати дані з кешу (тільки якщо показуємо лоадер - перший раз)
-      if (showLoader) {
-        console.log('[Generation] Checking cache for categories...');
-        const cachedData = await dataCache.getCachedCategories<SiteCategoryDescription>(selectedLang);
+      // Завжди перевіряємо кеш спочатку перед викликом API
+      console.log('[Generation] Checking cache for categories...');
+      const cachedData = await dataCache.getCachedCategories<SiteCategoryDescription>(selectedLang);
+      
+      if (cachedData && cachedData.data.length > 0) {
+        console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.data.length} cached categories (isFull=${cachedData.isFull})`);
+        const withUnsaved = applyCategoryUnsavedToItems(cachedData.data);
+        setCategoryDescriptions(withUnsaved);
+        setInitialCategoryDescriptions(cachedData.data.map(it => ({ ...it })));
+        setIsDataFromCache(true);
+        setLoading(false);
         
-        if (cachedData && cachedData.length > 0) {
-          console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.length} cached categories`);
-          const withUnsaved = applyCategoryUnsavedToItems(cachedData);
-          setCategoryDescriptions(withUnsaved);
-          setInitialCategoryDescriptions(cachedData.map(it => ({ ...it })));
-          setIsDataFromCache(true);
-          setLoading(false);
-          
-          // Запускаємо фонове оновлення
-          console.log('[Generation] Starting background refresh for categories...');
-          setTimeout(() => fetchCategoryData(false), 100);
-          return;
+        if (!cachedData.isFull) {
+          console.log('[Generation] Cached categories are partial, scheduling background refresh...');
+          scheduleCategoriesBackgroundFetch();
+        } else {
+          console.log('[Generation] Using cached data, skipping API call');
         }
-        console.log('[Generation] ❌ Cache miss. Fetching from API...');
+        return;
       }
       
-      const response = await fetchSiteCategoriesDescriptions(1, 9999);
-      console.log('[Generation] fetchSiteCategoriesDescriptions response:', {
-        itemsCount: response.items?.length ?? 0,
-        total: response.total,
-        page: response.page,
-        limit: response.limit,
+      console.log('[Generation] ❌ Cache miss. Fetching from API...');
+      
+      // ЕТАП 1: Швидко завантажуємо перші 100 категорій
+      console.log('[Generation] STEP 1: Quick fetch - 100 categories');
+      const quickResponse = await fetchSiteCategoriesDescriptions(1, 100);
+      console.log('[Generation] STEP 1 response:', {
+        itemsCount: quickResponse.items?.length ?? 0,
+        total: quickResponse.total,
       });
       
-      // Фільтруємо категорії по мові перед збереженням в кеш
-      const allItems = response.items || [];
-      const itemsForCurrentLang = allItems.filter((item: any) => {
+      // Фільтруємо перші 100 категорій по мові
+      const quickItems = quickResponse.items || [];
+      const quickItemsForLang = quickItems.filter((item: any) => {
         const lang = (item.lang_code || '').toLowerCase();
         return selectedLang === 'ua' 
           ? (lang === 'ua' || lang === 'uk')
           : lang === selectedLang;
       });
       
-      console.log(`[Generation] Total categories from API: ${allItems.length}, items for lang '${selectedLang}': ${itemsForCurrentLang.length}`);
+      console.log(`[Generation] STEP 1: Filtered ${quickItemsForLang.length} categories for lang '${selectedLang}'`);
       
-      // Зберігаємо у кеш (перші 50 категорій для поточної мови)
+      // Показуємо перші 100 категорій користувачу
+      const withUnsaved = applyCategoryUnsavedToItems(quickItemsForLang);
+      setCategoryDescriptions(withUnsaved);
+      setInitialCategoryDescriptions(quickItemsForLang.map(it => ({ ...it })));
+      setIsDataFromCache(false);
+      setLoading(false);
+      
+      // Зберігаємо перші 100 в кеш
       try {
-        await dataCache.cacheCategories(itemsForCurrentLang, selectedLang);
-        console.log(`[Generation] Successfully cached ${Math.min(50, itemsForCurrentLang.length)} categories for lang '${selectedLang}'`);
+        await dataCache.cacheCategories(quickItemsForLang, selectedLang);
+        console.log(`[Generation] STEP 1: Cached ${quickItemsForLang.length} categories`);
       } catch (cacheError) {
-        console.warn('[Generation] Failed to cache categories:', cacheError);
+        console.warn('[Generation] STEP 1: Failed to cache:', cacheError);
       }
       
-      // Дані з API - прибираємо індикатор кешу
-      setIsDataFromCache(false);
-      
-      // Застосовуємо незбережені дані з localStorage
-      const itemsWithUnsaved = applyCategoryUnsavedToItems(response.items || []);
-      
-      setCategoryDescriptions(itemsWithUnsaved);
-      setInitialCategoryDescriptions((response.items || []).map(it => ({ ...it })));
+      // ЕТАП 2: Фоново завантажуємо всі категорії (9999)
+      scheduleCategoriesBackgroundFetch();
     } catch (err) {
       setError('Помилка при завантаженні категорій. Спробуйте пізніше.');
       console.error('Error fetching category descriptions:', err);
@@ -2281,48 +2245,36 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     ));
   };
 
-  const filteredDescriptions = descriptions.filter(desc => {
-    // Базовий пошук за запитом
-    let matchesSearch = true;
-    if (searchQuery) {
-      const productName = desc.site_product || desc.product_name || '';
-      const shortName = desc.site_shortname || '';
-      const shortDesc = desc.site_short_description || '';
-      const fullDesc = desc.site_full_description || desc.description || '';
-      const promoText = desc.site_promo_text || '';
-      const metaKeywords = desc.site_meta_keywords || '';
-      const metaDesc = desc.site_meta_description || '';
-      const searchWords = desc.site_searchwords || '';
+  // Фільтрація по всіх товарах (не тільки по поточній сторінці)
+  const filteredDescriptions = useMemo(() => {
+    return descriptions.filter(desc => {
+      // Базовий пошук за запитом - шукаємо ТІЛЬКИ по назві товару
+      let matchesSearch = true;
+      if (searchQuery) {
+        const productName = desc.site_product || desc.product_name || '';
+        const searchLower = searchQuery.toLowerCase();
+        
+        matchesSearch = productName.toLowerCase().includes(searchLower);
+      }
       
-      const searchLower = searchQuery.toLowerCase();
-      
-      matchesSearch = productName.toLowerCase().includes(searchLower) ||
-             shortName.toLowerCase().includes(searchLower) ||
-             shortDesc?.toLowerCase().includes(searchLower) ||
-             fullDesc?.toLowerCase().includes(searchLower) ||
-             promoText?.toLowerCase().includes(searchLower) ||
-             metaKeywords.toLowerCase().includes(searchLower) ||
-             metaDesc.toLowerCase().includes(searchLower) ||
-             searchWords?.toLowerCase().includes(searchLower);
-    }
-    
-    // Фільтр за мовою (клієнтський) — 'ua' вважаємо еквівалентним до 'uk'
-    const lang = (desc.site_lang_code || '').toLowerCase();
-    const langMatch = selectedLang === 'ua'
-      ? (lang === 'ua' || lang === 'uk')
-      : lang === selectedLang;
+      // Фільтр за мовою (клієнтський) — 'ua' вважаємо еквівалентним до 'uk'
+      const lang = (desc.site_lang_code || '').toLowerCase();
+      const langMatch = selectedLang === 'ua'
+        ? (lang === 'ua' || lang === 'uk')
+        : lang === selectedLang;
 
-    // Перевірка за користувацькими фільтрами
-    // Застосовуємо тільки активні фільтри
-    const activeFilters = customFilters.filter(filter => filter.active);
-    if (activeFilters.length === 0) return matchesSearch && langMatch;
+      // Перевірка за користувацькими фільтрами
+      // Застосовуємо тільки активні фільтри
+      const activeFilters = customFilters.filter(filter => filter.active);
+      if (activeFilters.length === 0) return matchesSearch && langMatch;
 
-    return matchesSearch && langMatch && activeFilters.every(filter => {
-      const fieldValue = desc[filter.field as keyof ContentDescription];
-      if (fieldValue === undefined || fieldValue === null) return false;
-      return String(fieldValue).toLowerCase().includes(filter.value.toLowerCase());
+      return matchesSearch && langMatch && activeFilters.every(filter => {
+        const fieldValue = desc[filter.field as keyof ContentDescription];
+        if (fieldValue === undefined || fieldValue === null) return false;
+        return String(fieldValue).toLowerCase().includes(filter.value.toLowerCase());
+      });
     });
-  });
+  }, [descriptions, searchQuery, selectedLang, customFilters]);
   
   // Хелпери сортування
   const toggleSort = (col: SiteColumnName) => {
@@ -2737,11 +2689,24 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
                 <Input
                   type="text"
-                  placeholder="Несохранённый поиск"
+                  placeholder={
+                    activeTab === 'categories'
+                      ? (searchQuery ? `Знайдено: ${filteredCategories.length} з ${categoryDescriptions.length}` : `Пошук по ${categoryDescriptions.length} категоріях`)
+                      : (searchQuery ? `Знайдено: ${filteredDescriptions.length} з ${descriptions.length}` : `Пошук по ${descriptions.length} товарах`)
+                  }
                   className="pl-8"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    title="Очистити пошук"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               {/* Мова */}
               <Select value={selectedLang} onValueChange={(value) => setSelectedLang(value as 'ua' | 'en' | 'ru')}>
@@ -4184,13 +4149,23 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                   {t('buttons.update')}
                 </Button>
                 {isDataFromCache && (
-                  <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" title="Дані завантажено з кешу. Оновлення у фоновому режимі...">
+                  <Badge variant="secondary" className="text-xs px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" title="Дані завантажено з кешу">
                     📦 Кеш
+                  </Badge>
+                )}
+                {backgroundLoading && (
+                  <Badge variant="secondary" className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 animate-pulse" title="Фонове завантаження всіх даних...">
+                    ⏳ Довантаження...
+                  </Badge>
+                )}
+                {searchQuery && (
+                  <Badge variant="secondary" className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" title={`Пошук: "${searchQuery}"`}>
+                    🔍 Знайдено: {activeTab === 'categories' ? filteredCategories.length : filteredDescriptions.length} / {activeTab === 'categories' ? categoryDescriptions.length : descriptions.length}
                   </Badge>
                 )}
               </div>
             </div>
-            {totalPages > 1 && (
+            {(totalPages > 0 || searchQuery) && (
               <div className="flex flex-col gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
@@ -4198,7 +4173,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                       {(() => {
                         const start = totalFiltered > 0 ? (page - 1) * limit + 1 : 0;
                         const end = Math.min(page * limit, totalFiltered);
-                        return `${t('table.shown')} ${start}-${end} ${t('table.of')} ${totalFiltered} ${t('table.records')}`;
+                        const searchInfo = searchQuery ? ` (пошук: "${searchQuery}")` : '';
+                        return `${t('table.shown')} ${start}-${end} ${t('table.of')} ${totalFiltered} ${t('table.records')}${searchInfo}`;
                       })()}
                     </span>
                     <div className="flex items-center gap-2">
@@ -4216,11 +4192,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                       </Select>
                     </div>
                   </div>
-                  <Pagination 
-                    currentPage={page} 
-                    totalPages={totalPages} 
-                    onPageChange={(newPage) => setPage(newPage)}
-                  />
+                  {totalPages > 1 && (
+                    <Pagination 
+                      currentPage={page} 
+                      totalPages={totalPages} 
+                      onPageChange={(newPage) => setPage(newPage)}
+                    />
+                  )}
                 </div>
               </div>
             )}

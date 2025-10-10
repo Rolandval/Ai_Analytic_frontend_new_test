@@ -1,6 +1,7 @@
 /**
  * IndexedDB Cache для товарів та категорій
- * Зберігає перші 50 записів для швидкого відображення при наступних візитах
+ * Зберігає ВСІ записи (2820+ товарів) для миттєвого відображення при наступних візитах
+ * Кеш діє 24 години, після чого автоматично оновлюється
  */
 
 const DB_NAME = 'AiAnalyticCache';
@@ -13,6 +14,13 @@ interface CacheEntry<T> {
   data: T[];
   timestamp: number;
   lang: string;
+  isFull?: boolean;
+}
+
+export interface CachedData<T> {
+  data: T[];
+  isFull: boolean;
+  timestamp: number;
 }
 
 class DataCache {
@@ -63,7 +71,7 @@ class DataCache {
   /**
    * Збереження даних у кеш
    */
-  private async setCache<T>(storeName: string, key: string, data: T[], lang: string): Promise<void> {
+  private async setCache<T>(storeName: string, key: string, data: T[], lang: string, isFull: boolean = false): Promise<void> {
     try {
       await this.init();
       if (!this.db) throw new Error('Database not initialized');
@@ -72,6 +80,7 @@ class DataCache {
         data,
         timestamp: Date.now(),
         lang,
+        isFull,
       };
 
       return new Promise((resolve, reject) => {
@@ -98,12 +107,12 @@ class DataCache {
   /**
    * Отримання даних з кешу
    */
-  private async getCache<T>(storeName: string, key: string, lang: string): Promise<T[] | null> {
+  private async getCache<T>(storeName: string, key: string, lang: string): Promise<CacheEntry<T> | null> {
     try {
       await this.init();
       if (!this.db) return null;
 
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const transaction = this.db!.transaction([storeName], 'readonly');
         const store = transaction.objectStore(storeName);
         const request = store.get(key);
@@ -132,8 +141,8 @@ class DataCache {
             return;
           }
 
-          console.log(`[DataCache] Retrieved ${entry.data.length} items from ${storeName} (age: ${Math.round(age / 1000)} sec)`);
-          resolve(entry.data);
+          console.log(`[DataCache] Retrieved ${entry.data.length} items from ${storeName} (age: ${Math.round(age / 1000)} sec, full: ${entry.isFull === true})`);
+          resolve(entry);
         };
 
         request.onerror = () => {
@@ -182,41 +191,76 @@ class DataCache {
   // ===== PUBLIC API =====
 
   /**
-   * Збереження товарів у кеш (перші 50)
    */
-  async cacheProducts<T>(products: T[], lang: string): Promise<void> {
-    console.log(`[DataCache] cacheProducts called with ${products?.length ?? 0} items, lang: ${lang}`);
-    const toCache = products.slice(0, 50);
-    console.log(`[DataCache] Caching ${toCache.length} items (first 50 from ${products?.length ?? 0})`);
-    await this.setCache(PRODUCTS_STORE, 'latest', toCache, lang);
+  async cacheProducts<T>(products: T[], lang: string, isFull: boolean = false): Promise<void> {
+    console.log(`[DataCache] cacheProducts called with ${products?.length ?? 0} items, lang: ${lang}, isFull: ${isFull}`);
+    const key = isFull ? 'full' : 'latest';
+    console.log(`[DataCache] Caching ${products.length} items to key '${key}' for lang: ${lang}`);
+    await this.setCache(PRODUCTS_STORE, key, products, lang, isFull);
   }
 
   /**
-   * Отримання товарів з кешу
+   * Отримання товарів з кешу (спочатку шукає повний кеш, потім швидкий)
    */
-  async getCachedProducts<T>(lang: string): Promise<T[] | null> {
-    const result = await this.getCache<T>(PRODUCTS_STORE, 'latest', lang);
-    console.log(`[DataCache] getCachedProducts returned ${result?.length ?? 0} items for lang: ${lang}`);
-    return result;
+  async getCachedProducts<T>(lang: string): Promise<CachedData<T> | null> {
+    // Спочатку шукаємо повний кеш
+    let entry = await this.getCache<T>(PRODUCTS_STORE, 'full', lang);
+    if (entry && entry.data.length > 0) {
+      console.log(`[DataCache] getCachedProducts returned FULL cache: ${entry.data.length} items for lang: ${lang}`);
+      return {
+        data: entry.data,
+        isFull: entry.isFull ?? true,
+        timestamp: entry.timestamp,
+      };
+    }
+
+    // Якщо повного немає - беремо швидкий
+    entry = await this.getCache<T>(PRODUCTS_STORE, 'latest', lang);
+    console.log(`[DataCache] getCachedProducts returned quick cache: ${entry?.data.length ?? 0} items for lang: ${lang}`);
+    return entry
+      ? {
+          data: entry.data,
+          isFull: entry.isFull === true,
+          timestamp: entry.timestamp,
+        }
+      : null;
   }
 
   /**
-   * Збереження категорій у кеш (перші 50)
+   * Збереження категорій у кеш (всі категорії)
    */
-  async cacheCategories<T>(categories: T[], lang: string): Promise<void> {
-    console.log(`[DataCache] cacheCategories called with ${categories?.length ?? 0} items, lang: ${lang}`);
-    const toCache = categories.slice(0, 50);
-    console.log(`[DataCache] Caching ${toCache.length} items (first 50 from ${categories?.length ?? 0})`);
-    await this.setCache(CATEGORIES_STORE, 'latest', toCache, lang);
+  async cacheCategories<T>(categories: T[], lang: string, isFull: boolean = false): Promise<void> {
+    console.log(`[DataCache] cacheCategories called with ${categories?.length ?? 0} items, lang: ${lang}, isFull: ${isFull}`);
+    const key = isFull ? 'full' : 'latest';
+    console.log(`[DataCache] Caching ${categories.length} items to key '${key}' for lang: ${lang}`);
+    await this.setCache(CATEGORIES_STORE, key, categories, lang, isFull);
   }
 
   /**
-   * Отримання категорій з кешу
+   * Отримання категорій з кешу (спочатку шукає повний кеш, потім швидкий)
    */
-  async getCachedCategories<T>(lang: string): Promise<T[] | null> {
-    const result = await this.getCache<T>(CATEGORIES_STORE, 'latest', lang);
-    console.log(`[DataCache] getCachedCategories returned ${result?.length ?? 0} items for lang: ${lang}`);
-    return result;
+  async getCachedCategories<T>(lang: string): Promise<CachedData<T> | null> {
+    // Спочатку шукаємо повний кеш
+    let entry = await this.getCache<T>(CATEGORIES_STORE, 'full', lang);
+    if (entry && entry.data.length > 0) {
+      console.log(`[DataCache] getCachedCategories returned FULL cache: ${entry.data.length} items for lang: ${lang}`);
+      return {
+        data: entry.data,
+        isFull: entry.isFull ?? true,
+        timestamp: entry.timestamp,
+      };
+    }
+
+    // Якщо повного немає - беремо швидкий
+    entry = await this.getCache<T>(CATEGORIES_STORE, 'latest', lang);
+    console.log(`[DataCache] getCachedCategories returned quick cache: ${entry?.data.length ?? 0} items for lang: ${lang}`);
+    return entry
+      ? {
+          data: entry.data,
+          isFull: entry.isFull === true,
+          timestamp: entry.timestamp,
+        }
+      : null;
   }
 
   /**
