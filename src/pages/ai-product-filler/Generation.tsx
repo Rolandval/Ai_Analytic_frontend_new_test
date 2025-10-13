@@ -2010,6 +2010,108 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }
   };
 
+  // Фонове завантаження всіх товарів (9999 записів)
+  const scheduleProductsBackgroundFetch = useCallback(() => {
+    console.log('[Generation] Scheduling background fetch for ALL products...');
+    
+    setTimeout(async () => {
+      try {
+        console.log('[Generation] STEP 2: Background fetch - ALL products (9999)');
+        setBackgroundLoading(true);
+        
+        const fullRequest = {
+          category_ids: selectedCategory === 'all' ? [] : [selectedCategory],
+          page: 1,
+          limit: 9999,
+        };
+        
+        const fullResponse = await fetchContentDescriptions<ContentDescription>(fullRequest);
+        console.log('[Generation] STEP 2 response:', {
+          itemsCount: fullResponse.items?.length ?? 0,
+          total: fullResponse.total,
+        });
+        
+        // Фільтруємо всі товари по мові
+        const fullItems = fullResponse.items || [];
+        const fullItemsForLang = fullItems.filter((item: any) => {
+          const lang = (item.site_lang_code || '').toLowerCase();
+          return selectedLang === 'ua' 
+            ? (lang === 'ua' || lang === 'uk')
+            : lang === selectedLang;
+        });
+        
+        console.log(`[Generation] STEP 2: Filtered ${fullItemsForLang.length} items for lang '${selectedLang}'`);
+        
+        // Оновлюємо дані в UI
+        const withUnsaved = applyUnsavedToItems(fullItemsForLang);
+        setDescriptions(withUnsaved);
+        setInitialDescriptions(fullItemsForLang.map(it => ({ ...it })));
+        setIsDataFromCache(false);
+        
+        // Зберігаємо всі товари в повний кеш
+        try {
+          await dataCache.cacheProducts(fullItemsForLang, selectedLang, true);
+          console.log(`[Generation] STEP 2: Cached ${fullItemsForLang.length} products as FULL cache`);
+        } catch (cacheError) {
+          console.warn('[Generation] STEP 2: Failed to cache:', cacheError);
+        }
+        
+      } catch (err) {
+        console.error('[Generation] STEP 2: Background fetch failed:', err);
+      } finally {
+        setBackgroundLoading(false);
+      }
+    }, 100);
+  }, [selectedCategory, selectedLang]);
+
+  // Фонове завантаження всіх категорій (9999 записів)
+  const scheduleCategoriesBackgroundFetch = useCallback(() => {
+    console.log('[Generation] Scheduling background fetch for ALL categories...');
+    
+    setTimeout(async () => {
+      try {
+        console.log('[Generation] STEP 2: Background fetch - ALL categories (9999)');
+        setBackgroundLoading(true);
+        
+        const fullResponse = await fetchSiteCategoriesDescriptions(1, 9999);
+        console.log('[Generation] STEP 2 response:', {
+          itemsCount: fullResponse.items?.length ?? 0,
+          total: fullResponse.total,
+        });
+        
+        // Фільтруємо всі категорії по мові
+        const fullItems = fullResponse.items || [];
+        const fullItemsForLang = fullItems.filter((item: any) => {
+          const lang = (item.lang_code || '').toLowerCase();
+          return selectedLang === 'ua' 
+            ? (lang === 'ua' || lang === 'uk')
+            : lang === selectedLang;
+        });
+        
+        console.log(`[Generation] STEP 2: Filtered ${fullItemsForLang.length} categories for lang '${selectedLang}'`);
+        
+        // Оновлюємо дані в UI
+        const withUnsaved = applyCategoryUnsavedToItems(fullItemsForLang);
+        setCategoryDescriptions(withUnsaved);
+        setInitialCategoryDescriptions(fullItemsForLang.map(it => ({ ...it })));
+        setIsDataFromCache(false);
+        
+        // Зберігаємо всі категорії в повний кеш
+        try {
+          await dataCache.cacheCategories(fullItemsForLang, selectedLang, true);
+          console.log(`[Generation] STEP 2: Cached ${fullItemsForLang.length} categories as FULL cache`);
+        } catch (cacheError) {
+          console.warn('[Generation] STEP 2: Failed to cache:', cacheError);
+        }
+        
+      } catch (err) {
+        console.error('[Generation] STEP 2: Background fetch failed:', err);
+      } finally {
+        setBackgroundLoading(false);
+      }
+    }, 100);
+  }, [selectedLang]);
+
   const fetchData = async (showLoader: boolean = true) => {
     if (showLoader) {
       setLoading(true);
@@ -2019,7 +2121,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     try {
       // Завжди перевіряємо кеш спочатку перед викликом API
       console.log('[Generation] Checking cache for products...');
-      const cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
+      let cachedData = null;
+      
+      try {
+        cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
+      } catch (cacheError) {
+        console.warn('[Generation] Cache read failed, continuing without cache:', cacheError);
+      }
       
       if (cachedData && cachedData.data.length > 0) {
         console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.data.length} cached products (isFull=${cachedData.isFull})`);
@@ -2083,9 +2191,48 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       // ЕТАП 2: Фоново завантажуємо всі товари (9999)
       scheduleProductsBackgroundFetch();
       // total рахуємо після клієнтської фільтрації
-    } catch (err) {
-      setError('Помилка при завантаженні даних. Спробуйте пізніше.');
+    } catch (err: any) {
       console.error('Error fetching content descriptions:', err);
+      
+      // Детальна діагностика помилки
+      let errorMessage = 'Помилка при завантаженні даних. Спробуйте пізніше.';
+      
+      if (err?.response) {
+        // Помилка від сервера
+        const status = err.response.status;
+        console.error(`[Generation] API Error ${status}:`, err.response.data);
+        
+        if (status === 401) {
+          errorMessage = 'Помилка авторизації. Будь ласка, увійдіть в систему.';
+        } else if (status === 404) {
+          errorMessage = 'API endpoint не знайдено. Перевірте конфігурацію сервера.';
+        } else if (status === 500) {
+          errorMessage = 'Помилка сервера. Спробуйте пізніше.';
+        } else {
+          errorMessage = `Помилка сервера (${status}). ${err.response.data?.message || ''}`;
+        }
+      } else if (err?.request) {
+        // Запит був відправлений, але немає відповіді
+        console.error('[Generation] No response from server:', err.request);
+        errorMessage = 'Сервер не відповідає. Перевірте підключення до інтернету та доступність API.';
+      } else if (err?.message?.includes('IndexedDB')) {
+        // Помилка IndexedDB
+        console.error('[Generation] IndexedDB error:', err.message);
+        errorMessage = 'Помилка локального кешу. Спробуйте перезавантажити сторінку.';
+      } else if (err?.message) {
+        // Інша помилка
+        console.error('[Generation] Error:', err.message);
+        errorMessage = `Помилка: ${err.message}`;
+      }
+      
+      setError(errorMessage);
+      
+      // Показуємо toast з помилкою
+      toast({
+        title: 'Помилка завантаження',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     } 
@@ -2157,9 +2304,43 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       
       // ЕТАП 2: Фоново завантажуємо всі категорії (9999)
       scheduleCategoriesBackgroundFetch();
-    } catch (err) {
-      setError('Помилка при завантаженні категорій. Спробуйте пізніше.');
+    } catch (err: any) {
       console.error('Error fetching category descriptions:', err);
+      
+      // Детальна діагностика помилки
+      let errorMessage = 'Помилка при завантаженні категорій. Спробуйте пізніше.';
+      
+      if (err?.response) {
+        const status = err.response.status;
+        console.error(`[Generation] API Error ${status}:`, err.response.data);
+        
+        if (status === 401) {
+          errorMessage = 'Помилка авторизації. Будь ласка, увійдіть в систему.';
+        } else if (status === 404) {
+          errorMessage = 'API endpoint не знайдено. Перевірте конфігурацію сервера.';
+        } else if (status === 500) {
+          errorMessage = 'Помилка сервера. Спробуйте пізніше.';
+        } else {
+          errorMessage = `Помилка сервера (${status}). ${err.response.data?.message || ''}`;
+        }
+      } else if (err?.request) {
+        console.error('[Generation] No response from server:', err.request);
+        errorMessage = 'Сервер не відповідає. Перевірте підключення до інтернету та доступність API.';
+      } else if (err?.message?.includes('IndexedDB')) {
+        console.error('[Generation] IndexedDB error:', err.message);
+        errorMessage = 'Помилка локального кешу. Спробуйте перезавантажити сторінку.';
+      } else if (err?.message) {
+        console.error('[Generation] Error:', err.message);
+        errorMessage = `Помилка: ${err.message}`;
+      }
+      
+      setError(errorMessage);
+      
+      toast({
+        title: 'Помилка завантаження',
+        description: errorMessage,
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
