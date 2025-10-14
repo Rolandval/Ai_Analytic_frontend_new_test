@@ -94,6 +94,7 @@ export default function AIProductFillerGeneration({ title: _title = 'AI гене
   const [searchQuery, setSearchQuery] = useState('');
   
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [customFilters, setCustomFilters] = useState<CustomFilter[]>([]);
@@ -2139,41 +2140,47 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }, 100);
   }, [selectedLang]);
 
-  const fetchData = async (showLoader: boolean = true) => {
+  const fetchData = async (showLoader: boolean = true, forceRefresh: boolean = false) => {
     if (showLoader) {
       setLoading(true);
     }
     setError(null);
     
     try {
-      // Завжди перевіряємо кеш спочатку перед викликом API
-      console.log('[Generation] Checking cache for products...');
-      let cachedData = null;
+      // Перевіряємо кеш ТІЛЬКИ якщо це не примусове оновлення і категорія "Всі"
+      const shouldUseCache = !forceRefresh && selectedCategory === 'all';
       
-      try {
-        cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
-      } catch (cacheError) {
-        console.warn('[Generation] Cache read failed, continuing without cache:', cacheError);
-      }
-      
-      if (cachedData && cachedData.data.length > 0) {
-        console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.data.length} cached products (isFull=${cachedData.isFull})`);
-        const withUnsaved = applyUnsavedToItems(cachedData.data);
-        setDescriptions(withUnsaved);
-        setInitialDescriptions(cachedData.data.map(item => ({ ...item })));
-        setIsDataFromCache(true);
-        setLoading(false);
+      if (shouldUseCache) {
+        console.log('[Generation] Checking cache for products...');
+        let cachedData = null;
         
-        if (!cachedData.isFull) {
-          console.log('[Generation] Cached products are partial, scheduling background refresh...');
-          scheduleProductsBackgroundFetch();
-        } else {
-          console.log('[Generation] Using cached data, skipping API call');
+        try {
+          cachedData = await dataCache.getCachedProducts<ContentDescription>(selectedLang);
+        } catch (cacheError) {
+          console.warn('[Generation] Cache read failed, continuing without cache:', cacheError);
         }
-        return;
+        
+        if (cachedData && cachedData.data.length > 0) {
+          console.log(`[Generation] ✅ Cache hit! Showing ${cachedData.data.length} cached products (isFull=${cachedData.isFull})`);
+          const withUnsaved = applyUnsavedToItems(cachedData.data);
+          setDescriptions(withUnsaved);
+          setInitialDescriptions(cachedData.data.map(item => ({ ...item })));
+          setIsDataFromCache(true);
+          setLoading(false);
+          
+          if (!cachedData.isFull) {
+            console.log('[Generation] Cached products are partial, scheduling background refresh...');
+            scheduleProductsBackgroundFetch();
+          } else {
+            console.log('[Generation] Using cached data, skipping API call');
+          }
+          return;
+        }
+      } else {
+        console.log(`[Generation] Skipping cache (forceRefresh=${forceRefresh}, selectedCategory=${selectedCategory})`);
       }
       
-      console.log('[Generation] ❌ Cache miss. Fetching from API...');
+      console.log('[Generation] ❌ Cache miss or forced refresh. Fetching from API...');
       
       // ЕТАП 1: Швидко завантажуємо перші 300 товарів
       const quickRequest = {
@@ -2207,16 +2214,20 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       setIsDataFromCache(false);
       setLoading(false);
       
-      // Зберігаємо перші 300 в кеш
-      try {
-        await dataCache.cacheProducts(quickItemsForLang, selectedLang);
-        console.log(`[Generation] STEP 1: Cached ${quickItemsForLang.length} products`);
-      } catch (cacheError) {
-        console.warn('[Generation] STEP 1: Failed to cache:', cacheError);
+      // Зберігаємо перші 300 в кеш ТІЛЬКИ для категорії "Всі"
+      if (selectedCategory === 'all') {
+        try {
+          await dataCache.cacheProducts(quickItemsForLang, selectedLang);
+          console.log(`[Generation] STEP 1: Cached ${quickItemsForLang.length} products`);
+        } catch (cacheError) {
+          console.warn('[Generation] STEP 1: Failed to cache:', cacheError);
+        }
+        
+        // ЕТАП 2: Фоново завантажуємо всі товари (9999) тільки для "Всі категорії"
+        scheduleProductsBackgroundFetch();
+      } else {
+        console.log(`[Generation] STEP 1: Skipping cache for specific category ${selectedCategory}`);
       }
-      
-      // ЕТАП 2: Фоново завантажуємо всі товари (9999)
-      scheduleProductsBackgroundFetch();
       // total рахуємо після клієнтської фільтрації
     } catch (err: any) {
       console.error('Error fetching content descriptions:', err);
@@ -2394,9 +2405,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   
   // Окремий useEffect для зміни категорії (тільки для товарів)
   useEffect(() => {
-    if (activeTab === 'products' && descriptions.length > 0) {
-      console.log('[Generation] Category changed, reloading products');
-      fetchData();
+    if (activeTab === 'products') {
+      console.log('[Generation] Category changed, reloading products. Category:', selectedCategory);
+      // Примусово оновлюємо дані з API, пропускаючи кеш
+      fetchData(true, true);
     }
   }, [selectedCategory]);
   
@@ -2467,6 +2479,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
 
   // Фільтрація по всіх товарах (не тільки по поточній сторінці)
   const filteredDescriptions = useMemo(() => {
+    console.log('[filteredDescriptions] Filtering with:', {
+      totalDescriptions: descriptions.length,
+      selectedCategory,
+      selectedLang,
+      searchQuery
+    });
+    
     return descriptions.filter(desc => {
       // Базовий пошук за запитом - шукаємо ТІЛЬКИ по назві товару
       let matchesSearch = true;
@@ -2486,13 +2505,15 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       // Перевірка за користувацькими фільтрами
       // Застосовуємо тільки активні фільтри
       const activeFilters = customFilters.filter(filter => filter.active);
-      if (activeFilters.length === 0) return matchesSearch && langMatch;
-
-      return matchesSearch && langMatch && activeFilters.every(filter => {
+      const customFiltersMatch = activeFilters.length === 0 || activeFilters.every(filter => {
         const fieldValue = desc[filter.field as keyof ContentDescription];
         if (fieldValue === undefined || fieldValue === null) return false;
         return String(fieldValue).toLowerCase().includes(filter.value.toLowerCase());
       });
+
+      const result = matchesSearch && langMatch && customFiltersMatch;
+      
+      return result;
     });
   }, [descriptions, searchQuery, selectedLang, customFilters]);
   
@@ -2940,17 +2961,67 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 </SelectContent>
               </Select>
               {/* Категорія */}
-              <Select value={selectedCategory.toString()} onValueChange={(value) => setSelectedCategory(value === 'all' ? 'all' : parseInt(value))}>
-                <SelectTrigger className="w-[200px] shrink-0">
+              <Select 
+                value={selectedCategory.toString()} 
+                onValueChange={(value) => {
+                  setSelectedCategory(value === 'all' ? 'all' : parseInt(value));
+                  setCategorySearchQuery(''); // Очищаємо пошук після вибору
+                }}
+                onOpenChange={(open) => {
+                  if (!open) setCategorySearchQuery(''); // Очищаємо пошук при закритті
+                }}
+              >
+                <SelectTrigger className="w-[200px] shrink-0 text-[12px] h-10 ">
                   <SelectValue placeholder={categoriesLoading ? 'Завантаження...' : 'Всі категорії'} />
                 </SelectTrigger>
                 <SelectContent className="select-content-scroll" style={{maxHeight: "320px", overflowY: "scroll", scrollbarWidth: "thin"}}>
-                  <SelectItem value="all">Всі категорії</SelectItem>
-                  {categories?.map((cat) => (
-                    <SelectItem key={cat.category_id} value={cat.category_id.toString()}>
-                      {cat.category}
-                    </SelectItem>
-                  ))}
+                  {/* Поле пошуку категорій */}
+                  <div className="sticky top-0 z-10 bg-white dark:bg-slate-800 p-1.5 border-b border-gray-200 dark:border-gray-700">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                      <Input
+                        type="text"
+                        placeholder="Пошук..."
+                        value={categorySearchQuery}
+                        onChange={(e) => setCategorySearchQuery(e.target.value)}
+                        className="pl-7 h-7 text-xs"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                      {categorySearchQuery && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCategorySearchQuery('');
+                          }}
+                          className="absolute right-1.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <SelectItem value="all" className="text-sm py-1.5">Всі категорії</SelectItem>
+                  {categories
+                    ?.filter((cat) => 
+                      categorySearchQuery === '' || 
+                      cat.category.toLowerCase().includes(categorySearchQuery.toLowerCase())
+                    )
+                    .map((cat) => (
+                      <SelectItem key={cat.category_id} value={cat.category_id.toString()} className="text-sm py-1.5">
+                        {cat.category}
+                      </SelectItem>
+                    ))}
+                  
+                  {/* Повідомлення якщо нічого не знайдено */}
+                  {categorySearchQuery && categories?.filter((cat) => 
+                    cat.category.toLowerCase().includes(categorySearchQuery.toLowerCase())
+                  ).length === 0 && (
+                    <div className="px-2 py-4 text-center text-sm text-gray-500">
+                      Категорій не знайдено
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
               {/* Модель/Мови для перекладу */}
