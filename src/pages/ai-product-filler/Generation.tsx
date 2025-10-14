@@ -127,8 +127,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   // Стан для редагування клітинок категорій (rowKey:column)
   const [editingCategoryCell, setEditingCategoryCell] = useState<string | null>(null);
   
-  console.log('🎯 [Generation] Component rendered, selectedCells:', selectedCells);
-  
   // Рядки, у яких відбулась AI‑генерація в цій сесії (для селективного збереження)
   const [generatedRows, setGeneratedRows] = useState<Record<string, boolean>>({});
   const [templatesState, setTemplatesState] = useState<TemplatesState>(null);
@@ -1224,18 +1222,9 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     desc: ContentDescription,
     checked: boolean | 'indeterminate'
   ) => {
-    console.log('✅ [onCellCheckedChangeWithLog] CELL CLICKED!', {
-      rowKey,
-      col,
-      checked,
-      cellKey: `${rowKey}:${col}`,
-      site_product: desc.site_product || desc.product_name || '-',
-    });
     setSelectedCells(prev => {
       const cellKey = `${rowKey}:${col}`;
       const newState = { ...prev, [cellKey]: checked === true };
-      console.log(`📝 Updated selectedCells: ${cellKey} = ${checked === true}`);
-      console.log('📋 All selected cells:', Object.keys(newState).filter(k => newState[k]));
       return newState;
     });
     // Тільки перемикаємо вибір. Генерація виконується кнопкою "Заповнити вибрані".
@@ -1246,17 +1235,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   // Хелпер: визначити, чи значення клітинки вважається порожнім (у т.ч. плейсхолдер '-')
   const isEmptyCellValue = (v: string | null | undefined): boolean => {
     if (v === null || v === undefined) {
-      console.log(`[isEmptyCellValue] null/undefined -> true`);
       return true;
     }
     const s = String(v).trim();
     if (s.length === 0) {
-      console.log(`[isEmptyCellValue] empty string -> true`);
       return true;
     }
-    const isEmpty = s === '-' || s === '—' || s === '–';
-    console.log(`[isEmptyCellValue] "${s}" -> ${isEmpty}`);
-    return isEmpty;
+    return s === '-' || s === '—' || s === '–';
   };
   // Стан чекбокса рядка — тільки з незалежного стану, не змінюється від вибору колонок
   const getRowCheckedState = (rowKey: string): boolean | 'indeterminate' => {
@@ -2207,6 +2192,22 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       
       console.log(`[Generation] STEP 1: Filtered ${quickItemsForLang.length} items for lang '${selectedLang}'`);
       
+      // Перевіряємо на дублікати
+      const uniqueIds = new Set();
+      const duplicates: any[] = [];
+      quickItemsForLang.forEach((item: any) => {
+        const id = item.product_id || item.id;
+        if (uniqueIds.has(id)) {
+          duplicates.push(item);
+        } else {
+          uniqueIds.add(id);
+        }
+      });
+      
+      if (duplicates.length > 0) {
+        console.warn(`[Generation] ⚠️ Found ${duplicates.length} duplicate items!`, duplicates);
+      }
+      
       // Показуємо перші 300 товарів користувачу
       const withUnsaved = applyUnsavedToItems(quickItemsForLang);
       setDescriptions(withUnsaved);
@@ -2227,6 +2228,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         scheduleProductsBackgroundFetch();
       } else {
         console.log(`[Generation] STEP 1: Skipping cache for specific category ${selectedCategory}`);
+        // Для конкретної категорії також запускаємо фонове завантаження всіх товарів
+        scheduleProductsBackgroundFetch();
       }
       // total рахуємо після клієнтської фільтрації
     } catch (err: any) {
@@ -2935,10 +2938,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                       ? (searchQuery ? `Знайдено: ${filteredCategories.length} з ${categoryDescriptions.length}` : `Пошук по ${categoryDescriptions.length} категоріях`)
                       : (searchQuery ? `Знайдено: ${filteredDescriptions.length} з ${descriptions.length}` : `Пошук по ${descriptions.length} товарах`)
                   }
-                  className="pl-8"
+                  className="pl-8 pr-20"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                {backgroundLoading && (
+                  <div className="absolute right-10 top-2.5 flex items-center gap-1.5 text-xs text-blue-600">
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-blue-600 border-t-transparent"></div>
+                    <span>Завантаження...</span>
+                  </div>
+                )}
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
@@ -3420,6 +3429,20 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         const total = filteredCategories.length;
         const paged = pagedCategories;
 
+        if (backgroundLoading && searchQuery) {
+          // Показуємо лоадер якщо йде фонове завантаження і є пошуковий запит
+          return (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center py-8">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="text-gray-500">Завантаження всіх категорій для пошуку...</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        }
+
         if (total === 0) {
           return (
             <TableRow>
@@ -3466,7 +3489,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                     aria-label="Вибрати клітинку категорії"
                     checked={isCategoryCellChecked(rowKey, 'category')}
                     onCheckedChange={(checked) => {
-                      console.log(`🖱️ [Category Checkbox] Click on ${rowKey}:category, checked=${checked}`);
                       onCategoryCellCheckedChange(rowKey, 'category', checked);
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -3944,15 +3966,17 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(() => {
-                  console.log('📊 [TableBody] Rendering table body:', {
-                    filteredDescriptions: filteredDescriptions.length,
-                    pagedDescriptions: pagedDescriptions.length,
-                    descriptions: descriptions.length
-                  });
-                  return null;
-                })()}
-                {filteredDescriptions.length === 0 ? (
+                {backgroundLoading && searchQuery ? (
+                  // Показуємо лоадер якщо йде фонове завантаження і є пошуковий запит
+                  <TableRow>
+                    <TableCell colSpan={12} className="text-center py-8">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <span className="text-gray-500">Завантаження всіх товарів для пошуку...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredDescriptions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={12} className="text-center py-8 text-gray-500">
                       Немає даних для відображення
@@ -3961,7 +3985,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                 ) : (
                   pagedDescriptions.map((desc, index) => {
                     const rowKey = getRowKey(desc, index);
-                    console.log(`🔑 [Render] Row ${index}: rowKey = ${rowKey}, product = ${desc.site_product || desc.product_name || 'unnamed'}`);
                     
                     // У режимі перекладу: якщо користувач вручну перемкнув (chevron),
                     // використовуємо це значення. Інакше — розкриваємо за станом чекбокса рядка.
@@ -4010,7 +4033,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'product')}
                               onCheckedChange={(checked) => {
-                                console.log(`🖱️ [Checkbox] Click on ${rowKey}:product, checked=${checked}`);
                                 onCellCheckedChangeWithLog(rowKey, 'product', desc, checked);
                               }}
                               onClick={(e) => e.stopPropagation()}
