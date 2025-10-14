@@ -28,10 +28,27 @@ class DataCache {
   private initPromise: Promise<void> | null = null;
 
   /**
+   * Перевірка стану з'єднання з базою
+   */
+  private isDbValid(): boolean {
+    // Перевіряємо, чи база існує і не закрита
+    return this.db !== null && !this.db.objectStoreNames.contains('__closed__');
+  }
+
+  /**
    * Ініціалізація бази даних
    */
   private async init(): Promise<void> {
-    if (this.db) return;
+    // Якщо база існує і валідна - повертаємо
+    if (this.db && this.isDbValid()) return;
+    
+    // Якщо база закрита - скидаємо і створюємо нову
+    if (this.db && !this.isDbValid()) {
+      console.log('[DataCache] Database connection was closed, reinitializing...');
+      this.db = null;
+      this.initPromise = null;
+    }
+    
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = new Promise((resolve, reject) => {
@@ -39,11 +56,28 @@ class DataCache {
 
       request.onerror = () => {
         console.error('[DataCache] Failed to open IndexedDB:', request.error);
+        this.initPromise = null;
         reject(request.error);
       };
 
       request.onsuccess = () => {
         this.db = request.result;
+        
+        // Додаємо обробник закриття з'єднання
+        this.db.onclose = () => {
+          console.warn('[DataCache] Database connection closed');
+          this.db = null;
+          this.initPromise = null;
+        };
+        
+        // Додаємо обробник помилок версії
+        this.db.onversionchange = () => {
+          console.warn('[DataCache] Database version changed, closing connection');
+          this.db?.close();
+          this.db = null;
+          this.initPromise = null;
+        };
+        
         console.log('[DataCache] IndexedDB opened successfully');
         resolve();
       };
@@ -69,9 +103,11 @@ class DataCache {
   }
 
   /**
-   * Збереження даних у кеш
+   * Збереження даних у кеш з retry логікою
    */
-  private async setCache<T>(storeName: string, key: string, data: T[], lang: string, isFull: boolean = false): Promise<void> {
+  private async setCache<T>(storeName: string, key: string, data: T[], lang: string, isFull: boolean = false, retryCount: number = 0): Promise<void> {
+    const MAX_RETRIES = 2;
+    
     try {
       await this.init();
       if (!this.db) throw new Error('Database not initialized');
@@ -84,74 +120,123 @@ class DataCache {
       };
 
       return new Promise((resolve, reject) => {
-        const transaction = this.db!.transaction([storeName], 'readwrite');
-        const store = transaction.objectStore(storeName);
-        const request = store.put(entry, key);
+        try {
+          const transaction = this.db!.transaction([storeName], 'readwrite');
+          const store = transaction.objectStore(storeName);
+          const request = store.put(entry, key);
 
-        request.onsuccess = () => {
-          console.log(`[DataCache] Saved ${data.length} items to ${storeName} (lang: ${lang})`);
-          resolve();
-        };
+          request.onsuccess = () => {
+            console.log(`[DataCache] Saved ${data.length} items to ${storeName} (lang: ${lang})`);
+            resolve();
+          };
 
-        request.onerror = () => {
-          console.error(`[DataCache] Failed to save to ${storeName}:`, request.error);
-          reject(request.error);
-        };
+          request.onerror = () => {
+            console.error(`[DataCache] Failed to save to ${storeName}:`, request.error);
+            reject(request.error);
+          };
+          
+          transaction.onerror = () => {
+            console.error(`[DataCache] Transaction error:`, transaction.error);
+            reject(transaction.error);
+          };
+        } catch (txError: any) {
+          // Якщо помилка "connection is closing" - пробуємо ще раз
+          if (txError.message?.includes('closing') && retryCount < MAX_RETRIES) {
+            console.warn(`[DataCache] Connection closing, retry ${retryCount + 1}/${MAX_RETRIES}`);
+            reject(txError);
+          } else {
+            reject(txError);
+          }
+        }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[DataCache] setCache error:', error);
+      
+      // Retry логіка для помилок з'єднання
+      if (error.message?.includes('closing') && retryCount < MAX_RETRIES) {
+        console.log(`[DataCache] Retrying setCache (${retryCount + 1}/${MAX_RETRIES})...`);
+        // Скидаємо з'єднання і пробуємо знову
+        this.db = null;
+        this.initPromise = null;
+        await new Promise(resolve => setTimeout(resolve, 100)); // Невелика затримка
+        return this.setCache(storeName, key, data, lang, isFull, retryCount + 1);
+      }
+      
       // Не кидаємо помилку, щоб не зламати основний функціонал
     }
   }
 
   /**
-   * Отримання даних з кешу
+   * Отримання даних з кешу з retry логікою
    */
-  private async getCache<T>(storeName: string, key: string, lang: string): Promise<CacheEntry<T> | null> {
+  private async getCache<T>(storeName: string, key: string, lang: string, retryCount: number = 0): Promise<CacheEntry<T> | null> {
+    const MAX_RETRIES = 2;
+    
     try {
       await this.init();
       if (!this.db) return null;
 
       return new Promise((resolve) => {
-        const transaction = this.db!.transaction([storeName], 'readonly');
-        const store = transaction.objectStore(storeName);
-        const request = store.get(key);
+        try {
+          const transaction = this.db!.transaction([storeName], 'readonly');
+          const store = transaction.objectStore(storeName);
+          const request = store.get(key);
 
-        request.onsuccess = () => {
-          const entry = request.result as CacheEntry<T> | undefined;
+          request.onsuccess = () => {
+            const entry = request.result as CacheEntry<T> | undefined;
+            
+            if (!entry) {
+              console.log(`[DataCache] No cache found for ${storeName}`);
+              resolve(null);
+              return;
+            }
+
+            // Перевіряємо актуальність кешу
+            const age = Date.now() - entry.timestamp;
+            if (age > CACHE_DURATION) {
+              console.log(`[DataCache] Cache expired for ${storeName} (age: ${Math.round(age / 1000 / 60)} min)`);
+              resolve(null);
+              return;
+            }
+
+            // Перевіряємо відповідність мови
+            if (entry.lang !== lang) {
+              console.log(`[DataCache] Cache lang mismatch for ${storeName} (cached: ${entry.lang}, requested: ${lang})`);
+              resolve(null);
+              return;
+            }
+
+            console.log(`[DataCache] Retrieved ${entry.data.length} items from ${storeName} (age: ${Math.round(age / 1000)} sec, full: ${entry.isFull === true})`);
+            resolve(entry);
+          };
+
+          request.onerror = () => {
+            console.error(`[DataCache] Failed to get from ${storeName}:`, request.error);
+            resolve(null);
+          };
           
-          if (!entry) {
-            console.log(`[DataCache] No cache found for ${storeName}`);
+          transaction.onerror = () => {
+            console.error(`[DataCache] Transaction error:`, transaction.error);
             resolve(null);
-            return;
-          }
-
-          // Перевіряємо актуальність кешу
-          const age = Date.now() - entry.timestamp;
-          if (age > CACHE_DURATION) {
-            console.log(`[DataCache] Cache expired for ${storeName} (age: ${Math.round(age / 1000 / 60)} min)`);
-            resolve(null);
-            return;
-          }
-
-          // Перевіряємо відповідність мови
-          if (entry.lang !== lang) {
-            console.log(`[DataCache] Cache lang mismatch for ${storeName} (cached: ${entry.lang}, requested: ${lang})`);
-            resolve(null);
-            return;
-          }
-
-          console.log(`[DataCache] Retrieved ${entry.data.length} items from ${storeName} (age: ${Math.round(age / 1000)} sec, full: ${entry.isFull === true})`);
-          resolve(entry);
-        };
-
-        request.onerror = () => {
-          console.error(`[DataCache] Failed to get from ${storeName}:`, request.error);
+          };
+        } catch (txError: any) {
+          console.error(`[DataCache] Transaction creation error:`, txError);
           resolve(null);
-        };
+        }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('[DataCache] getCache error:', error);
+      
+      // Retry логіка для помилок з'єднання
+      if (error.message?.includes('closing') && retryCount < MAX_RETRIES) {
+        console.log(`[DataCache] Retrying getCache (${retryCount + 1}/${MAX_RETRIES})...`);
+        // Скидаємо з'єднання і пробуємо знову
+        this.db = null;
+        this.initPromise = null;
+        await new Promise(resolve => setTimeout(resolve, 100)); // Невелика затримка
+        return this.getCache(storeName, key, lang, retryCount + 1);
+      }
+      
       return null;
     }
   }

@@ -1917,11 +1917,26 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       await updateSiteDescriptions({ descriptions: payload });
       // Показуємо лише статус без кількості змін
       toast({ title: 'Успішно' });
+      
+      // Оновлюємо initialDescriptions збереженими даними
+      // щоб вони стали новою базою для порівняння
+      setInitialDescriptions(descriptions.map(desc => ({ ...desc })));
+      
+      // Оновлюємо кеш збереженими даними
+      try {
+        await dataCache.cacheProducts(descriptions, selectedLang, true);
+        console.log('[SaveChanges] Updated cache with saved data');
+      } catch (cacheError) {
+        console.warn('[SaveChanges] Failed to update cache:', cacheError);
+      }
+      
       // Очищаємо локальні чернетки, бо дані збережено
       clearAllUnsaved();
-      // Після збереження перезавантажуємо дані з сервера, щоб уникнути локальних артефактів
-      preferServerOnceRef.current = true;
-      await fetchData();
+      
+      // НЕ перезавантажуємо з сервера, щоб не втратити згенеровані дані
+      // preferServerOnceRef.current = true;
+      // await fetchData();
+      
       // Скидаємо маркери згенерованих рядків після успішного збереження
       setGeneratedRows({});
     } catch (e) {
@@ -1996,11 +2011,23 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       
       toast({ title: `Успішно збережено ${payload.length} категорій` });
       
+      // Оновлюємо initialCategoryDescriptions збереженими даними
+      // щоб вони стали новою базою для порівняння
+      setInitialCategoryDescriptions(categoryDescriptions.map(cat => ({ ...cat })));
+      
+      // Оновлюємо кеш збереженими даними
+      try {
+        await dataCache.cacheCategories(categoryDescriptions, selectedLang, true);
+        console.log('[SaveCategoryChanges] Updated cache with saved data');
+      } catch (cacheError) {
+        console.warn('[SaveCategoryChanges] Failed to update cache:', cacheError);
+      }
+      
       // Очищаємо локальні чернетки
       clearAllCategoryUnsaved();
       
-      // Перезавантажуємо категорії з сервера
-      await fetchCategoryData();
+      // НЕ перезавантажуємо з сервера, щоб не втратити згенеровані дані
+      // await fetchCategoryData();
       
     } catch (e) {
       console.error('[SaveCategoryChanges] Failed', e);
@@ -2374,6 +2401,18 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   }, [selectedCategory]);
   
   const handleRefresh = () => {
+    // Перевіряємо наявність незбережених змін
+    const hasUnsavedChanges = activeTab === 'products' 
+      ? Object.keys(readUnsaved()).length > 0
+      : Object.keys(readCategoryUnsaved()).length > 0;
+    
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        'У вас є незбережені зміни. Оновлення сторінки призведе до їх втрати. Продовжити?'
+      );
+      if (!confirmed) return;
+    }
+    
     if (activeTab === 'products') fetchData();
     else fetchCategoryData();
   };
