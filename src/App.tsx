@@ -33,7 +33,8 @@ import AIProductFillerTemplates from './pages/ai-product-filler/Templates';
 import AIProductFillerTranslator from './pages/ai-product-filler/Translator';
 import AIProductFillerAnalysis from './pages/ai-product-filler/Analysis';
 import AIProductFillerCharacteristics from './pages/ai-product-filler/Characteristics';
-import AIProductFillerWatermarkRemoval from './pages/ai-product-filler/WatermarkRemoval';
+import AIProductFillerPhotoEditor from './pages/ai-product-filler/PhotoEditor';
+import AIProductFillerWatermarkRemoval from './pages/ai-product-filler/WatermarkRemoval_NEW';
 import PriceBuilderHome from './pages/ai-price-builder/Home';
 import PriceBuilderGenerate from './pages/ai-price-builder/Generate';
 import BusinessAgentDashboard from './pages/ai-business-agent/Dashboard';
@@ -252,6 +253,7 @@ function App() {
           <Route path="/ai-product-filler/translator" element={<AIProductFillerTranslator />} />
           <Route path="/ai-product-filler/analysis" element={<AIProductFillerAnalysis />} />
           <Route path="/ai-product-filler/characteristics" element={<AIProductFillerCharacteristics />} />
+          <Route path="/ai-product-filler/photo-editor" element={<AIProductFillerPhotoEditor />} />
           <Route path="/ai-product-filler/watermark-removal" element={<AIProductFillerWatermarkRemoval />} />
           <Route path="/ai-product-filler/settings" element={<Settings/>} />
 

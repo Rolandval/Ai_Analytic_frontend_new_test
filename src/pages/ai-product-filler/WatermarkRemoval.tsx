@@ -1,25 +1,23 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { Upload, X, Download, Wand2, Eye, EyeOff } from 'lucide-react';
-import { usePFI18n } from './i18n';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AIProductFillerLayout from './components/AIProductFillerLayout';
 
-interface ProcessedImage {
-  id: string;
-  originalFile: File;
-  originalUrl: string;
-  processedUrl: string;
-  status: 'processing' | 'completed' | 'error';
-  progress: number;
-}
- 
-interface ImageComparisonSliderProps {
-  originalImage: string;
-  processedImage: string;
-  originalLabel: string;
-  processedLabel: string;
-}
+export default function WatermarkRemoval() {
+  const navigate = useNavigate();
 
-function ImageComparisonSlider({ 
+  useEffect(() => {
+    // Редірект на нову сторінку PhotoEditor
+    navigate('/ai-product-filler/photo-editor', { replace: true });
+  }, [navigate]);
+
+  return (
+    <AIProductFillerLayout>
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500">Перенаправлення на Робота з фото...</p>
+      </div>
+    </AIProductFillerLayout>
+  );
+} 
   originalImage, 
   processedImage, 
   originalLabel, 

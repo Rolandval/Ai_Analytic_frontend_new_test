@@ -16,7 +16,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<Invert
     sortable: true,
     render: (row) => (
       <span className="text-sm">
-        {row.power != null ? (row.power / 1000).toFixed(1) : '-'}
+        {row.power != null ? Number(row.power).toFixed(1) : '-'}
       </span>
     )
   },

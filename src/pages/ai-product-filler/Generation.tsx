@@ -2036,6 +2036,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           category_ids: selectedCategory === 'all' ? [] : [selectedCategory],
           page: 1,
           limit: 9999,
+          lang: selectedLang,
         };
         
         const fullResponse = await fetchContentDescriptions<ContentDescription>(fullRequest);
@@ -2172,6 +2173,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         category_ids: selectedCategory === 'all' ? [] : [selectedCategory],
         page: 1,
         limit: 300,
+        lang: selectedLang,
       };
       console.log('[Generation] STEP 1: Quick fetch - 300 products:', quickRequest);
       
@@ -4472,8 +4474,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                   </Badge>
                 )}
                 {searchQuery && (
-                  <Badge variant="secondary" className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" title={`Пошук: "${searchQuery}"`}>
-                    🔍 Знайдено: {activeTab === 'categories' ? filteredCategories.length : filteredDescriptions.length} / {activeTab === 'categories' ? categoryDescriptions.length : descriptions.length}
+                  <Badge
+                    variant="secondary"
+                    className="text-xs px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                    title={`Пошук: "${searchQuery}"`}
+                  >
+                    {(() => {
+                      const filteredCount = activeTab === 'categories' ? filteredCategories.length : filteredDescriptions.length;
+                      const totalCount = activeTab === 'categories' ? categoryDescriptions.length : descriptions.length;
+                      return `🔍 Знайдено: ${filteredCount} / ${totalCount}`;
+                    })()}
                   </Badge>
                 )}
               </div>
@@ -4484,10 +4494,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                   <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
                     <span>
                       {(() => {
-                        const start = totalFiltered > 0 ? (page - 1) * limit + 1 : 0;
-                        const end = Math.min(page * limit, totalFiltered);
+                        const currentTotalFiltered = activeTab === 'categories' ? filteredCategories.length : totalFiltered;
+                        const start = currentTotalFiltered > 0 ? (page - 1) * limit + 1 : 0;
+                        const end = Math.min(page * limit, currentTotalFiltered);
                         const searchInfo = searchQuery ? ` (пошук: "${searchQuery}")` : '';
-                        return `${t('table.shown')} ${start}-${end} ${t('table.of')} ${totalFiltered} ${t('table.records')}${searchInfo}`;
+                        return `${t('table.shown')} ${start}-${end} ${t('table.of')} ${currentTotalFiltered} ${t('table.records')}${searchInfo}`;
                       })()}
                     </span>
                     <div className="flex items-center gap-2">

@@ -20,7 +20,7 @@ function InnerLayout({ children }: Props) {
     { to: '/ai-product-filler/generation', label: t('nav.generation'), icon: Wand2 },
     { to: '/ai-product-filler/analysis', label: t('nav.analysis'), icon: BarChart2 },
     { to: '/ai-product-filler/characteristics', label: t('nav.characteristics'), icon: List },
-    { to: '/ai-product-filler/watermark-removal', label: t('nav.watermark'), icon: Droplets },
+    { to: '/ai-product-filler/photo-editor', label: 'Робота з фото', icon: Droplets },
     { to: '/ai-product-filler/templates', label: t('nav.templates'), icon: Layers },
     { to: '/ai-product-filler/translator', label: t('nav.translator'), icon: Languages },
     { to: '/auth', label: t('nav.logout'), icon: LogOut, onClick: () => { try { logout(); } finally { navigate('/auth', { replace: true }); } } },
