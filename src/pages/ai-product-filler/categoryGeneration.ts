@@ -1,5 +1,5 @@
 import { generateAiCategoryDescription } from '@/api/contentDescriptions';
-import { type SiteColumnName, type SiteContentPrompt } from '@/api/contentPrompts';
+import { type SiteColumnName, type SiteContentPrompt, fetchCategoryPrompts } from '@/api/contentPrompts';
 import type { SiteCategoryDescription } from '@/api/siteCategoriesDescriptions';
 
 // Колонки для категорій (відповідають полям SiteCategoryDescription)
@@ -25,6 +25,7 @@ export const mapCategoryColumnToApiField: Record<CategoryColumnName, string> = {
 // Отримати промпт для колонки категорії
 export const resolvePromptForCategoryColumn = (
   prompts: Record<string, SiteContentPrompt[]>,
+  categoryPrompts: Record<string, SiteContentPrompt[]>,
   col: CategoryColumnName,
   selectedLang: 'ua' | 'en' | 'ru'
 ): string | null => {
@@ -37,27 +38,65 @@ export const resolvePromptForCategoryColumn = (
   };
   
   const productCol = productColumnMap[col];
-  const list = prompts[productCol] || [];
+  
+  console.log(`🔍 [resolvePromptForCategoryColumn] Resolving prompt for col: ${col} -> ${productCol}, lang: ${selectedLang}`);
+  console.log('Available category prompts:', Object.keys(categoryPrompts));
+  console.log('Available regular prompts:', Object.keys(prompts));
   
   const norm = (s?: string) => (s || '').toLowerCase();
   const want = norm(selectedLang);
   const isSameLang = (code?: string) => (want === 'ua' ? (norm(code) === 'ua' || norm(code) === 'uk') : norm(code) === want);
   
+  // First, try to get category-specific prompts
+  const categoryList = categoryPrompts[productCol] || [];
+  console.log(`📋 Category prompts for ${productCol}:`, categoryList.length, categoryList.map(p => ({ id: p.id, name: p.name, is_active: p.is_active, lang_code: p.lang_code })));
+  
+  if (categoryList.length > 0) {
+    const byLang = categoryList.filter(p => isSameLang(p.lang_code as any));
+    const pool = byLang.length > 0 ? byLang : categoryList;
+    
+    console.log(`🎯 Filtered by language (${selectedLang}):`, pool.length, pool.map(p => ({ id: p.id, is_active: p.is_active })));
+    
+    const active = pool.find(p => p.is_active);
+    if (active?.prompt) {
+      console.log(`✅ Found active category prompt:`, active.id, active.name);
+      return active.prompt;
+    }
+    
+    if (Array.isArray(pool) && pool.length > 0) {
+      const latest = [...pool].filter(x => typeof x?.prompt === 'string').sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0];
+      if (latest && typeof latest.prompt === 'string') {
+        console.log(`📝 Using latest category prompt:`, latest.id, latest.name);
+        return latest.prompt;
+      }
+    }
+  }
+  
+  // Fallback to regular product prompts if no category-specific prompts found
+  console.log(`🔄 Falling back to regular prompts for ${productCol}`);
+  const list = prompts[productCol] || [];
+  console.log(`📋 Regular prompts for ${productCol}:`, list.length, list.map(p => ({ id: p.id, name: p.name, is_active: p.is_active, lang_code: p.lang_code })));
+  
   const byLang = list.filter(p => isSameLang(p.lang_code as any));
   const pool = byLang.length > 0 ? byLang : list;
   
+  console.log(`🎯 Filtered regular prompts by language (${selectedLang}):`, pool.length, pool.map(p => ({ id: p.id, is_active: p.is_active })));
+  
   const active = pool.find(p => p.is_active);
   if (active?.prompt) {
+    console.log(`✅ Found active regular prompt:`, active.id, active.name);
     return active.prompt;
   }
   
   if (Array.isArray(pool) && pool.length > 0) {
     const latest = [...pool].filter(x => typeof x?.prompt === 'string').sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0];
     if (latest && typeof latest.prompt === 'string') {
+      console.log(`📝 Using latest regular prompt:`, latest.id, latest.name);
       return latest.prompt;
     }
   }
   
+  console.log(`❌ No prompt found for ${col} -> ${productCol}, lang: ${selectedLang}`);
   return null;
 };
 
@@ -66,6 +105,7 @@ export const generateSelectedCategories = async (
   categoryDescriptions: SiteCategoryDescription[],
   selectedCells: Record<string, boolean>,
   prompts: Record<string, SiteContentPrompt[]>,
+  categoryPrompts: Record<string, SiteContentPrompt[]>,
   selectedLang: 'ua' | 'en' | 'ru',
   selectedChatModel: string,
   getCategoryRowKey: (cat: SiteCategoryDescription, index: number) => string,
@@ -125,7 +165,11 @@ export const generateSelectedCategories = async (
 
   if (jobs.length === 0) {
     console.warn('[generateSelectedCategories] No jobs created!');
-    onProgress('Нічого не вибрано');
+    console.warn('Possible reasons:');
+    console.warn('1. No cells selected (selectedCells is empty)');
+    console.warn('2. selectedCells keys do not match expected format');
+    console.warn('Expected format: "cat_{category_id}_{lang_code}_{index}:{column}"');
+    onProgress('❌ Нічого не вибрано для генерації');
     return;
   }
 
@@ -139,12 +183,15 @@ export const generateSelectedCategories = async (
     
     try {
       const cat = job.category;
-      const prompt = resolvePromptForCategoryColumn(prompts, job.col, selectedLang);
+      const prompt = resolvePromptForCategoryColumn(prompts, categoryPrompts, job.col, selectedLang);
       
       if (!prompt) {
-        console.warn('[GenerateSelectedCategories] Skip: no prompt resolved for col', job.col, 'lang:', selectedLang);
+        console.warn(`❌ [GenerateSelectedCategories] Skip: no prompt resolved for col ${job.col}, lang: ${selectedLang}`);
+        console.warn('Available category prompts:', Object.keys(categoryPrompts));
+        console.warn('Available regular prompts:', Object.keys(prompts));
+        console.warn('💡 Hint: Create category prompts in Templates page (Category tab) or regular prompts will be used as fallback');
         done++; 
-        onProgress(`${done}/${jobs.length}`); 
+        onProgress(`${done}/${jobs.length} (пропущено: немає промпта для ${job.col})`); 
         continue;
       }
 
@@ -204,6 +251,7 @@ export const generateSelectedCategories = async (
 export const massGenerateCategories = async (
   categoryDescriptions: SiteCategoryDescription[],
   prompts: Record<string, SiteContentPrompt[]>,
+  categoryPrompts: Record<string, SiteContentPrompt[]>,
   selectedLang: 'ua' | 'en' | 'ru',
   selectedChatModel: string,
   getCategoryRowKey: (cat: SiteCategoryDescription, index: number) => string,
@@ -242,7 +290,7 @@ export const massGenerateCategories = async (
   for (const job of jobs) {
     try {
       const cat = job.category;
-      const prompt = resolvePromptForCategoryColumn(prompts, job.col, selectedLang);
+      const prompt = resolvePromptForCategoryColumn(prompts, categoryPrompts, job.col, selectedLang);
       
       if (!prompt) {
         done++; 

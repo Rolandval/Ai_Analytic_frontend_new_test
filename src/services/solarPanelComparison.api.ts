@@ -2,7 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { SolarPanelPriceListRequestSchema } from '@/types/solarPanels';
 
 const BASE = '/solar_panels/backend';
-const BASE_URL = 'http://185.233.44.234:8002';
+const BASE_URL = import.meta.env.DEV ? '' : 'http://185.233.44.234:8002';
 
 // Minimal response shape for supplier comparison used by the UI
 export interface SolarPanelMultiPriceListResponseSchema {

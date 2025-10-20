@@ -7,6 +7,7 @@ export const useCategoryGeneration = (
   categoryDescriptions: SiteCategoryDescription[],
   setCategoryDescriptions: (updater: (prev: SiteCategoryDescription[]) => SiteCategoryDescription[]) => void,
   prompts: Record<string, SiteContentPrompt[]>,
+  categoryPrompts: Record<string, SiteContentPrompt[]>,
   selectedLang: 'ua' | 'en' | 'ru',
   selectedChatModel: string,
   getCategoryRowKey: (cat: SiteCategoryDescription, index: number) => string,
@@ -94,6 +95,7 @@ export const useCategoryGeneration = (
         categoryDescriptions,
         selectedCells,
         prompts,
+        categoryPrompts,
         selectedLang,
         selectedChatModel,
         getCategoryRowKey,
@@ -112,6 +114,7 @@ export const useCategoryGeneration = (
   }, [
     categoryDescriptions,
     prompts,
+    categoryPrompts,
     selectedLang,
     selectedChatModel,
     getCategoryRowKey,
@@ -131,6 +134,7 @@ export const useCategoryGeneration = (
       await massGenerateCategories(
         categoryDescriptions,
         prompts,
+        categoryPrompts,
         selectedLang,
         selectedChatModel,
         getCategoryRowKey,
@@ -146,6 +150,7 @@ export const useCategoryGeneration = (
   }, [
     categoryDescriptions,
     prompts,
+    categoryPrompts,
     selectedLang,
     selectedChatModel,
     getCategoryRowKey,

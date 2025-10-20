@@ -18,7 +18,9 @@ import { getTemplates,
 
 import {
   fetchAllColumnPrompts,
+  fetchAllCategoryPrompts,
   fetchColumnPrompts,
+  fetchCategoryPrompts,
   createSiteContentPrompt,
   activateSiteContentPrompt,
   deleteSiteContentPrompt,
@@ -56,6 +58,24 @@ const CATEGORY_FIELDS: FieldConfig<keyof CategoryTemplates>[] = [
   { key: 'meta_keywords', label: 'Meta-tag Keywords' },
 ];
 
+// Мапінг полів категорій до колонок для промптів
+const mapCategoryFieldKeyToSiteColumnName = (
+  key: keyof CategoryTemplates
+): SiteColumnName | null => {
+  switch (key) {
+    case 'meta_title':
+      return 'page_title';
+    case 'meta_description':
+      return 'meta_description';
+    case 'description':
+      return 'short_description';
+    case 'meta_keywords':
+      return 'meta_keywords';
+    default:
+      return null;
+  }
+};
+
 export default function AIProductFillerTemplates() {
   const { t } = usePFI18n();
   // const navigate = useNavigate();
@@ -67,6 +87,8 @@ export default function AIProductFillerTemplates() {
   const [saving, setSaving] = useState(false);
   // Кеш підказок за мовою: lang -> (column -> prompts)
   const [promptsByLang, setPromptsByLang] = useState<Partial<Record<Lang, Partial<Record<SiteColumnName, SiteContentPrompt[]>>>> >({});
+  // Кеш категорійних підказок за мовою: lang -> (column -> prompts)
+  const [categoryPromptsByLang, setCategoryPromptsByLang] = useState<Partial<Record<Lang, Partial<Record<SiteColumnName, SiteContentPrompt[]>>>> >({});
   // Обраний для поля language override: column -> lang
   const [fieldLang, setFieldLang] = useState<Partial<Record<SiteColumnName, Lang>>>({});
   const [creatingColumn, setCreatingColumn] = useState<SiteColumnName | null>(null);
@@ -156,9 +178,15 @@ export default function AIProductFillerTemplates() {
       await activateSiteContentPrompt(id);
       // reload this column to reflect new active state (для мови, що обрана для цього поля)
       const l = (fieldLang[column] ?? lang);
-      const list = await fetchColumnPrompts(column, l);
-      setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
-      // baseline map більше не використовується
+      
+      if (entity === 'product') {
+        const list = await fetchColumnPrompts(column, l);
+        setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
+      } else {
+        const list = await fetchCategoryPrompts(column, l);
+        setCategoryPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
+      }
+      
       // сповістити генерацію, що активний промпт змінився
       notifyPromptsChanged(column);
     } catch (e) {
@@ -170,13 +198,19 @@ export default function AIProductFillerTemplates() {
     if (!window.confirm('Видалити цей промпт? Дію неможливо скасувати.')) return;
     // Перевіряємо, чи був він активним до видалення
     const l = (fieldLang[column] ?? lang);
-    const prevList = getPromptsFor(column, l);
+    const prevList = entity === 'product' ? getPromptsFor(column, l) : getCategoryPromptsFor(column, l);
     const wasActive = !!prevList.find((p: SiteContentPrompt) => p.id === id)?.is_active;
     setDeletingId(id);
     try {
       const ok = await deleteSiteContentPrompt(id);
       if (ok) {
-        let list = await fetchColumnPrompts(column, l);
+        let list: SiteContentPrompt[];
+        if (entity === 'product') {
+          list = await fetchColumnPrompts(column, l);
+        } else {
+          list = await fetchCategoryPrompts(column, l);
+        }
+        
         // Якщо видаляли активний — активуємо "попередню" версію
         if (wasActive && list.length > 0) {
           // шукаємо найбільший id, що менший за видалений; якщо немає — просто максимальний id
@@ -184,11 +218,20 @@ export default function AIProductFillerTemplates() {
           let toActivate = less.length > 0 ? less.reduce((a, b) => (a.id > b.id ? a : b)) : list.reduce((a, b) => (a.id > b.id ? a : b));
           if (toActivate && !toActivate.is_active) {
             await activateSiteContentPrompt(toActivate.id);
-            list = await fetchColumnPrompts(column, l);
+            if (entity === 'product') {
+              list = await fetchColumnPrompts(column, l);
+            } else {
+              list = await fetchCategoryPrompts(column, l);
+            }
           }
         }
-        setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
-        // baseline map більше не використовується
+        
+        if (entity === 'product') {
+          setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
+        } else {
+          setCategoryPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
+        }
+        
         notifyPromptsChanged(column);
       }
     } catch (e) {
@@ -207,16 +250,40 @@ export default function AIProductFillerTemplates() {
 
   const loadAllPrompts = async () => {
     try {
-      const data = await fetchAllColumnPrompts(undefined as unknown as any, lang);
+      console.log(`[Templates] Loading prompts for language: ${lang}`);
+      const [data, categoryData] = await Promise.all([
+        fetchAllColumnPrompts(undefined as unknown as any, lang),
+        fetchAllCategoryPrompts(undefined as unknown as any, lang)
+      ]);
+      
+      console.log(`[Templates] Loaded prompts:`, {
+        regular: Object.keys(data).map(k => ({ column: k, count: data[k].length })),
+        category: Object.keys(categoryData).map(k => ({ column: k, count: categoryData[k].length }))
+      });
+      
       setPromptsByLang(prev => ({ ...prev, [lang]: data }));
+      setCategoryPromptsByLang(prev => ({ ...prev, [lang]: categoryData }));
 
       // ініціалізуємо lastSavedText поточними активними/першими значеннями
       const last: Partial<Record<SiteColumnName, string>> = {};
+      
+      // Для звичайних промптів
       (Object.keys(data) as SiteColumnName[]).forEach((c) => {
         const list = data[c] ?? [];
         const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
         if (active) last[c] = active.prompt;
       });
+      
+      // Для категорійних промптів - завжди встановлюємо baseline
+      (Object.keys(categoryData) as SiteColumnName[]).forEach((c) => {
+        const list = categoryData[c] ?? [];
+        const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+        if (active) {
+          last[c] = active.prompt;
+        }
+      });
+      
+      console.log(`[Templates] Initialized baseline for ${lang}:`, Object.keys(last).map(k => ({ column: k, length: last[k]?.length || 0 })));
       setLastSavedTextByLang(prev => ({ ...prev, [lang]: last }));
     } catch (e) {
       console.error('Не вдалося завантажити підказки', e);
@@ -243,26 +310,60 @@ export default function AIProductFillerTemplates() {
     }
   }, [entity, lang, promptsByLang, productTpl, categoryTpl, enabled]);
 
-  const createPrompt = async (column: SiteColumnName, name: string, prompt: string, l?: Lang) => {
+  const createPrompt = async (column: SiteColumnName, name: string, prompt: string, l?: Lang, isCategory?: boolean) => {
     setCreatingColumn(column);
     try {
       const langCode = l ?? (fieldLang[column] ?? lang);
-      const payload = { name, prompt, site_column_name: column, lang_code: langCode, is_active: true } as const;
+      const payload = { name, prompt, site_column_name: column, lang_code: langCode, is_active: true, is_category: isCategory ?? false } as const;
       console.log('[CreateSiteContentPrompt] Payload:', payload);
       const created = await createSiteContentPrompt(payload);
-      // Reload the column list to capture the new item (and its real id)
-      let list = await fetchColumnPrompts(column, langCode);
-      console.log('[CreateSiteContentPrompt] Reloaded column list:', column, list);
+      
+      // Reload the appropriate column list based on prompt type
+      let list: SiteContentPrompt[];
+      if (isCategory) {
+        list = await fetchCategoryPrompts(column, langCode);
+        console.log('[CreateSiteContentPrompt] Reloaded CATEGORY column list:', column, list);
+      } else {
+        list = await fetchColumnPrompts(column, langCode);
+        console.log('[CreateSiteContentPrompt] Reloaded REGULAR column list:', column, list);
+      }
+      
       // Try to find created item in the list
       let target = list.find(it => it.id === created?.id);
       if (!target) target = list.find(it => it.prompt === prompt && it.name === name);
       if (!target) target = list.find(it => it.prompt === prompt);
+      
+      console.log('[CreateSiteContentPrompt] Found created prompt:', target ? `${target.id} (active: ${target.is_active})` : 'NOT FOUND');
+      
       // If target exists and is not active, explicitly activate it (backend should deactivate previous active)
       if (target && !target.is_active) {
+        console.log('[CreateSiteContentPrompt] Activating prompt:', target.id);
         await activateSiteContentPrompt(target.id);
-        list = await fetchColumnPrompts(column, langCode);
+        
+        // Reload again after activation
+        if (isCategory) {
+          list = await fetchCategoryPrompts(column, langCode);
+        } else {
+          list = await fetchColumnPrompts(column, langCode);
+        }
       }
-      setPromptsByLang(prev => ({ ...prev, [langCode]: { ...(prev[langCode]||{}), [column]: list } }));
+      
+      // Update the appropriate state
+      if (isCategory) {
+        setCategoryPromptsByLang(prev => ({ ...prev, [langCode]: { ...(prev[langCode]||{}), [column]: list } }));
+        // Update baseline for category prompts
+        const activePrompt = list.find(it => it.is_active);
+        if (activePrompt) {
+          setLastSavedTextByLang(prev => ({ ...prev, [langCode]: { ...(prev[langCode]||{}), [column]: activePrompt.prompt } }));
+        }
+      } else {
+        setPromptsByLang(prev => ({ ...prev, [langCode]: { ...(prev[langCode]||{}), [column]: list } }));
+        // Update baseline for regular prompts
+        const activePrompt = list.find(it => it.is_active);
+        if (activePrompt) {
+          setLastSavedTextByLang(prev => ({ ...prev, [langCode]: { ...(prev[langCode]||{}), [column]: activePrompt.prompt } }));
+        }
+      }
       notifyPromptsChanged(column);
     } catch (e) {
       console.error('Не вдалося створити підказку', e);
@@ -280,14 +381,45 @@ export default function AIProductFillerTemplates() {
     return (promptsByLang[l]?.[column] ?? []) as SiteContentPrompt[];
   };
 
+  // Хелпер: отримати список категорійних підказок для колонки у заданій мові
+  const getCategoryPromptsFor = (column: SiteColumnName, l: Lang): SiteContentPrompt[] => {
+    return (categoryPromptsByLang[l]?.[column] ?? []) as SiteContentPrompt[];
+  };
+
   // При перемиканні мови для конкретного поля — підвантажуємо тільки її для цієї колонки при потребі
   const ensureColumnLangLoaded = async (column: SiteColumnName, l: Lang) => {
-    if (promptsByLang[l]?.[column]) return;
-    const list = await fetchColumnPrompts(column, l);
-    setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: list } }));
-    // baseline для нової мови
-    const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
-    if (active) setLastSavedTextByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: active.prompt } }));
+    const needsProduct = !promptsByLang[l]?.[column];
+    const needsCategory = !categoryPromptsByLang[l]?.[column];
+    
+    if (!needsProduct && !needsCategory) return;
+    
+    const promises = [];
+    if (needsProduct) promises.push(fetchColumnPrompts(column, l));
+    if (needsCategory) promises.push(fetchCategoryPrompts(column, l));
+    
+    const results = await Promise.all(promises);
+    
+    let productList: SiteContentPrompt[] = [];
+    let categoryList: SiteContentPrompt[] = [];
+    
+    if (needsProduct && needsCategory) {
+      [productList, categoryList] = results;
+    } else if (needsProduct) {
+      productList = results[0];
+    } else if (needsCategory) {
+      categoryList = results[0];
+    }
+    
+    if (needsProduct) {
+      setPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: productList } }));
+      // baseline для нової мови
+      const active = (productList.find((it) => !!it.is_active) ?? productList[0]) as SiteContentPrompt | undefined;
+      if (active) setLastSavedTextByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: active.prompt } }));
+    }
+    
+    if (needsCategory) {
+      setCategoryPromptsByLang(prev => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: categoryList } }));
+    }
   };
 
   const vars = useMemo(() => (entity === 'product' ? PRODUCT_VARIABLES : CATEGORY_VARIABLES), [entity]);
@@ -296,21 +428,76 @@ export default function AIProductFillerTemplates() {
 
   // Глобальний прапор наявності незбережених змін для відображення кнопки у топ-барі
   const hasUnsaved = useMemo(() => {
-    if (entity !== 'product') return false;
+    console.log(`[hasUnsaved] Recalculating for entity: ${entity}, lang: ${lang}`);
     try {
-      for (const f of PRODUCT_FIELDS) {
-        const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
-        if (!column) continue;
-        const l = (fieldLang[column] ?? lang);
-        const list = getPromptsFor(column, l);
-        const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
-        const currentText = (active?.prompt ?? ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? ''));
-        const baseline = (lastSavedTextByLang[l]?.[column] ?? '');
-        if ((currentText || '').trim().length > 0 && currentText !== baseline) return true;
+      if (entity === 'product') {
+        // Логіка для продуктів
+        for (const f of PRODUCT_FIELDS) {
+          const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+          if (!column) continue;
+          const l = (fieldLang[column] ?? lang);
+          const list = getPromptsFor(column, l);
+          const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+          const currentText = (active?.prompt ?? ((productTpl?.[f.key as keyof ProductTemplates] as string) ?? ''));
+          const baseline = (lastSavedTextByLang[l]?.[column] ?? '');
+          if ((currentText || '').trim().length > 0 && currentText !== baseline) return true;
+        }
+      } else if (entity === 'category') {
+        // Логіка для категорій
+        for (const f of CATEGORY_FIELDS) {
+          const column = mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+          
+          if (!column) {
+            // Немаплене поле - перевіряємо локальний стан categoryTpl
+            const currentText = (categoryTpl?.[f.key as keyof CategoryTemplates] as string) ?? '';
+            const initialText = (getTemplates('category', lang)?.[f.key as keyof CategoryTemplates] as string) ?? '';
+            
+            console.log(`[hasUnsaved] Check unmapped ${f.key}:`, {
+              currentText: currentText.substring(0, 30) + '...',
+              initialText: initialText.substring(0, 30) + '...',
+              isDifferent: currentText !== initialText,
+              hasContent: currentText.trim().length > 0
+            });
+            
+            if (currentText !== initialText) {
+              console.log(`[hasUnsaved] Found unsaved changes in unmapped ${f.key}! Returning true.`);
+              return true;
+            }
+            continue;
+          }
+          
+          const l = (fieldLang[column] ?? lang);
+          const list = getCategoryPromptsFor(column, l);
+          const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+          
+          const currentText = (() => {
+            if (active?.prompt) return active.prompt;
+            return (categoryTpl?.[f.key as keyof CategoryTemplates] as string) ?? '';
+          })();
+          
+          const baseline = (lastSavedTextByLang[l]?.[column] ?? '');
+          
+          console.log(`[hasUnsaved] Check mapped ${f.key}:`, {
+            currentText: currentText.substring(0, 30) + '...',
+            baseline: baseline.substring(0, 30) + '...',
+            hasActive: !!active,
+            isDifferent: currentText !== baseline,
+            hasContent: currentText.trim().length > 0
+          });
+          
+          // Проста логіка: порівнюємо поточний текст з baseline
+          if (currentText.trim().length > 0 && currentText !== baseline) {
+            console.log(`[hasUnsaved] Found unsaved changes in mapped ${f.key}! Returning true.`);
+            return true;
+          }
+        }
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[hasUnsaved] Error:', e);
+    }
+    console.log(`[hasUnsaved] Result: false (no unsaved changes)`);
     return false;
-  }, [entity, fieldLang, lang, productTpl, lastSavedTextByLang, promptsByLang]);
+  }, [entity, fieldLang, lang, productTpl, categoryTpl, lastSavedTextByLang, promptsByLang, categoryPromptsByLang]);
 
   // Мапа колонки у читабельну назву поля (для заголовка діалогу)
   const columnToFieldLabel = useMemo(() => {
@@ -336,11 +523,27 @@ export default function AIProductFillerTemplates() {
     });
   };
 
+  const handleCategoryPromptChange = (
+    column: SiteColumnName,
+    id: number,
+    patch: Partial<Pick<SiteContentPrompt, 'name' | 'prompt'>>
+  ) => {
+    const l = (fieldLang[column] ?? lang);
+    setCategoryPromptsByLang(prev => {
+      const by = prev[l] ?? {};
+      const list = (by[column] ?? []) as SiteContentPrompt[];
+      const next = list.map(item => (item.id === id ? { ...item, ...patch } : item));
+      return { ...prev, [l]: { ...by, [column]: next } };
+    });
+  };
+
   // Updating existing prompt is disabled by product decision; we create a new prompt instead (new id)
 
   // removed isDirty (кнопки версій прибрані; авто-збереження створює нову версію одразу)
 
   const onChangeField = (key: string, value: string) => {
+    console.log(`[onChangeField] Called with entity: ${entity}, key: ${key}, value: ${value.substring(0, 50)}...`);
+    
     if (entity === 'product') {
       // Try map product field key to API column and update first prompt item inline
       const column = mapProductFieldKeyToSiteColumnName(key as keyof ProductTemplates);
@@ -356,12 +559,33 @@ export default function AIProductFillerTemplates() {
       // Fallback to local state if no mapping or no prompt item
       setProductTpl(prev => (prev ? ({ ...prev, [key]: value } as ProductTemplates) : prev));
     } else {
-      setCategoryTpl(prev => (prev ? ({ ...prev, [key]: value } as CategoryTemplates) : prev));
+      // Category handling
+      const column = mapCategoryFieldKeyToSiteColumnName(key as keyof CategoryTemplates);
+      if (column) {
+        const l = (fieldLang[column] ?? lang);
+        const list = getCategoryPromptsFor(column, l);
+        const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+        if (active) {
+          handleCategoryPromptChange(column, active.id, { prompt: value });
+          return;
+        }
+      }
+      // Fallback to local state if no mapping or no prompt item
+      console.log(`[onChangeField] Updating categoryTpl for ${key}:`, value.substring(0, 50) + '...');
+      setCategoryTpl(prev => {
+        const updated = prev ? ({ ...prev, [key]: value } as CategoryTemplates) : prev;
+        console.log(`[onChangeField] New categoryTpl state:`, updated);
+        return updated;
+      });
     }
   };
 
   const onSave = async () => {
     // Зберігати промпти ТІЛЬКИ по кнопці. Плюс локальні немаплені поля/категорії.
+    console.log(`[Templates] onSave called! Entity: ${entity}, Lang: ${lang}`);
+    console.log(`[Templates] categoryTpl state:`, categoryTpl);
+    console.log(`[Templates] productTpl state:`, productTpl);
+    
     setSaving(true);
     try {
       if (entity === 'product') {
@@ -408,9 +632,70 @@ export default function AIProductFillerTemplates() {
             setTemplates('product', lang, toPersist as unknown as ProductTemplates);
           }
         }
-      }
+      } else if (entity === 'category') {
+        // Збереження промптів для категорій
+        const saveTasks: Promise<void>[] = [];
+        (CATEGORY_FIELDS as typeof CATEGORY_FIELDS).forEach((f) => {
+          const column = mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+          if (!column) return; // немаплені підуть у локальне збереження нижче
+          const l = (fieldLang[column] ?? lang);
+          const list = getCategoryPromptsFor(column, l);
+          const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+          
+          // Отримуємо поточний текст з активного промпта або з локального шаблону
+          const currentText = (() => {
+            if (active?.prompt) return active.prompt;
+            return (categoryTpl?.[f.key as keyof CategoryTemplates] as string) ?? '';
+          })();
+          
+          const baseline = (lastSavedTextByLang[l]?.[column] ?? '');
+          
+          console.log(`[Templates] Category save check for ${f.key} (${column}):`, {
+            currentText: currentText.length > 0 ? currentText.substring(0, 50) + '...' : 'EMPTY',
+            baseline: baseline.length > 0 ? baseline.substring(0, 50) + '...' : 'EMPTY',
+            hasActive: !!active,
+            textLength: currentText.length,
+            isDifferent: currentText !== baseline,
+            categoryTpl: !!categoryTpl,
+            fieldValue: categoryTpl?.[f.key as keyof CategoryTemplates]
+          });
+          
+          if (!currentText || currentText.trim().length === 0) return; // не створюємо порожні
+          if (currentText === baseline) return; // змін немає
 
-      if (entity === 'category' && categoryTpl) setTemplates('category', lang, categoryTpl);
+          setSavingPerColumn((prev) => ({ ...prev, [column]: 'saving' }));
+          const currentName = active ? active.name : `${column}_category`;
+          const task = (async () => {
+            console.log(`[Templates] Creating category prompt for ${column}:`, { name: currentName, text: currentText.substring(0, 100) });
+            await createPrompt(column, currentName, currentText, l, true); // is_category = true
+            setLastSavedTextByLang((prev) => ({ ...prev, [l]: { ...(prev[l]||{}), [column]: currentText } }));
+            setSavingPerColumn((prev) => ({ ...prev, [column]: 'saved' }));
+            window.setTimeout(() => {
+              setSavingPerColumn((prev) => ({ ...prev, [column]: 'idle' }));
+            }, 1200);
+          })().catch((error) => {
+            console.error(`[Templates] Failed to save category prompt for ${column}:`, error);
+            setSavingPerColumn((prev) => ({ ...prev, [column]: 'error' }));
+          });
+          saveTasks.push(task);
+        });
+        await Promise.allSettled(saveTasks);
+
+        // Локальне збереження немаплених полів категорії
+        if (categoryTpl) {
+          const toPersist = CATEGORY_FIELDS.reduce((acc, f) => {
+            const column = mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+            if (!column) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (acc as any)[f.key] = categoryTpl[f.key as keyof CategoryTemplates] as any;
+            }
+            return acc;
+          }, {} as Partial<CategoryTemplates>);
+          if (Object.keys(toPersist).length > 0) {
+            setTemplates('category', lang, toPersist as unknown as CategoryTemplates);
+          }
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -543,11 +828,13 @@ export default function AIProductFillerTemplates() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <a href={`#field-${f.key}`} className="text-green-700 hover:underline">{f.label}</a>
-                        {entity === 'product' && (() => {
-                          const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
+                        {(() => {
+                          const column = entity === 'product' 
+                            ? mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates)
+                            : mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
                           if (!column) return null;
                           const l = (fieldLang[column] ?? lang);
-                          const list = getPromptsFor(column, l);
+                          const list = entity === 'product' ? getPromptsFor(column, l) : getCategoryPromptsFor(column, l);
                           return (
                             <button
                               type="button"
@@ -566,24 +853,28 @@ export default function AIProductFillerTemplates() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="hidden md:flex gap-2 text-xs text-muted-foreground">
-                          {(['ua','ru','en'] as Lang[]).map(lx => (
-                            <button
-                              key={lx}
-                              type="button"
-                              className={[
-                                'hover:underline',
-                                (fieldLang[mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates) as SiteColumnName] ?? lang) === lx ? 'font-semibold text-primary' : ''
-                              ].join(' ')}
-                              onClick={async () => {
-                                const col = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
-                                if (!col) return;
-                                setFieldLang(prev => ({ ...prev, [col]: lx }));
-                                await ensureColumnLangLoaded(col, lx);
-                              }}
-                            >
-                              {lx.toUpperCase()}
-                            </button>
-                          ))}
+                          {(['ua','ru','en'] as Lang[]).map(lx => {
+                            const col = entity === 'product' 
+                              ? mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates)
+                              : mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+                            return (
+                              <button
+                                key={lx}
+                                type="button"
+                                className={[
+                                  'hover:underline',
+                                  (fieldLang[col as SiteColumnName] ?? lang) === lx ? 'font-semibold text-primary' : ''
+                                ].join(' ')}
+                                onClick={async () => {
+                                  if (!col) return;
+                                  setFieldLang(prev => ({ ...prev, [col]: lx }));
+                                  await ensureColumnLangLoaded(col, lx);
+                                }}
+                              >
+                                {lx.toUpperCase()}
+                              </button>
+                            );
+                          })}
                         </div>
                         {entity === 'product' && (() => {
                           const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
@@ -618,11 +909,21 @@ export default function AIProductFillerTemplates() {
                             }
                             return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
                           } else {
+                            const column = mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+                            if (column) {
+                              const l = (fieldLang[column] ?? lang);
+                              const list = getCategoryPromptsFor(column, l);
+                              const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+                              if (active) return active.prompt;
+                            }
                             return (categoryTpl?.[f.key as keyof CategoryTemplates] as string) ?? '';
                           }
                         }
                       )()}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChangeField(f.key, e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                        console.log(`[Textarea onChange] Field: ${f.key}, Value: ${e.target.value.substring(0, 50)}...`);
+                        onChangeField(f.key, e.target.value);
+                      }}
                       placeholder="Введіть шаблон..."
                     />
                     <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
@@ -636,24 +937,83 @@ export default function AIProductFillerTemplates() {
                             if (active) return active.prompt.length;
                           }
                           return (productTpl?.[f.key as keyof ProductTemplates] ?? '').length;
+                        } else {
+                          const column = mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+                          if (column) {
+                            const l = (fieldLang[column] ?? lang);
+                            const list = getCategoryPromptsFor(column, l);
+                            const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
+                            if (active) return active.prompt.length;
+                          }
+                          return (categoryTpl?.[f.key as keyof CategoryTemplates] ?? '').length;
                         }
-                        return (categoryTpl?.[f.key as keyof CategoryTemplates] ?? '').length;
                       })()}</span>
                       <div className="flex items-center gap-2">
                         <a href={`#field-${f.key}`} className="hover:underline">#</a>
                         {(() => {
-                          if (entity !== 'product') return null;
-                          const column = mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates);
-                          if (!column) return null;
+                          const column = entity === 'product' 
+                            ? mapProductFieldKeyToSiteColumnName(f.key as keyof ProductTemplates)
+                            : mapCategoryFieldKeyToSiteColumnName(f.key as keyof CategoryTemplates);
+                          
+                          // Немаплене поле - перевіряємо локальний стан
+                          if (!column) {
+                            const currentText = entity === 'product'
+                              ? (productTpl?.[f.key as keyof ProductTemplates] as string) ?? ''
+                              : (categoryTpl?.[f.key as keyof CategoryTemplates] as string) ?? '';
+                            const initialText = entity === 'product'
+                              ? (getTemplates('product', lang)?.[f.key as keyof ProductTemplates] as string) ?? ''
+                              : (getTemplates('category', lang)?.[f.key as keyof CategoryTemplates] as string) ?? '';
+                            
+                            const isDirty = currentText !== initialText;
+                            
+                            console.log(`[Field Status] Unmapped ${f.key}:`, {
+                              currentText: currentText.substring(0, 30) + '...',
+                              initialText: initialText.substring(0, 30) + '...',
+                              isDirty
+                            });
+                            
+                            return (
+                              <span className="inline-flex items-center gap-2 text-xs">
+                                {isDirty ? (
+                                  <span className="inline-flex items-center gap-1.5 text-amber-600">
+                                    {t('status.unsaved')}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 text-emerald-700">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    {t('status.saved')}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          }
+                          
                           const l = (fieldLang[column] ?? lang);
-                          const list = getPromptsFor(column, l);
+                          const list = entity === 'product' ? getPromptsFor(column, l) : getCategoryPromptsFor(column, l);
                           const active = (list.find((it) => !!it.is_active) ?? list[0]) as SiteContentPrompt | undefined;
                           const currentText = (() => {
                             if (active) return active.prompt;
-                            return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
+                            if (entity === 'product') {
+                              return (productTpl?.[f.key as keyof ProductTemplates] as string) ?? '';
+                            } else {
+                              return (categoryTpl?.[f.key as keyof CategoryTemplates] as string) ?? '';
+                            }
                           })();
                           const baseline = lastSavedTextByLang[l]?.[column] ?? '';
+                          
+                          // Проста логіка isDirty - порівнюємо поточний текст з baseline
                           const isDirty = currentText !== baseline;
+                          
+                          // Логування для діагностики
+                          if (entity === 'category') {
+                            console.log(`[Field Status] Mapped ${f.key} (${column}):`, {
+                              hasActive: !!active,
+                              currentText: currentText.substring(0, 30) + '...',
+                              baseline: baseline.substring(0, 30) + '...',
+                              isDirty
+                            });
+                          }
+                          
                           const status = savingPerColumn[column] ?? 'idle';
                           const isLoading = creatingColumn === column || status === 'saving';
                           return (
@@ -744,7 +1104,9 @@ export default function AIProductFillerTemplates() {
           <div className="space-y-2 max-h-[60vh] overflow-auto">
             {(() => {
               const l = historyColumn ? (fieldLang[historyColumn] ?? lang) : lang;
-              const list = historyColumn ? getPromptsFor(historyColumn, l) : [];
+              const list = historyColumn 
+                ? (entity === 'product' ? getPromptsFor(historyColumn, l) : getCategoryPromptsFor(historyColumn, l))
+                : [];
               if (!list.length) {
                 return <div className="text-sm text-neutral-500">{t('templates.history_empty')}</div>;
               }

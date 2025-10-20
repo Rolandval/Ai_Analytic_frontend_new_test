@@ -12,7 +12,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { fetchContentDescriptions, ProductType, generateAiCategoryDescription, CATEGORY_FIELD_MAPPING } from '@/api/contentDescriptions';
 import { fetchSiteCategoriesDescriptions, updateSiteCategoriesDescriptions, type SiteCategoryDescription, type UpdateSiteCategoryDescriptionRequest } from '@/api/siteCategoriesDescriptions';
-import { fetchAllColumnPrompts, fetchColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
+import { fetchAllColumnPrompts, fetchAllCategoryPrompts, fetchColumnPrompts, type SiteColumnName, type SiteContentPrompt, SITE_COLUMNS } from '@/api/contentPrompts';
 import { getTemplates } from '@/api/productFillerMock';
 import type { ProductTemplates, CategoryTemplates } from '@/api/productFillerMock';
 import { generateAiDescription } from '@/api/generateAiDescription';
@@ -130,6 +130,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   // Рядки, у яких відбулась AI‑генерація в цій сесії (для селективного збереження)
   const [generatedRows, setGeneratedRows] = useState<Record<string, boolean>>({});
   const [templatesState, setTemplatesState] = useState<TemplatesState>(null);
+  const [categoryPrompts, setCategoryPrompts] = useState<Record<string, SiteContentPrompt[]>>({});
   // Масова генерація
   const [massGenerating, setMassGenerating] = useState(false);
   const [massProgress, setMassProgress] = useState<string>('');
@@ -413,8 +414,12 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           });
         } else {
           console.log('[Generation] Refresh all prompts via event', { selectedLang });
-          const prompts = await fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any);
+          const [prompts, categoryPromptsData] = await Promise.all([
+            fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any),
+            fetchAllCategoryPrompts(SITE_COLUMNS, selectedLang as any)
+          ]);
           setTemplatesState(prev => ({ ...(prev || {}), prompts, lang: selectedLang } as any));
+          setCategoryPrompts(categoryPromptsData);
         }
         toast({ title: 'Активний промпт оновлено' });
       } catch (err) {
@@ -468,7 +473,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     // Fallback: напряму завантажуємо промпти з API і локальні шаблони, щоб логувати навіть при прямому заході
     (async () => {
       try {
-        const prompts = await fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any);
+        const [prompts, categoryPromptsData] = await Promise.all([
+          fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any),
+          fetchAllCategoryPrompts(SITE_COLUMNS, selectedLang as any)
+        ]);
         const productTpl = getTemplates('product', selectedLang as any);
         const categoryTpl = getTemplates('category', selectedLang as any);
         const fallback = {
@@ -486,6 +494,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           // ignore storage errors
         }
         setTemplatesState(fallback);
+        setCategoryPrompts(categoryPromptsData);
       } catch (err) {
         console.warn('[Templates -> Generation] Fallback fetch failed', err);
       }
@@ -496,12 +505,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   useEffect(() => {
     (async () => {
       try {
-        const prompts = await fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any);
+        const [prompts, categoryPromptsData] = await Promise.all([
+          fetchAllColumnPrompts(SITE_COLUMNS, selectedLang as any),
+          fetchAllCategoryPrompts(SITE_COLUMNS, selectedLang as any)
+        ]);
         setTemplatesState(prev => ({
           ...(prev || {}),
           lang: selectedLang,
           prompts,
         } as any));
+        setCategoryPrompts(categoryPromptsData);
       } catch (e) {
         // noop
       }
@@ -686,10 +699,33 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     return filteredCategories.slice((page - 1) * limit, page * limit);
   }, [filteredCategories, page, limit]);
 
+  // Debug: логуємо стан категорійних промптів
+  console.log('[Generation] Category prompts state:', {
+    categoryPrompts,
+    keys: Object.keys(categoryPrompts),
+    values: Object.values(categoryPrompts).map(arr => arr.length),
+    templatesStatePrompts: templatesState?.prompts ? Object.keys(templatesState.prompts) : 'no prompts',
+    selectedLang,
+    pagedCategoriesCount: pagedCategories.length
+  });
+
+  // Детальне логування для кожної колонки
+  ['product', 'short_description', 'meta_keywords', 'page_title'].forEach(col => {
+    const categoryList = categoryPrompts[col] || [];
+    const regularList = templatesState?.prompts?.[col] || [];
+    console.log(`[Generation] Prompts for ${col}:`, {
+      category: categoryList.length,
+      regular: regularList.length,
+      categoryActive: categoryList.find(p => p.is_active)?.name || 'none',
+      regularActive: regularList.find(p => p.is_active)?.name || 'none'
+    });
+  });
+
   const categoryGeneration = useCategoryGeneration(
     pagedCategories, // Передаємо тільки категорії поточної сторінки!
     setCategoryDescriptions,
     templatesState?.prompts || {},
+    categoryPrompts,
     selectedLang,
     selectedChatModel || 'GPT-4o-mini',
     getCategoryRowKey,
@@ -1741,8 +1777,23 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     
     if (!templatesState) {
       console.warn('[GenerateSelectedCategories] Шаблони ще не готові');
+      toast({ title: 'Помилка', description: 'Шаблони ще не завантажені', variant: 'destructive' });
       return;
     }
+    
+    // Перевіряємо, чи вибрані клітинки
+    const selectedCellKeys = Object.keys(categorySelectedCells).filter(k => categorySelectedCells[k]);
+    if (selectedCellKeys.length === 0) {
+      console.warn('[GenerateSelectedCategories] Жодна клітинка не вибрана');
+      toast({ 
+        title: 'Нічого не вибрано', 
+        description: 'Виберіть клітинки для генерації, натиснувши на чекбокси', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    console.log(`🎯 [GenerateSelectedCategories] Generating ${selectedCellKeys.length} selected cells:`, selectedCellKeys);
     
     await categoryGeneration.handleGenerateSelectedCategories(
       categorySelectedCells,
@@ -1759,8 +1810,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const handleMassGenerateCategories = async () => {
     if (!templatesState) {
       console.warn('[MassGenerateCategories] Шаблони ще не готові');
+      toast({ title: 'Помилка', description: 'Шаблони ще не завантажені', variant: 'destructive' });
       return;
     }
+    
+    console.log('🚀 [handleMassGenerateCategories] Starting mass generation for categories');
     
     await categoryGeneration.handleMassGenerateCategories(
       (key: string, selected: boolean) => {

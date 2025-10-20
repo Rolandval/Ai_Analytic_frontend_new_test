@@ -34,6 +34,7 @@ export interface SiteContentPrompt {
   site_column_name: SiteColumnName;
   lang_code?: Lang;
   is_active?: boolean;
+  is_category?: boolean;
 }
 
 // Map UI product template field keys to backend site column names
@@ -99,9 +100,24 @@ const normalizePromptItems = (
         } else {
           is_active = undefined;
         }
+        
+        // Handle is_category field
+        const rawCategory = (obj?.is_category ?? obj?.category ?? obj?.isCategory) as unknown;
+        let is_category: boolean | undefined;
+        if (typeof rawCategory === 'boolean') {
+          is_category = rawCategory;
+        } else if (typeof rawCategory === 'number') {
+          is_category = rawCategory === 1;
+        } else if (typeof rawCategory === 'string') {
+          const s = rawCategory.trim().toLowerCase();
+          is_category = s === '1' || s === 'true' || s === 'yes' || s === 'category';
+        } else {
+          is_category = undefined;
+        }
+        
         if (!prompt) return null;
         if (!site_column_name) return null;
-        return { id, name, prompt, site_column_name, lang_code, is_active } as SiteContentPrompt;
+        return { id, name, prompt, site_column_name, lang_code, is_active, is_category } as SiteContentPrompt;
       })
       .filter(Boolean) as SiteContentPrompt[];
   }
@@ -193,6 +209,8 @@ export interface CreateSiteContentPromptRequest {
   lang_code?: Lang;
   // backend requires this field; default to false when not provided
   is_active?: boolean;
+  // indicates if this prompt is for categories; default to false when not provided
+  is_category?: boolean;
 }
 
 export const createSiteContentPrompt = async (
@@ -202,6 +220,7 @@ export const createSiteContentPrompt = async (
     ...body,
     lang_code: body.lang_code ?? 'ua',
     is_active: body.is_active ?? false,
+    is_category: body.is_category ?? false,
   });
   const data = res?.data;
   if (data && typeof data === 'object') {
@@ -221,6 +240,8 @@ export interface UpdateSiteContentPromptRequest {
   lang_code?: Lang;
   // backend requires this field; send current value or false
   is_active?: boolean;
+  // indicates if this prompt is for categories
+  is_category?: boolean;
 }
 
 export const updateSiteContentPrompt = async (
@@ -230,6 +251,7 @@ export const updateSiteContentPrompt = async (
     ...body,
     lang_code: body.lang_code ?? 'ua',
     is_active: body.is_active ?? false,
+    is_category: body.is_category ?? false,
   });
   const data = res?.data;
   // If backend returns an object/array with updated item(s), normalize and use it.
@@ -264,4 +286,51 @@ export const deleteSiteContentPrompt = async (id: number): Promise<boolean> => {
     console.error('[deleteSiteContentPrompt] failed', e);
     return false;
   }
+};
+
+// Fetch category-specific prompts for a column and language
+export const fetchCategoryPrompts = async (
+  column: SiteColumnName,
+  langCode: Lang = 'ua'
+): Promise<SiteContentPrompt[]> => {
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[API] GET /content/get_site_category_prompts', { column, langCode });
+    const res = await apiClient.get(`/content/get_site_category_prompts/${column}/${langCode}`);
+    const items = normalizePromptItems(res?.data, column);
+    try {
+      const summary = items.map(it => ({ id: it.id, name: it.name, is_active: it.is_active, lang_code: it.lang_code, is_category: it.is_category })).slice(0, 10);
+      // eslint-disable-next-line no-console
+      console.debug('[API] <- category prompts', { column, langCode, count: items.length, sample: summary });
+    } catch {}
+    return items;
+  } catch (err: any) {
+    // eslint-disable-next-line no-console
+    console.error('[API] [fetchCategoryPrompts] Failed for column', column, 'lang', langCode, err);
+    return [];
+  }
+};
+
+// Fetch all category prompts for multiple columns
+export const fetchAllCategoryPrompts = async (
+  columns: SiteColumnName[] = SITE_COLUMNS,
+  langCode: Lang = 'ua'
+): Promise<Record<SiteColumnName, SiteContentPrompt[]>> => {
+  // eslint-disable-next-line no-console
+  console.debug('[API] fetchAllCategoryPrompts start', { columns, langCode });
+  const settled = await Promise.allSettled(columns.map((c) => fetchCategoryPrompts(c, langCode)));
+  const out = {} as Record<SiteColumnName, SiteContentPrompt[]>;
+  columns.forEach((c, idx) => {
+    const s = settled[idx];
+    out[c] = s.status === 'fulfilled' ? s.value : [];
+    try {
+      const arr = out[c] || [];
+      const act = arr.find(x => x.is_active);
+      // eslint-disable-next-line no-console
+      console.debug('[API] fetchAllCategoryPrompts item', { column: c, count: arr.length, activeId: act?.id, activeName: act?.name });
+    } catch {}
+  });
+  // eslint-disable-next-line no-console
+  console.debug('[API] fetchAllCategoryPrompts done');
+  return out;
 };

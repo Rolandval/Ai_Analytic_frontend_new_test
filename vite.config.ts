@@ -15,6 +15,12 @@ export default defineConfig({
     },
   },
   server: {
+    cors: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
     proxy: {
       '/batteries/backend': {
         target: BACKEND_ORIGIN,
@@ -104,6 +110,18 @@ export default defineConfig({
       '/content': {
         target: BACKEND_ORIGIN,
         changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
       },
       '/extentions': {
         target: BACKEND_ORIGIN,
