@@ -693,8 +693,8 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
       
       {/* Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className={`w-full ${compact ? 'table-fixed text-xs' : 'table-fixed'}`} style={{userSelect: 'text', minWidth: 'max-content', tableLayout: 'fixed'}}>
-          <thead style={{userSelect: 'none'}} className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 [&>tr>th]:px-1 first:[&>tr>th]:rounded-tl-lg last:[&>tr>th]:rounded-tr-lg">
+        <table className={`w-full ${compact ? 'text-xs' : ''}`} style={{userSelect: 'text', minWidth: 'max-content', tableLayout: 'auto'}}>
+          <thead style={{userSelect: 'none'}} className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 first:[&>tr>th]:rounded-tl-lg last:[&>tr>th]:rounded-tr-lg">
                   <tr>
               <th className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} text-center font-medium min-w-[3ch] w-[4ch]`} title="№">№</th>
               {columns.map(column => {
@@ -708,16 +708,16 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                 return (
                   <th
                     key={column.key as string}
-                    className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} ${headerAlignment} font-medium overflow-hidden min-w-[5ch] w-[5ch] sm:w-[8ch] md:w-[12ch] lg:w-auto`}
+                    className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} ${headerAlignment} font-medium overflow-hidden`}
                     title={column.headerTitle || column.header}
-                    style={{ minWidth: '5ch' }}
+                    style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px' }}
                   >
-                    <div className={`flex items-center gap-1 ${justifyContent}`}>
+                    <div className={`flex items-center gap-1 ${justifyContent} w-full`}>
                       <button
-                        className={`hover:bg-muted/50 flex items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} rounded transition-colors flex-nowrap`}
+                        className={`hover:bg-muted/50 flex items-center justify-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} rounded transition-colors flex-nowrap w-full`}
                         onClick={() => handleSortClick(column.key as string, column.sortKey)}
                       >
-                        <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} min-w-[5ch] block flex-none`}>{column.header}</span>
+                        <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} min-w-[5ch] block text-center`}>{column.header}</span>
                         <span className="flex items-center flex-none">
                           {getSortIcon(column.key as string, column.sortKey)}
                         </span>
@@ -726,7 +726,11 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                   </th>
                 );
               })}
-               
+              {hasAnyActionButtons && (
+                <th className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center font-medium border-l`} style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px' }}>
+                  Дії
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="[&>tr:last-child>td:first-child]:rounded-bl-lg [&>tr:last-child>td:last-child]:rounded-br-lg">
@@ -742,11 +746,16 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                       return null;
                     }
                     return (
-                      <td key={`skeleton-col-${colIndex}`} className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} text-center min-w-[5ch] w-[5ch] sm:w-[8ch] md:w-[12ch] lg:w-auto`}>
+                      <td key={`skeleton-col-${colIndex}`} className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center`} style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px', maxWidth: compact ? '100px' : '140px' }}>
                         <div className="animate-pulse bg-gray-300 dark:bg-gray-600 rounded h-4 w-full"></div>
                       </td>
                     );
                   })}
+                  {hasAnyActionButtons && (
+                    <td className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center border-l`} style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px', maxWidth: compact ? '100px' : '140px' }}>
+                      <div className="animate-pulse bg-gray-300 dark:bg-gray-600 rounded h-4 w-full"></div>
+                    </td>
+                  )}
                 </tr>
               ))
             ) : sortedRows.length === 0 ? (
@@ -771,24 +780,21 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                     }
                     
                     const value = row[column.key as keyof typeof row];
-                    // Match data cell alignment with header alignment
-                    const isTextColumn = ['full_name', 'brand', 'supplier', 'city', 'contact', 'phone', 'telegram', 'firmware'].includes(column.key as string);
-                    const dataAlignment = isTextColumn ? 'text-left' : 'text-center';
                     
                     return (
                       <td 
                         key={column.key as string} 
-                        className={`${compact ? 'py-1 px-1 text-xs' : 'py-2 px-2 text-sm'} ${dataAlignment} whitespace-nowrap truncate min-w-[5ch] w-[5ch] sm:w-[8ch] md:w-[12ch] lg:w-auto`}
-                        style={{ minWidth: '5ch' }}
+                        className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center whitespace-nowrap`}
+                        style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px', maxWidth: compact ? '100px' : '140px' }}
                       >
-                        <div className="truncate" title={String(value ?? '')}>
+                        <div className="truncate mx-auto" title={String(value ?? '')}>
                           {column.render ? column.render(row) : String(value ?? '')}
                         </div>
                       </td>
                     );
                   })}
                   {hasAnyActionButtons && (
-                    <td className={`${compact ? 'py-1 px-2 text-xs min-w-[104px]' : 'py-2 px-4 min-w-[160px]'} text-center last:pr-3 sticky right-0 bg-white z-10 border-l` }>
+                    <td className={`${compact ? 'py-1 px-2 text-xs' : 'py-2 px-4 text-sm'} text-center border-l` } style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px', maxWidth: compact ? '100px' : '140px' }}>
                       <div className={`flex items-center justify-center ${compact ? 'gap-1' : 'gap-2'} flex-nowrap`}>
                       {buttonsVisibility.contact && row.phone && (
                         compact ? (

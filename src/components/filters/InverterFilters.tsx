@@ -273,7 +273,7 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
                       {/* Потужність */}
                       {(local.power_min || local.power_max) && (
                         <Badge variant="secondary" className="bg-pink-100  text-pink-800 border-pink-200">
-                          Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
+                          Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} кВт
                           <X 
                             className="w-3 h-3 ml-1 cursor-pointer" 
                             onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
@@ -420,7 +420,7 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
                             ))}
                             {(local.power_min !== undefined || local.power_max !== undefined) && (
                               <Badge variant="secondary" className="bg-pink-100 text-pink-800 border-pink-200">
-                                Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} Вт
+                                Потужність: {local.power_min || '∞'}-{local.power_max || '∞'} кВт
                                 <X
                                   className="w-3 h-3 ml-1 cursor-pointer"
                                   onClick={() => setLocal(p => ({ ...p, power_min: undefined, power_max: undefined }))}
@@ -860,7 +860,7 @@ export const InverterFilters: React.FC<PropsWithActions> = ({ current, setFilter
     ),
     power: (
       <div className="h-[60px] flex flex-col gap-1">
-        <span className="text-[12px] font-medium text-slate-600">Потужність, Вт</span>
+        <span className="text-[12px] font-medium text-slate-600">Потужність, кВт</span>
         <div className="flex gap-1 items-center">
           <Input
             type="number"
