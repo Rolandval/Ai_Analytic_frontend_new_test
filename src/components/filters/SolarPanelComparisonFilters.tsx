@@ -130,17 +130,26 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     return saved ? JSON.parse(saved) : defaultFilterOrder;
   });
 
+  // Основні фільтри, які завжди внизу
+  const mainFilters = ['power', 'brands', 'cities', 'suppliers'];
+  
+  // Решта фільтрів (без основних)
+  const otherFilters = filterOrder.filter(id => !mainFilters.includes(id));
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setFilterOrder((items) => {
-        const oldIndex = items.indexOf(active.id as string);
-        const newIndex = items.indexOf(over.id as string);
-        const newOrder = arrayMove(items, oldIndex, newIndex);
+      const oldIndex = otherFilters.indexOf(active.id as string);
+      const newIndex = otherFilters.indexOf(over.id as string);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOtherFilters = arrayMove(otherFilters, oldIndex, newIndex);
+        // Зберігаємо повний порядок: решта фільтрів + основні фільтри
+        const newOrder = [...newOtherFilters, ...mainFilters];
+        setFilterOrder(newOrder);
         localStorage.setItem('solarPanelComparisonFiltersOrder', JSON.stringify(newOrder));
-        return newOrder;
-      });
+      }
     }
   };
   
@@ -975,7 +984,8 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
+        <SortableContext items={otherFilters} strategy={verticalListSortingStrategy}>
+          {/* Решта фільтрів з drag and drop */}
           <div
             className={cn(
               // Always fill full width and auto-wrap, prevent overlap
@@ -985,7 +995,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
               isExpanded ? "grid" : "hidden md:grid"
             )}
           >
-            {filterOrder.map((filterId) => (
+            {otherFilters.map((filterId) => (
               <DraggableFilterItem key={filterId} id={filterId}>
                 {filterComponents[filterId]}
               </DraggableFilterItem>
@@ -993,6 +1003,28 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
           </div>
         </SortableContext>
       </DndContext>
+      
+      {/* Основні фільтри завжди внизу (без drag and drop) */}
+      <div
+        className={cn(
+          // Always fill full width and auto-wrap, prevent overlap
+          "grid w-full gap-3 sm:gap-5 transition-all duration-200",
+          "[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] [grid-auto-rows:minmax(60px,auto)]",
+          // Respect mobile toggle: hidden until expanded on mobile, visible on md+
+          isExpanded ? "grid" : "hidden md:grid"
+        )}
+      >
+        {mainFilters.map((filterId) => {
+          const component = filterComponents[filterId];
+          if (!component) return null;
+          
+          return (
+            <div key={filterId}>
+              {component}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Actions */}
       <div className={cn(

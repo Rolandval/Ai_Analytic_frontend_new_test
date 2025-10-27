@@ -69,17 +69,19 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   const { rows, total, page, pageSize, setPage, setPageSize, loading } = hook;
   const compact = Boolean((props as any).compact);
 
-  // Логування для дебагу таблиці
-  console.log('📋 PriceHistoryPage render:', {
-    title,
-    rowsCount: rows?.length ?? 0,
-    total,
-    page,
-    pageSize,
-    loading,
-    hasRows: Array.isArray(rows),
-    firstRow: rows?.[0] || null
-  });
+  // Логування для дебагу таблиці (тільки при розробці)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📋 PriceHistoryPage render:', {
+      title,
+      rowsCount: rows?.length ?? 0,
+      total,
+      page,
+      pageSize,
+      loading,
+      hasRows: Array.isArray(rows),
+      firstRow: rows?.[0] || null
+    });
+  }
   
   const [createOpen, setCreateOpen] = useState(false);
   const [editRow, setEditRow] = useState<{ id: number; price: number } | null>(null);
@@ -100,10 +102,18 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
   const buttonsVisibilityKey = React.useMemo(() => `buttonsVisibility:${title}`, [title]);
   const pageSizeKey = React.useMemo(() => `pageSize:${title}`, [title]);
 
-  // Стан для сортування
-  const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' | null }>({ 
-    key: null, 
-    direction: null 
+  // Стан для сортування з збереженням в localStorage
+  const sortConfigKey = React.useMemo(() => `sortConfig:${title}`, [title]);
+  const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' | null }>(() => {
+    try {
+      const stored = localStorage.getItem(sortConfigKey);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {
+      console.error('Failed to load sort config', e);
+    }
+    return { key: null, direction: null };
   });
   
   // Стан для графіку
@@ -161,6 +171,15 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
       localStorage.setItem(buttonsVisibilityKey, JSON.stringify(newVisibility));
     } catch (e) {
       console.error('Failed to save buttons settings', e);
+    }
+  };
+
+  // Функція для збереження налаштувань сортування в localStorage
+  const saveSortConfig = (newSortConfig: typeof sortConfig) => {
+    try {
+      localStorage.setItem(sortConfigKey, JSON.stringify(newSortConfig));
+    } catch (e) {
+      console.error('Failed to save sort config', e);
     }
   };
 
@@ -255,7 +274,11 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
       let bValue: any;
       
       // Спеціальна обробка для різних типів полів
-      if (sortKey === 'price_per_watt_sort') {
+      if (sortKey === 'price_sort') {
+        // Сортування за ціною
+        aValue = parseFloat(a.price) || 0;
+        bValue = parseFloat(b.price) || 0;
+      } else if (sortKey === 'price_per_watt_sort') {
         // Для акумуляторів це ціна / об'єм
         if ('volume' in a && a.volume) {
           aValue = a.price / a.volume;
@@ -277,12 +300,75 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
         // Спеціальна обробка для дат
         aValue = new Date(a.date || 0).getTime();
         bValue = new Date(b.date || 0).getTime();
+      } else if (sortKey === 'price_markup_uah') {
+        // Обробка для ціни з націнкою в гривнях
+        const filters = hook.filters as any;
+        const usdRate = filters?.usd_rate || 1;
+        const markup = filters?.markup || 0;
+        aValue = (a.price || 0) * usdRate * (1 + markup/100);
+        bValue = (b.price || 0) * usdRate * (1 + markup/100);
       } else if (sortKey === 'volume' || sortKey === 'c_amps' || sortKey === 'power') {
         // Спеціальна обробка для числових полів
         aValue = parseFloat(a[sortKey]) || 0;
         bValue = parseFloat(b[sortKey]) || 0;
-      } else if (sortKey === 'full_name') {
-        // Обробка для назв
+      } else if (sortKey === 'price') {
+        // Обробка для базової ціни
+        aValue = parseFloat(a[sortKey]) || 0;
+        bValue = parseFloat(b[sortKey]) || 0;
+      } else if (sortKey === 'price_per_w' || sortKey === 'price_per_ah') {
+        // Обробка для ціни за одиницю (розрахункові поля)
+        if (sortKey === 'price_per_w' && 'power' in a && a.power) {
+          aValue = (a.price || 0) / a.power;
+          bValue = (b.price || 0) / (b.power || 1);
+        } else if (sortKey === 'price_per_ah' && 'volume' in a && a.volume) {
+          aValue = (a.price || 0) / a.volume;
+          bValue = (b.price || 0) / (b.volume || 1);
+        } else {
+          aValue = parseFloat(a[sortKey]) || 0;
+          bValue = parseFloat(b[sortKey]) || 0;
+        }
+      } else if (sortKey === 'price_per_w_markup' || sortKey === 'price_per_w_uah' || sortKey === 'price_per_w_markup_uah') {
+        // Обробка для розрахункових полів ціни за Ват
+        const filters = hook.filters as any;
+        const usdRate = filters?.usd_rate || 1;
+        const markup = filters?.markup || 0;
+        
+        if ('power' in a && a.power && 'power' in b && b.power) {
+          if (sortKey === 'price_per_w_markup') {
+            aValue = ((a.price || 0) * (1 + markup/100)) / a.power;
+            bValue = ((b.price || 0) * (1 + markup/100)) / b.power;
+          } else if (sortKey === 'price_per_w_uah') {
+            aValue = ((a.price || 0) * usdRate) / a.power;
+            bValue = ((b.price || 0) * usdRate) / b.power;
+          } else if (sortKey === 'price_per_w_markup_uah') {
+            aValue = ((a.price || 0) * usdRate * (1 + markup/100)) / a.power;
+            bValue = ((b.price || 0) * usdRate * (1 + markup/100)) / b.power;
+          }
+        } else {
+          aValue = 0;
+          bValue = 0;
+        }
+      } else if (sortKey === 'price_markup_usd' || sortKey === 'price_uah') {
+        // Обробка для розрахункових полів ціни
+        const filters = hook.filters as any;
+        const usdRate = filters?.usd_rate || 1;
+        const markup = filters?.markup || 0;
+        
+        if (sortKey === 'price_markup_usd') {
+          aValue = (a.price || 0) * (1 + markup/100);
+          bValue = (b.price || 0) * (1 + markup/100);
+        } else if (sortKey === 'price_uah') {
+          aValue = (a.price || 0) * usdRate;
+          bValue = (b.price || 0) * usdRate;
+        }
+      } else if (sortKey === 'suppliers_cities') {
+        // Обробка для масиву міст - сортуємо за першим містом
+        const aCities = Array.isArray(a[sortKey]) ? a[sortKey] : [];
+        const bCities = Array.isArray(b[sortKey]) ? b[sortKey] : [];
+        aValue = aCities.length > 0 ? String(aCities[0]).toLowerCase() : '';
+        bValue = bCities.length > 0 ? String(bCities[0]).toLowerCase() : '';
+      } else if (sortKey === 'full_name' || sortKey === 'brand' || sortKey === 'supplier' || sortKey === 'contact' || sortKey === 'phone' || sortKey === 'telegram') {
+        // Обробка для текстових полів
         aValue = String(a[sortKey] || '').toLowerCase();
         bValue = String(b[sortKey] || '').toLowerCase();
       } else {
@@ -290,6 +376,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
         aValue = a[sortKey];
         bValue = b[sortKey];
       }
+      
       
       // Порівняння рядків
       if (typeof aValue === 'string' && typeof bValue === 'string') {
@@ -314,23 +401,29 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
     const effectiveSortKey = sortKey || key;
     
     // Якщо ми вже сортуємо за цим ключем, змінюємо напрямок або скидаємо
+    let newSortConfig;
     if (sortConfig.key === effectiveSortKey) {
       if (sortConfig.direction === 'asc') {
-        setSortConfig({ key: effectiveSortKey, direction: 'desc' });
+        newSortConfig = { key: effectiveSortKey, direction: 'desc' as const };
       } else if (sortConfig.direction === 'desc') {
-        setSortConfig({ key: null, direction: null });
+        newSortConfig = { key: null, direction: null };
       } else {
-        setSortConfig({ key: effectiveSortKey, direction: 'asc' });
+        newSortConfig = { key: effectiveSortKey, direction: 'asc' as const };
       }
     } else {
       // При зміні колонки сортування, скидаємо попереднє сортування і встановлюємо нове
-      setSortConfig({ key: effectiveSortKey, direction: 'asc' });
+      newSortConfig = { key: effectiveSortKey, direction: 'asc' as const };
     }
+    
+    setSortConfig(newSortConfig);
+    saveSortConfig(newSortConfig);
   };
   
   // Функція для отримання іконки статусу сортування
   const getSortIcon = (columnKey: string, sortKey?: string) => {
     const effectiveSortKey = sortKey || columnKey;
+    
+    console.log('🎯 getSortIcon called:', { columnKey, sortKey, effectiveSortKey, sortConfig });
     
     if (sortConfig.key !== effectiveSortKey) {
       return <ArrowUpDown className="h-4 w-4 text-gray-400" />;
@@ -713,15 +806,24 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                     style={{ minWidth: compact ? '100px' : '140px', width: compact ? '100px' : '140px' }}
                   >
                     <div className={`flex items-center gap-1 ${justifyContent} w-full`}>
-                      <button
-                        className={`hover:bg-muted/50 flex items-center justify-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} rounded transition-colors flex-nowrap w-full`}
-                        onClick={() => handleSortClick(column.key as string, column.sortKey)}
-                      >
-                        <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} min-w-[5ch] block text-center`}>{column.header}</span>
-                        <span className="flex items-center flex-none">
-                          {getSortIcon(column.key as string, column.sortKey)}
-                        </span>
-                      </button>
+                      {(() => {
+                        console.log('🔍 Column check:', { key: column.key, header: column.header, sortable: column.sortable });
+                        return column.sortable;
+                      })() ? (
+                        <button
+                          className={`hover:bg-muted/50 flex items-center justify-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} rounded transition-colors flex-nowrap w-full`}
+                          onClick={() => handleSortClick(column.key as string, column.sortKey)}
+                        >
+                          <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} min-w-[5ch] block text-center`}>{column.header}</span>
+                          <span className="flex items-center flex-none">
+                            {getSortIcon(column.key as string, column.sortKey)}
+                          </span>
+                        </button>
+                      ) : (
+                        <div className={`flex items-center justify-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'px-2 py-1'} w-full`}>
+                          <span className={`truncate whitespace-nowrap ${compact ? 'max-w-[110px]' : 'max-w-[160px]'} min-w-[5ch] block text-center`}>{column.header}</span>
+                        </div>
+                      )}
                     </div>
                   </th>
                 );

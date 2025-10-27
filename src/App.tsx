@@ -90,7 +90,6 @@ import InvoiceRecognition from './pages/ai-accountant/documents/invoices/Invoice
 import FacebookPost from './pages/AdsManager/Facebook/FacebookPost';
 import GoogleAd from './pages/AdsManager/Google/GoogleAd';
 import UploadReports from './pages/reports/Upload';
-import PostGeneration from './pages/ContentGeneration/PostGeneration';
 import { AIExtensionsPage } from './pages/AIExtensionsPage';
 import { AIModelsPage } from './pages/AIModelsPage';
 // Forecasting Pages
@@ -104,6 +103,16 @@ import ProductListPage from './pages/ai-supply/product-list';
 import SupplierAnalysisPage from './pages/ai-supply/supplier-analysis';
 import OrdersPage from './pages/ai-supply/orders';
 import SendOrdersPage from './pages/ai-supply/send-orders';
+
+// SEO Writer Pages
+import SeoWriterDashboard from './pages/seo-writer/Dashboard';
+import SeoWriterTopicGeneration from './pages/seo-writer/TopicGeneration';
+import SeoWriterContentCalendar from './pages/seo-writer/ContentCalendar';
+import SeoWriterArticleManagement from './pages/seo-writer/ArticleManagement';
+import SeoWriterAnalytics from './pages/seo-writer/Analytics';
+import SeoWriterSettings from './pages/seo-writer/Settings';
+import SeoWriterArticleEditor from './pages/seo-writer/ArticleEditor';
+import SeoWriterLayout from './components/SeoWriterLayout';
 
 // Компонент для favicon логіки всередині Router контексту
 function FaviconHandler() {
@@ -227,8 +236,17 @@ function App() {
           <Route path="/ai-forecast/sql-queries" element={<SQLQueriesPage />} />
           <Route path="/ai-forecast/analytics" element={<AnalyticsPage />} />
           <Route path="/ai-procurement" element={<ServicePage />} />
-          <Route path="/ai-content" element={<ServicePage />} />
-          <Route path="/ai-content/generation/post" element={<PostGeneration />} />
+          {/* AI Content - SEO Writer */}
+          <Route path="/ai-content" element={<SeoWriterLayout><SeoWriterDashboard /></SeoWriterLayout>} />
+          <Route path="/ai-content/generation/post" element={<SeoWriterLayout><SeoWriterTopicGeneration /></SeoWriterLayout>} />
+          {/* SEO Writer - Content Management */}
+          <Route path="/seo-writer" element={<SeoWriterLayout><SeoWriterDashboard /></SeoWriterLayout>} />
+          <Route path="/seo-writer/topics" element={<SeoWriterLayout><SeoWriterTopicGeneration /></SeoWriterLayout>} />
+          <Route path="/seo-writer/calendar" element={<SeoWriterLayout><SeoWriterContentCalendar /></SeoWriterLayout>} />
+          <Route path="/seo-writer/articles" element={<SeoWriterLayout><SeoWriterArticleManagement /></SeoWriterLayout>} />
+          <Route path="/seo-writer/article/:id" element={<SeoWriterLayout><SeoWriterArticleEditor /></SeoWriterLayout>} />
+          <Route path="/seo-writer/analytics" element={<SeoWriterLayout><SeoWriterAnalytics /></SeoWriterLayout>} />
+          <Route path="/seo-writer/settings" element={<SeoWriterLayout><SeoWriterSettings /></SeoWriterLayout>} />
           {/* Ці маршрути будуть імплементовані пізніше */}
           <Route path="ai-content/social/twitter" element={<ServicePage />} />
           <Route path="ai-content/seo/tags" element={<ServicePage />} />

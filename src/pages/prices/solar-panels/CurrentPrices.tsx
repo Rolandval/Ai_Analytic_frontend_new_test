@@ -58,7 +58,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
   {
     key: 'suppliers_cities',
     header: 'Міста',
-    sortable: false,
+    sortable: true,
     render: (row) => {
       if (!row.suppliers_cities || row.suppliers_cities.length === 0) {
         return <span className="text-gray-500">Невідомо</span>;
@@ -91,6 +91,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
     key: 'price_markup_usd',
     header: '$ з нац.',
     headerTitle: 'Долари США з націнкою',
+    sortable: true,
     render: (row) => (
       <span className="font-medium text-green-800">
         {(row.price * (1 + markup/100)).toFixed(2)}

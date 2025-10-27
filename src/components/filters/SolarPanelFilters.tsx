@@ -524,17 +524,27 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
     })
   );
 
-  // Handle drag end
+  // Основні фільтри, які завжди внизу
+  const mainFilters = ['power', 'brands', 'cities', 'suppliers'];
+  
+  // Решта фільтрів (без основних)
+  const otherFilters = filterOrder.filter(id => !mainFilters.includes(id));
+
+  // Handle drag end (тільки для решти фільтрів)
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const oldIndex = filterOrder.indexOf(active.id as string);
-      const newIndex = filterOrder.indexOf(over.id as string);
+      const oldIndex = otherFilters.indexOf(active.id as string);
+      const newIndex = otherFilters.indexOf(over.id as string);
       
-      const newOrder = arrayMove(filterOrder, oldIndex, newIndex);
-      setFilterOrder(newOrder);
-      saveFilterOrder(newOrder);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOtherFilters = arrayMove(otherFilters, oldIndex, newIndex);
+        // Зберігаємо повний порядок: решта фільтрів + основні фільтри
+        const newOrder = [...newOtherFilters, ...mainFilters];
+        setFilterOrder(newOrder);
+        saveFilterOrder(newOrder);
+      }
     }
   };
   
@@ -1035,10 +1045,10 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
-          {/* filters grid with drag and drop */}
+        <SortableContext items={otherFilters} strategy={verticalListSortingStrategy}>
+          {/* Решта фільтрів з drag and drop */}
           <div className="grid gap-5" style={{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>
-            {filterOrder.map((filterId) => {
+            {otherFilters.map((filterId) => {
               const component = filterComponents[filterId];
               if (!component) return null;
               
@@ -1051,6 +1061,20 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
           </div>
         </SortableContext>
       </DndContext>
+      
+      {/* Основні фільтри завжди внизу (без drag and drop) */}
+      <div className="grid gap-5" style={{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>
+        {mainFilters.map((filterId) => {
+          const component = filterComponents[filterId];
+          if (!component) return null;
+          
+          return (
+            <div key={filterId}>
+              {component}
+            </div>
+          );
+        })}
+      </div>
     </div>
     </>
   );
