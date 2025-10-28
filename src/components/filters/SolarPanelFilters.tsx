@@ -55,7 +55,7 @@ const DEFAULT_FILTER_ORDER = [
   'impp',
   'voltage',
   'amperage',
-   'panel_type',
+  'panel_type',
   'cell_type',
   'panel_color',
   'frame_color',
@@ -340,6 +340,18 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
                 <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, impp_min: undefined, impp_max: undefined }))} />
               </Badge>
             );
+            if (local.voltage_min || local.voltage_max) nodes.push(
+              <Badge key={`voltage`} variant="secondary" className="bg-violet-100 text-violet-800 border-violet-200">
+                Вольтаж: {local.voltage_min || '∞'}-{local.voltage_max || '∞'} В
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, voltage_min: undefined, voltage_max: undefined }))} />
+              </Badge>
+            );
+            if (local.amperage_min || local.amperage_max) nodes.push(
+              <Badge key={`amperage`} variant="secondary" className="bg-rose-100 text-rose-800 border-rose-200">
+                Амперраж: {local.amperage_min || '∞'}-{local.amperage_max || '∞'} А
+                <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal((p) => ({ ...p, amperage_min: undefined, amperage_max: undefined }))} />
+              </Badge>
+            );
             // Others
             if (local.usd_rate) nodes.push(
               <Badge key={`usd_rate`} variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
@@ -393,6 +405,8 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
                     weight_max: undefined,
                     impp_min: undefined,
                     impp_max: undefined,
+                    voltage_min: undefined,
+                    voltage_max: undefined,
                     amperage_min: undefined,
                     amperage_max: undefined,
                     usd_rate: undefined,
@@ -855,8 +869,8 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
           <Input
             type="number"
             placeholder="від"
-            value={local.power_min ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
+            value={local.voltage_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, voltage_min: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />
@@ -864,8 +878,8 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
           <Input
             type="number"
             placeholder="до"
-            value={local.power_max ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
+            value={local.voltage_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, voltage_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />
@@ -1114,8 +1128,8 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
         </SortableContext>
       </DndContext>
       
-      {/* Основні фільтри завжди внизу (без drag and drop) */}
-      <div className="grid gap-5" style={{gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))'}}>
+      {/* Основні фільтри в одну лінію з кнопками (без drag and drop) */}
+      <div className="flex flex-wrap gap-3 items-center justify-between mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
         {mainFilters.map((filterId) => {
           const component = filterComponents[filterId];
           if (!component) return null;

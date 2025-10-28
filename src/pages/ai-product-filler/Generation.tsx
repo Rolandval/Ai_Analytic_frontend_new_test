@@ -134,6 +134,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   // Масова генерація
   const [massGenerating, setMassGenerating] = useState(false);
   const [massProgress, setMassProgress] = useState<string>('');
+  const [shouldStopGeneration, setShouldStopGeneration] = useState(false);
+  // Стани для drag selection
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartValue, setDragStartValue] = useState<boolean | null>(null);
   // Генерація для вибраних клітинок
   const [selectedGenerating, setSelectedGenerating] = useState(false);
   const [selectedProgress, setSelectedProgress] = useState<string>('');
@@ -1266,6 +1270,60 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     // Тільки перемикаємо вибір. Генерація виконується кнопкою "Заповнити вибрані".
   };
 
+  // Обробники для drag selection
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const dragThreshold = 5; // пікселів для активації drag
+
+  const handleCellMouseDown = (e: React.MouseEvent, rowKey: string, col: string, currentValue: boolean) => {
+    // Ігноруємо, якщо клік на самому чекбоксі
+    if ((e.target as HTMLElement).closest('button[role="checkbox"]')) {
+      return;
+    }
+    dragStartPosRef.current = { x: e.clientX, y: e.clientY };
+    setDragStartValue(!currentValue);
+  };
+
+  const handleCellMouseMove = (e: React.MouseEvent, rowKey: string, col: string) => {
+    if (!dragStartPosRef.current || dragStartValue === null) return;
+    
+    // Перевіряємо, чи мишка рухнулась достатньо далеко
+    const dx = Math.abs(e.clientX - dragStartPosRef.current.x);
+    const dy = Math.abs(e.clientY - dragStartPosRef.current.y);
+    
+    if (dx > dragThreshold || dy > dragThreshold) {
+      if (!isDragging) {
+        setIsDragging(true);
+      }
+    }
+    
+    // Застосовуємо значення тільки якщо вже в режимі drag
+    if (isDragging) {
+      setSelectedCells(prev => ({
+        ...prev,
+        [`${rowKey}:${col}`]: dragStartValue
+      }));
+    }
+  };
+
+  const handleCellMouseUp = () => {
+    dragStartPosRef.current = null;
+    setIsDragging(false);
+    setDragStartValue(null);
+  };
+
+  // Додаємо глобальний обробник mouseup
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging || dragStartPosRef.current) {
+        dragStartPosRef.current = null;
+        setIsDragging(false);
+        setDragStartValue(null);
+      }
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [isDragging]);
+
   // Рядкові хелпери для комбінованої колонки №/Генерувати
   const ROW_GENERATABLE_COLUMNS: SiteColumnName[] = SITE_COLUMNS as SiteColumnName[];
   // Хелпер: визначити, чи значення клітинки вважається порожнім (у т.ч. плейсхолдер '-')
@@ -1463,6 +1521,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }
     setSelectedGenerating(true);
     setSelectedProgress('');
+    setShouldStopGeneration(false);
     try {
       const cols = SITE_COLUMNS as SiteColumnName[];
       type Job = { globalIdx: number; row: ContentDescription; rowKey: string; col: SiteColumnName };
@@ -1553,6 +1612,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       console.log('[GenerateSelected] Starting generation for jobs:', jobs.map(j => ({ rowKey: j.rowKey, col: j.col })));
       let done = 0;
       for (const job of jobs) {
+        // Перевірка на зупинку генерації
+        if (shouldStopGeneration) {
+          setSelectedProgress(`Зупинено (${done}/${jobs.length})`);
+          break;
+        }
         console.log(`🔄 [GenerateSelected] Processing job ${done + 1}/${jobs.length}:`, { 
           rowKey: job.rowKey, 
           col: job.col,
@@ -1643,6 +1707,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       console.log(`🏁 [GenerateSelected] All jobs completed! Total: ${done}/${jobs.length}`);
     } finally {
       setSelectedGenerating(false);
+      setShouldStopGeneration(false);
       // Після генерації очищаємо вибір, щоб прибрати галочки у № та хедерах колонок
       setSelectedCells({});
       setRowCheckedRows({});
@@ -1658,6 +1723,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     }
     setMassGenerating(true);
     setMassProgress('');
+    setShouldStopGeneration(false);
     try {
       const cols = SITE_COLUMNS as SiteColumnName[];
       type Job = { row: ContentDescription; col: SiteColumnName; rowKey: string };
@@ -1709,6 +1775,11 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       }
       let done = 0;
       for (const job of jobs) {
+        // Перевірка на зупинку генерації
+        if (shouldStopGeneration) {
+          setMassProgress(`Зупинено (${done}/${jobs.length})`);
+          break;
+        }
         const desc = job.row;
         const site_product = desc.site_product || desc.product_name || '';
         const site_full_description = desc.site_full_description || desc.description || desc.site_product || desc.product_name || 'Товар';
@@ -1763,6 +1834,94 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       console.error('[MassGenerate] Failed', e);
     } finally {
       setMassGenerating(false);
+      setShouldStopGeneration(false);
+    }
+  };
+
+  // Функція зупинки генерації
+  const handleStopGeneration = () => {
+    setShouldStopGeneration(true);
+  };
+  
+  // Функція очищення вибраних клітинок (вміст + зняття галочок)
+  const handleClearSelection = () => {
+    if (activeTab === 'categories') {
+      // Для категорій: очищаємо вміст вибраних клітинок
+      const selectedCellKeys = Object.keys(categorySelectedCells).filter(k => categorySelectedCells[k]);
+      
+      if (selectedCellKeys.length > 0) {
+        setCategoryDescriptions(prev => {
+          const next = [...prev];
+          selectedCellKeys.forEach(cellKey => {
+            const [rowKeyPart, col] = cellKey.split(':');
+            const cat = pagedCategories.find((c, idx) => getCategoryRowKey(c, idx) === rowKeyPart);
+            if (!cat) return;
+            
+            const idx = next.findIndex(c => c.category_id === cat.category_id && c.lang_code === cat.lang_code);
+            if (idx === -1) return;
+            
+            // Очищаємо поле
+            next[idx] = { ...next[idx], [col]: '' } as SiteCategoryDescription;
+            
+            // Зберігаємо в localStorage як незбережену зміну
+            saveCategoryUnsavedField(next[idx], col as keyof SiteCategoryDescription, '');
+          });
+          return next;
+        });
+        toast({ title: `Очищено ${selectedCellKeys.length} клітинок` });
+      }
+      
+      // Знімаємо галочки
+      setCategorySelectedCells({});
+      setCategoryRowCheckedRows({});
+      setCategoryColumnHeaderChecked({});
+    } else {
+      // Для товарів: очищаємо вміст вибраних клітинок
+      const selectedCellKeys = Object.keys(selectedCells).filter(k => selectedCells[k]);
+      
+      if (selectedCellKeys.length > 0) {
+        setDescriptions(prev => {
+          const next = [...prev];
+          selectedCellKeys.forEach(cellKey => {
+            const [rowKeyPart, col] = cellKey.split(':');
+            const desc = pagedDescriptions.find((d, idx) => getRowKey(d, idx) === rowKeyPart);
+            if (!desc) return;
+            
+            const field = mapSiteColumnToContentField[col as SiteColumnName];
+            if (!field) return;
+            
+            // Знаходимо індекс в повному масиві
+            const globalIdx = next.findIndex(it => {
+              const targetId = (desc as any).product_id ?? (desc as any).id ?? null;
+              const candidateId = (it as any).product_id ?? (it as any).id ?? null;
+              if (targetId != null && candidateId != null) return candidateId === targetId;
+              const targetLang = desc.site_lang_code ?? '';
+              const itLang = it.site_lang_code ?? '';
+              const targetName = desc.site_product || desc.product_name || '';
+              const itName = it.site_product || it.product_name || '';
+              return itLang === targetLang && itName === targetName;
+            });
+            
+            if (globalIdx === -1) return;
+            
+            // Очищаємо поле
+            next[globalIdx] = { ...next[globalIdx], [field]: '' } as ContentDescription;
+            
+            // Зберігаємо в localStorage як незбережену зміну
+            saveUnsavedField(next[globalIdx], field as keyof ContentDescription, '');
+            
+            // Маркуємо рядок як змінений
+            markRowGenerated(next[globalIdx]);
+          });
+          return next;
+        });
+        toast({ title: `Очищено ${selectedCellKeys.length} клітинок` });
+      }
+      
+      // Знімаємо галочки
+      setSelectedCells({});
+      setRowCheckedRows({});
+      setColumnHeaderChecked({});
     }
   };
   const handleGenerateSelectedCategories = async () => {
@@ -3223,14 +3382,26 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                   {t('buttons.save_changes')}
                 </Button>
                 {!isTranslateMode && (
-                  <Button
-                    className="bg-purple-600 hover:bg-purple-700 text-white"
-                    onClick={activeTab === 'categories' ? handleMassGenerateCategories : handleMassGenerate}
-                    disabled={activeTab === 'categories' ? (categoryGeneration.categoryMassGenerating || !templatesState) : (massGenerating || !templatesState)}
-                  >
-                    {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
-                  </Button>
+                  <>
+                    <Button
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
+                      onClick={activeTab === 'categories' ? handleMassGenerateCategories : handleMassGenerate}
+                      disabled={activeTab === 'categories' ? (categoryGeneration.categoryMassGenerating || !templatesState) : (massGenerating || !templatesState)}
+                    >
+                      {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {t('buttons.mass_generate')}{massGenerating && massProgress ? ` (${massProgress})` : ''}
+                    </Button>
+                    {(massGenerating || selectedGenerating) && (
+                      <Button
+                        variant="destructive"
+                        onClick={handleStopGeneration}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Зупинити генерацію
+                      </Button>
+                    )}
+                  </>
                 )}
                 <div className="flex items-center gap-2">
                   <Button variant="outline" onClick={handleRefresh} className="shrink-0">
@@ -3303,6 +3474,16 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                   )
                 )}
                 {/* Кнопку аналізу видалено на прохання користувача */}
+                {/* Кнопка очищення вибору */}
+                <Button
+                  onClick={handleClearSelection}
+                  variant="outline"
+                  className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-400 dark:text-orange-400 dark:hover:bg-orange-950"
+                  title="Зняти вибір з усіх клітинок"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Очистити вибране
+                </Button>
                 {/* Згенерувати/Перекласти вибрані – завжди остання кнопка у ряду */}
                 <Button
                   onClick={
@@ -4084,7 +4265,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('product')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_product || desc.product_name || '')}`} title={desc.site_product || desc.product_name || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_product || desc.product_name || '')}`} 
+                            title={desc.site_product || desc.product_name || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'product', isCellChecked(rowKey, 'product'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'product')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'product')}
@@ -4108,7 +4295,12 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('shortname')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_shortname || '')}`}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_shortname || '')}`}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'shortname', isCellChecked(rowKey, 'shortname'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'shortname')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'shortname')}
@@ -4130,7 +4322,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('short_description')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_short_description || '')}`} title={desc.site_shortname || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_short_description || '')}`} 
+                            title={desc.site_shortname || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'short_description', isCellChecked(rowKey, 'short_description'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'short_description')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'short_description')}
@@ -4152,7 +4350,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('full_description')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_full_description || desc.description || '')}`} title={desc.site_full_description || desc.description || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_full_description || desc.description || '')}`} 
+                            title={desc.site_full_description || desc.description || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'full_description', isCellChecked(rowKey, 'full_description'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'full_description')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'full_description')}
@@ -4174,7 +4378,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('promo_text')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_promo_text || '')}`} title={desc.site_promo_text || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_promo_text || '')}`} 
+                            title={desc.site_promo_text || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'promo_text', isCellChecked(rowKey, 'promo_text'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'promo_text')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'promo_text')}
@@ -4196,7 +4406,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('meta_keywords')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_keywords || '')}`} title={desc.site_meta_keywords || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_keywords || '')}`} 
+                            title={desc.site_meta_keywords || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'meta_keywords', isCellChecked(rowKey, 'meta_keywords'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'meta_keywords')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'meta_keywords')}
@@ -4218,7 +4434,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('meta_description')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_description || '')}`} title={desc.site_meta_description || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_meta_description || '')}`} 
+                            title={desc.site_meta_description || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'meta_description', isCellChecked(rowKey, 'meta_description'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'meta_description')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'meta_description')}
@@ -4240,7 +4462,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('searchwords')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_searchwords || '')}`} title={desc.site_searchwords || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_searchwords || '')}`} 
+                            title={desc.site_searchwords || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'searchwords', isCellChecked(rowKey, 'searchwords'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'searchwords')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'searchwords')}
@@ -4262,7 +4490,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                           </div>
                         </TableCell>
                         <TableCell className="py-0 sm:py-1 px-1 min-h-[2px]" style={getColStyle('page_title')}>
-                          <div className={`flex items-center gap-0.5 ${minWClass(desc.site_page_title || '')}`} title={desc.site_page_title || ''}>
+                          <div 
+                            className={`flex items-center gap-0.5 ${minWClass(desc.site_page_title || '')}`} 
+                            title={desc.site_page_title || ''}
+                            onMouseDown={(e) => handleCellMouseDown(e, rowKey, 'page_title', isCellChecked(rowKey, 'page_title'))}
+                            onMouseMove={(e) => handleCellMouseMove(e, rowKey, 'page_title')}
+                            onMouseUp={handleCellMouseUp}
+                          >
                             <Checkbox
                               aria-label="Вибрати клітинку"
                               checked={isCellChecked(rowKey, 'page_title')}

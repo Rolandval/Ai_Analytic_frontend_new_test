@@ -3,23 +3,40 @@ import { type SiteColumnName, type SiteContentPrompt, fetchCategoryPrompts } fro
 import type { SiteCategoryDescription } from '@/api/siteCategoriesDescriptions';
 
 // Колонки для категорій (відповідають полям SiteCategoryDescription)
-export const CATEGORY_COLUMNS = ['category', 'description', 'meta_keywords', 'page_title'] as const;
+export const CATEGORY_COLUMNS = [
+  'category',
+  'description',
+  'page_title',
+  'meta_title',
+  'meta_keywords',
+  'custom_h1',
+  'seo_name',
+  'meta_description'
+] as const;
 export type CategoryColumnName = typeof CATEGORY_COLUMNS[number];
 
 // Мапінг колонок категорій до полів об'єкта SiteCategoryDescription
 export const mapCategoryColumnToField: Record<CategoryColumnName, keyof SiteCategoryDescription> = {
   category: 'category',
   description: 'description',
-  meta_keywords: 'meta_keywords',
   page_title: 'page_title',
+  meta_title: 'meta_title',
+  meta_keywords: 'meta_keywords',
+  custom_h1: 'custom_h1',
+  seo_name: 'seo_name',
+  meta_description: 'meta_description',
 };
 
 // Мапінг колонок категорій до ключів API генерації
 export const mapCategoryColumnToApiField: Record<CategoryColumnName, string> = {
   category: 'site_product',
   description: 'site_short_description',
-  meta_keywords: 'site_meta_keywords',
   page_title: 'site_page_title',
+  meta_title: 'site_page_title',
+  meta_keywords: 'site_meta_keywords',
+  custom_h1: 'site_shortname',
+  seo_name: 'site_searchwords',
+  meta_description: 'site_meta_description',
 };
 
 // Отримати промпт для колонки категорії
@@ -33,8 +50,12 @@ export const resolvePromptForCategoryColumn = (
   const productColumnMap: Record<CategoryColumnName, SiteColumnName> = {
     category: 'product',
     description: 'short_description',
-    meta_keywords: 'meta_keywords',
     page_title: 'page_title',
+    meta_title: 'page_title',
+    meta_keywords: 'meta_keywords',
+    custom_h1: 'shortname',
+    seo_name: 'searchwords',
+    meta_description: 'meta_description',
   };
   
   const productCol = productColumnMap[col];

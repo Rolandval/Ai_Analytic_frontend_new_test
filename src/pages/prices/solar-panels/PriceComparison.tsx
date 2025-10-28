@@ -46,6 +46,7 @@ interface SolarPanelWithSupplierPrices {
   cell_type: string | null;
   panel_color: string | null;
   frame_color: string | null;
+  datasheet_url?: string | null;
   supplier_prices: SupplierPrice[];
 }
 
@@ -967,7 +968,23 @@ export default function SolarPanelPriceComparison() {
                           title={panel.full_name}
                         >
                           <div className="truncate">
-                            {panel.full_name}
+                            {panel.datasheet_url ? (
+                              <a 
+                                href={panel.datasheet_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-500 hover:underline"
+                                title={panel.full_name}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  window.open(panel.datasheet_url, '_blank');
+                                }}
+                              >
+                                {panel.full_name}
+                              </a>
+                            ) : (
+                              <span>{panel.full_name}</span>
+                            )}
                           </div>
                         </TableCell>
                       )}

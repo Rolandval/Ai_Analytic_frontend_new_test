@@ -12,11 +12,27 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
     key: 'full_name', 
     header: 'Назва', 
     sortable: true,
-    render: (row) => (
-      <span title={row.full_name}>
-        {row.full_name}
-      </span>
-    )
+    render: (row) => {
+      if (row.datasheet_url) {
+        return (
+          <a 
+            href={row.datasheet_url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline"
+            title={row.full_name}
+            onClick={(e) => {
+              // Запобігаємо завантаженню, дозволяємо браузеру відкрити в новій вкладці
+              e.preventDefault();
+              window.open(row.datasheet_url, '_blank');
+            }}
+          >
+            {row.full_name}
+          </a>
+        );
+      }
+      return <span title={row.full_name}>{row.full_name}</span>;
+    }
   },
   { key: 'brand', header: 'Бренд', sortable: true },
   { 

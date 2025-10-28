@@ -5,8 +5,12 @@ export interface SiteCategoryDescription {
   lang_code: string;
   category: string;
   description: string;
-  meta_keywords: string;
   page_title: string;
+  meta_title?: string;
+  meta_keywords: string;
+  meta_description?: string;
+  seo_name?: string;
+  custom_h1?: string;
 }
 
 export interface UpdateSiteCategoryDescriptionRequest {
@@ -14,8 +18,12 @@ export interface UpdateSiteCategoryDescriptionRequest {
   lang_code: string;
   category: string;
   description: string;
-  meta_keywords: string;
   page_title: string;
+  meta_title?: string;
+  meta_keywords: string;
+  meta_description?: string;
+  seo_name?: string;
+  custom_h1?: string;
 }
 
 // Нова структура відповіді від API

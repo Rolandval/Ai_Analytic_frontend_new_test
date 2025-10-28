@@ -58,6 +58,15 @@ export const mockTopics: Topic[] = [
     createdAt: new Date('2025-10-20'),
     platforms: ['facebook', 'instagram', 'blog']
   },
+    {
+        id: '52',
+        title: 'Як вибрати сонячні2 панелі для дому',
+        keywords: ['сонячні панелі', 'енергія', 'дім'],
+        category: 'енергетика',
+        status: 'approved',
+        createdAt: new Date('2025-10-20'),
+        platforms: ['facebook', 'instagram', 'blog']
+    },
   {
     id: '2',
     title: 'Топ 5 акумуляторів для резервного живлення',
@@ -118,32 +127,36 @@ export const mockArticles: Article[] = [
   }
 ];
 
-export const mockContentPlan: ContentPlan[] = [
-  {
-    id: 'plan1',
-    date: new Date('2025-10-25'),
-    articleId: 'art1',
-    platforms: ['facebook', 'instagram'],
-    status: 'scheduled',
-    scheduledTime: '09:00'
-  },
-  {
-    id: 'plan2',
-    date: new Date('2025-10-26'),
-    articleId: 'art2',
-    platforms: ['instagram', 'linkedin'],
-    status: 'scheduled',
-    scheduledTime: '14:00'
-  },
-  {
-    id: 'plan3',
-    date: new Date('2025-10-27'),
-    articleId: 'art3',
-    platforms: ['tiktok'],
-    status: 'published',
-    scheduledTime: '18:00'
+export const mockContentPlan: ContentPlan[] = (() => {
+  // Generate 29 mock items distributed across October 2025
+  const articles = ['art1', 'art2', 'art3'];
+  const platformsPool: Platform[][] = [
+    ['facebook'],
+    ['instagram'],
+    ['linkedin'],
+    ['tiktok'],
+    ['blog'],
+    ['facebook', 'instagram'],
+    ['instagram', 'linkedin']
+  ];
+  const list: ContentPlan[] = [];
+  for (let i = 1; i <= 29; i++) {
+    const day = Math.min(31, i + 1); // spread starting from 2nd to avoid duplicates with articles dates
+    const artId = articles[i % articles.length];
+    const status: ContentPlan['status'] = i % 11 === 0 ? 'failed' : i % 5 === 0 ? 'published' : 'scheduled';
+    const platforms = platformsPool[i % platformsPool.length];
+    const hour = 8 + (i % 10);
+    list.push({
+      id: `plan${i}`,
+      date: new Date(`2025-10-${String(day).padStart(2, '0')}`),
+      articleId: artId,
+      platforms,
+      status,
+      scheduledTime: `${String(hour).padStart(2, '0')}:00`
+    });
   }
-];
+  return list;
+})();
 
 export const mockAnalytics: Analytics[] = [
   {

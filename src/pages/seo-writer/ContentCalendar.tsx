@@ -9,7 +9,13 @@ import {
   Eye,
   Edit,
   Trash2,
-  Clock
+  Clock,
+  Facebook,
+  Instagram,
+  Linkedin,
+  Music2,
+  Store,
+  FileText
 } from 'lucide-react';
 import { getContentPlan, getArticles } from '@/api/seoWriterApi';
 import { ContentPlan, Article } from '@/types/seoWriter';
@@ -60,6 +66,26 @@ export default function ContentCalendar() {
 
   const getArticleTitle = (articleId: string) => {
     return articles.find(a => a.id === articleId)?.title || 'Невідома стаття';
+  };
+
+  const renderPlatformIcon = (platform: string) => {
+    const commonProps = { className: 'w-3.5 h-3.5' } as const;
+    switch (platform as any) {
+      case 'facebook':
+        return <Facebook {...commonProps} />;
+      case 'instagram':
+        return <Instagram {...commonProps} />;
+      case 'linkedin':
+        return <Linkedin {...commonProps} />;
+      case 'tiktok':
+        return <Music2 {...commonProps} />; // tiktok placeholder icon
+      case 'google_business':
+        return <Store {...commonProps} />;
+      case 'blog':
+        return <FileText {...commonProps} />;
+      default:
+        return null;
+    }
   };
 
   const monthNames = [
@@ -198,7 +224,7 @@ export default function ContentCalendar() {
                   {day && (
                     <>
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <span className="text-9xl font-black text-slate-200 dark:text-slate-600 opacity-40 leading-none">
+                        <span className="text-9xl font-black text-white/20 dark:text-white/15 leading-none">
                           {day}
                         </span>
                       </div>
@@ -209,8 +235,17 @@ export default function ContentCalendar() {
                               className={`text-xs p-1 rounded cursor-pointer hover:opacity-80 transition ${getStatusColor(plan.status)}`}
                               title={getArticleTitle(plan.articleId)}
                             >
-                              <div className="font-medium truncate">
-                                {getArticleTitle(plan.articleId).substring(0, 20)}...
+                              <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-0.5 mr-1">
+                                  {plan.platforms.slice(0,3).map((p) => (
+                                    <span key={p} className="inline-flex items-center justify-center w-4 h-4 rounded-sm bg-white/70 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                                      {renderPlatformIcon(p)}
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="font-medium truncate">
+                                  {getArticleTitle(plan.articleId).substring(0, 20)}...
+                                </div>
                               </div>
                             </div>
                             

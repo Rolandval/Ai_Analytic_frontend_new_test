@@ -103,7 +103,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     ((local.height_min !== undefined || local.height_max !== undefined) ? 1 : 0) +
     ((local.weight_min !== undefined || local.weight_max !== undefined) ? 1 : 0) +
     ((local.impp_min !== undefined || local.impp_max !== undefined) ? 1 : 0) +
-    ((local.amperage_min !== undefined || local.amperage_max !== undefined) ? 1 : 0) +
     (local.panel_type ? 1 : 0) +
     (local.cell_type ? 1 : 0) +
     (local.panel_color ? 1 : 0) +
@@ -123,7 +122,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   // Filter order state
   const defaultFilterOrder = [
     'brands', 'suppliers', 'cities', 'power', 'price', 'price_per_w', 'thickness',
-    'cells_count', 'width', 'height', 'weight', 'impp', 'voltage', 'amperage',
+    'cells_count', 'width', 'height', 'weight', 'impp',
     'panel_type', 'cell_type', 'panel_color', 'frame_color', 'supplier_status', 'date_range'
   ];
 
@@ -232,8 +231,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       weight_max: undefined,
       impp_min: undefined,
       impp_max: undefined,
-      amperage_min: undefined,
-      amperage_max: undefined,
       date_min: undefined,
       date_max: undefined,
       supplier_status: [],
@@ -495,54 +492,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             placeholder="до"
             value={local.impp_max || ''}
             onChange={(e) => setLocal(p => ({ ...p, impp_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-10 text-sm border-gray-300"
-            step="0.1"
-          />
-        </div>
-      </div>
-    ),
-    voltage: (
-      <div className="flex flex-col gap-1 h-[60px]">
-        <label className="text-[12px] font-medium text-slate-600">Вольтаж, В</label>
-        <div className="flex items-end gap-1 h-[60px]">
-          <Input
-            type="number"
-            placeholder="від"
-            value={local.power_min || ''}
-            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-10 text-sm border-gray-300"
-            step="0.1"
-          />
-          <span className="text-muted-foreground">-</span>
-          <Input
-            type="number"
-            placeholder="до"
-            value={local.power_max || ''}
-            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-10 text-sm border-gray-300"
-            step="0.1"
-          />
-        </div>
-      </div>
-    ),
-    amperage: (
-      <div className="flex flex-col gap-1 h-[60px]">
-        <label className="text-[12px] font-medium text-slate-600">Амперраж, А</label>
-        <div className="flex items-end gap-1 h-[60px]">
-          <Input
-            type="number"
-            placeholder="від"
-            value={local.amperage_min || ''}
-            onChange={(e) => setLocal(p => ({ ...p, amperage_min: e.target.value ? Number(e.target.value) : undefined }))}
-            className="h-10 text-sm border-gray-300"
-            step="0.1"
-          />
-          <span className="text-muted-foreground">-</span>
-          <Input
-            type="number"
-            placeholder="до"
-            value={local.amperage_max || ''}
-            onChange={(e) => setLocal(p => ({ ...p, amperage_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />
@@ -893,6 +842,28 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
             </Badge>
           )}
           
+          {/* UMP */}
+          {(local.ump_min || local.ump_max) && (
+            <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 border-emerald-200">
+              Ump: {local.ump_min || '∞'}-{local.ump_max || '∞'} В
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, ump_min: undefined, ump_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
+          {/* ISC */}
+          {(local.isc_min || local.isc_max) && (
+            <Badge variant="secondary" className="bg-teal-100 text-teal-800 border-teal-200">
+              Isc: {local.isc_min || '∞'}-{local.isc_max || '∞'} А
+              <X 
+                className="w-3 h-3 ml-1 cursor-pointer" 
+                onClick={() => setLocal(p => ({ ...p, isc_min: undefined, isc_max: undefined }))}
+              />
+            </Badge>
+          )}
+          
             </div>
             {totalActiveBadges > 14 && (
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-7 bg-gradient-to-t from-white to-white/0 dark:hidden" />
@@ -981,18 +952,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
                         <Badge variant="secondary" className="bg-sky-100 text-sky-800 border-sky-200">
                           Impp: {local.impp_min || '∞'}-{local.impp_max || '∞'} А
                           <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, impp_min: undefined, impp_max: undefined }))} />
-                        </Badge>
-                      )}
-                      {(local.voltage_min !== undefined || local.voltage_max !== undefined) && (
-                        <Badge variant="secondary" className="bg-violet-100 text-violet-800 border-violet-200">
-                          Вольтаж: {local.voltage_min || '∞'}-{local.voltage_max || '∞'} В
-                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, voltage_min: undefined, voltage_max: undefined }))} />
-                        </Badge>
-                      )}
-                      {(local.amperage_min !== undefined || local.amperage_max !== undefined) && (
-                        <Badge variant="secondary" className="bg-rose-100 text-rose-800 border-rose-200">
-                          Амперраж: {local.amperage_min || '∞'}-{local.amperage_max || '∞'} А
-                          <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, amperage_min: undefined, amperage_max: undefined }))} />
                         </Badge>
                       )}
                       {local.panel_type && (

@@ -74,6 +74,21 @@ export interface SolarPanelPriceSchema {
   supplier_cities?: string[] | null;
   price: number;
   date: string;
+  datasheet_url?: string | null;
+  power?: number | null;
+  panel_type?: string | null;
+  cell_type?: string | null;
+  panel_color?: string | null;
+  frame_color?: string | null;
+  supplier_url?: string | null;
+  supplier_contact?: string | null;
+  price_per_w?: number | null;
+  panel_id?: number | null;
+  cells_count?: number | null;
+  width?: number | null;
+  height?: number | null;
+  weight?: number | null;
+  impp?: number | null;
 }
 
 // Common sort direction type for list endpoints
@@ -105,3 +120,4 @@ export interface PaginatedSolarPanelPricesResponse {
   page_size: number;
   prices: SolarPanelPriceSchema[];
 }
+

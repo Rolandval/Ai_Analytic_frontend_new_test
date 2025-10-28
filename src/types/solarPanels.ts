@@ -35,10 +35,8 @@ export interface SolarPanelPriceListRequestSchema {
   weight_max?: number;
   impp_min?: number;
   impp_max?: number;
-  ump_min?: number;
-  ump_max?: number;
-  isc_min?: number;
-  isc_max?: number;
+  voltage_min?: number;
+  voltage_max?: number;
   amperage_min?: number;
   amperage_max?: number;
 }

@@ -51,11 +51,15 @@ const PRODUCT_FIELDS: FieldConfig<keyof ProductTemplates>[] = [
 ];
 
 const CATEGORY_FIELDS: FieldConfig<keyof CategoryTemplates>[] = [
-  { key: 'age_warning_message', label: 'Age warning message' },
-  { key: 'meta_title', label: 'Meta-tag Title' },
-  { key: 'meta_description', label: 'Meta-tag Description' },
-  { key: 'description', label: 'Description' },
-  { key: 'meta_keywords', label: 'Meta-tag Keywords' },
+  { key: 'category', label: 'Назва категорії' },
+  { key: 'description', label: 'Опис' },
+  { key: 'page_title', label: 'Назва сторінки' },
+  { key: 'meta_title', label: 'Мета назва' },
+  { key: 'meta_keywords', label: 'Мета ключові слова' },
+  { key: 'custom_h1', label: 'Користувацький заголовок H1' },
+  { key: 'seo_name', label: 'SEO імя' },
+  { key: 'meta_description', label: 'Meta опис' },
+  { key: 'age_warning_message', label: 'Попередження про вік' },
 ];
 
 // Мапінг полів категорій до колонок для промптів
@@ -63,14 +67,22 @@ const mapCategoryFieldKeyToSiteColumnName = (
   key: keyof CategoryTemplates
 ): SiteColumnName | null => {
   switch (key) {
-    case 'meta_title':
-      return 'page_title';
-    case 'meta_description':
-      return 'meta_description';
+    case 'category':
+      return 'product'; // назва категорії
     case 'description':
-      return 'short_description';
+      return 'short_description'; // опис
+    case 'page_title':
+      return 'page_title'; // назва сторінки
+    case 'meta_title':
+      return 'page_title'; // мета назва
     case 'meta_keywords':
-      return 'meta_keywords';
+      return 'meta_keywords'; // мета ключові слова
+    case 'custom_h1':
+      return 'shortname'; // користувацький H1
+    case 'seo_name':
+      return 'searchwords'; // SEO імя
+    case 'meta_description':
+      return 'meta_description'; // мета опис
     default:
       return null;
   }

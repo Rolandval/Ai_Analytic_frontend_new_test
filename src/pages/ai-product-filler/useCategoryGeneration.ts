@@ -31,7 +31,14 @@ export const useCategoryGeneration = (
     
     // Зберігаємо зміни в localStorage
     if (saveCategoryUnsavedField) {
-      const fields: Array<keyof SiteCategoryDescription> = ['category', 'description', 'meta_keywords', 'page_title'];
+      const fields: Array<keyof SiteCategoryDescription> = [
+        'category',
+        'description',
+        'page_title',
+        'meta_keywords',
+        'seo_name',
+        'meta_description'
+      ];
       fields.forEach((field) => {
         if (updatedCategory[field] !== undefined) {
           console.log('[handleCategoryUpdate] Saving to localStorage:', field, updatedCategory[field]);
