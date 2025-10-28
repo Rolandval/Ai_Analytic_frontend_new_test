@@ -53,7 +53,9 @@ const DEFAULT_FILTER_ORDER = [
   'height',
   'weight',
   'impp',
-  'panel_type',
+  'voltage',
+  'amperage',
+   'panel_type',
   'cell_type',
   'panel_color',
   'frame_color',
@@ -838,6 +840,54 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
             placeholder="до"
             value={local.impp_max ?? ''}
             onChange={(e) => setLocal(p => ({ ...p, impp_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+        </div>
+      </div>
+    ),
+    voltage: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Вольтаж, В</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.voltage_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, voltage_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.voltage_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, voltage_max: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+        </div>
+      </div>
+    ),
+    amperage: (
+      <div className="h-[60px] flex flex-col gap-1">
+        <span className="text-[12px] font-medium text-slate-600">Амперраж, А</span>
+        <div className="flex gap-1 items-center">
+          <Input
+            type="number"
+            placeholder="від"
+            value={local.amperage_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, amperage_min: e.target.value ? Number(e.target.value) : undefined }))}
+            className="h-10 text-sm border-gray-300"
+            step="0.1"
+          />
+          <span className="text-xs text-slate-400">-</span>
+          <Input
+            type="number"
+            placeholder="до"
+            value={local.amperage_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, amperage_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />

@@ -12,44 +12,111 @@ import {
   Copy,
   Share2
 } from 'lucide-react';
-import { getArticles, updateArticle } from '@/api/seoWriterApi';
+import { getArticles, updateArticle, createArticle } from '@/api/seoWriterApi';
 import { Article } from '@/types/seoWriter';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ArticleEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [article, setArticle] = useState<Article | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [editData, setEditData] = useState<Partial<Article>>({});
+  const isNewArticle = !id;
 
   useEffect(() => {
     const loadArticle = async () => {
-      try {
-        const articles = await getArticles();
-        const found = articles.find(a => a.id === id);
-        if (found) {
-          setArticle(found);
-          setEditData(found);
+      if (isNewArticle) {
+        // Create new article template
+        const newArticle: Article = {
+          id: '',
+          topicId: '',
+          title: '',
+          content: '',
+          status: 'draft',
+          platforms: [],
+          mediaUrls: [],
+          version: 1,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        setArticle(newArticle);
+        setEditData(newArticle);
+      } else {
+        try {
+          const articles = await getArticles();
+          const found = articles.find(a => a.id === id);
+          if (found) {
+            setArticle(found);
+            setEditData(found);
+            setIsEditing(false);
+          } else {
+            toast({
+              title: 'Помилка',
+              description: 'Статтю не знайдено',
+              variant: 'destructive'
+            });
+            navigate('/seo-writer/articles');
+          }
+        } catch (error) {
+          console.error('Error loading article:', error);
+          toast({
+            title: 'Помилка',
+            description: 'Не вдалося завантажити статтю',
+            variant: 'destructive'
+          });
         }
-      } catch (error) {
-        console.error('Error loading article:', error);
       }
     };
 
     loadArticle();
-  }, [id]);
+  }, [id, isNewArticle, navigate, toast]);
 
   const handleSave = async () => {
     if (!article) return;
     
+    if (!editData.title || !editData.content) {
+      toast({
+        title: 'Помилка',
+        description: 'Заповніть назву та вміст статті',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
     setIsSaving(true);
     try {
-      await updateArticle(article.id, editData);
-      setArticle({ ...article, ...editData });
-      setIsEditing(false);
+      if (isNewArticle) {
+        const newArticle = await createArticle(
+          editData.topicId || '',
+          editData.title,
+          editData.content
+        );
+        setArticle(newArticle);
+        toast({
+          title: 'Успіх',
+          description: 'Статтю створено'
+        });
+        navigate(`/seo-writer/article/${newArticle.id}`);
+      } else {
+        const updated = await updateArticle(article.id, editData);
+        setArticle(updated);
+        setEditData(updated);
+        setIsEditing(false);
+        toast({
+          title: 'Успіх',
+          description: 'Статтю збережено'
+        });
+      }
     } catch (error) {
       console.error('Error saving article:', error);
+      toast({
+        title: 'Помилка',
+        description: 'Не вдалося зберегти статтю',
+        variant: 'destructive'
+      });
     } finally {
       setIsSaving(false);
     }
@@ -112,16 +179,16 @@ export default function ArticleEditor() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                {isEditing ? 'Редагування статті' : 'Перегляд статті'}
+                {isNewArticle ? 'Нова стаття' : isEditing ? 'Редагування статті' : 'Перегляд статті'}
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-1">
-                ID: {article.id}
+                {isNewArticle ? 'Створення нової статті' : `ID: ${article.id}`}
               </p>
             </div>
           </div>
 
           <div className="flex gap-2">
-            {!isEditing ? (
+            {!isEditing && !isNewArticle ? (
               <>
                 <Button
                   variant="outline"
@@ -148,8 +215,12 @@ export default function ArticleEditor() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setIsEditing(false);
-                    setEditData(article);
+                    if (isNewArticle) {
+                      navigate('/seo-writer/articles');
+                    } else {
+                      setIsEditing(false);
+                      setEditData(article || {});
+                    }
                   }}
                 >
                   Скасувати
@@ -158,7 +229,7 @@ export default function ArticleEditor() {
                   size="sm"
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="gap-2"
+                  className="gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
                 >
                   <Save className="w-4 h-4" />
                   {isSaving ? 'Збереження...' : 'Зберегти'}

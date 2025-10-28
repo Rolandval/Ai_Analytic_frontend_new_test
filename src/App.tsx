@@ -112,6 +112,7 @@ import SeoWriterArticleManagement from './pages/seo-writer/ArticleManagement';
 import SeoWriterAnalytics from './pages/seo-writer/Analytics';
 import SeoWriterSettings from './pages/seo-writer/Settings';
 import SeoWriterArticleEditor from './pages/seo-writer/ArticleEditor';
+import SeoWriterArticleViewEdit from './pages/seo-writer/ArticleViewEdit';
 import SeoWriterLayout from './components/SeoWriterLayout';
 
 // Компонент для favicon логіки всередині Router контексту
@@ -244,7 +245,8 @@ function App() {
           <Route path="/seo-writer/topics" element={<SeoWriterLayout><SeoWriterTopicGeneration /></SeoWriterLayout>} />
           <Route path="/seo-writer/calendar" element={<SeoWriterLayout><SeoWriterContentCalendar /></SeoWriterLayout>} />
           <Route path="/seo-writer/articles" element={<SeoWriterLayout><SeoWriterArticleManagement /></SeoWriterLayout>} />
-          <Route path="/seo-writer/article/:id" element={<SeoWriterLayout><SeoWriterArticleEditor /></SeoWriterLayout>} />
+          <Route path="/seo-writer/article/:id" element={<SeoWriterLayout><SeoWriterArticleViewEdit /></SeoWriterLayout>} />
+          <Route path="/seo-writer/articles/new" element={<SeoWriterLayout><SeoWriterArticleEditor /></SeoWriterLayout>} />
           <Route path="/seo-writer/analytics" element={<SeoWriterLayout><SeoWriterAnalytics /></SeoWriterLayout>} />
           <Route path="/seo-writer/settings" element={<SeoWriterLayout><SeoWriterSettings /></SeoWriterLayout>} />
           {/* Ці маршрути будуть імплементовані пізніше */}

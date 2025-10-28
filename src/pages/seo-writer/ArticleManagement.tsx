@@ -242,6 +242,7 @@ export default function ArticleManagement() {
                           size="sm"
                           className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                           title="Переглянути"
+                          onClick={() => navigate(`/seo-writer/article/${article.id}`)}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -250,6 +251,7 @@ export default function ArticleManagement() {
                           size="sm"
                           className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                           title="Редагувати"
+                          onClick={() => navigate(`/seo-writer/article/${article.id}`)}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>

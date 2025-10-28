@@ -1,7 +1,3 @@
-// Cleaned and extended according to backend schemas
-// ===================== AUTO-GENERATED CLEAN SOLAR PANEL TYPES =====================
-// Feel free to extend, but DO NOT place code after the opening /* comment further below.
-
 export interface SolarPanelPriceListRequestSchema {
   full_name?: string;
   power_min?: number;
@@ -39,54 +35,12 @@ export interface SolarPanelPriceListRequestSchema {
   weight_max?: number;
   impp_min?: number;
   impp_max?: number;
+  ump_min?: number;
+  ump_max?: number;
+  isc_min?: number;
+  isc_max?: number;
+  voltage_min?: number;
+  voltage_max?: number;
+  amperage_min?: number;
+  amperage_max?: number;
 }
-
-export interface SolarPanelPriceCreateSchemaRequest {
-  full_name: string;
-  brand: string;
-  power?: number;
-  thickness?: number;
-  panel_type?: string;
-  cell_type?: string;
-  panel_color?: string;
-  frame_color?: string;
-  supplier: string;
-  supplier_status: string;
-  price: number;
-  price_per_w: number;
-}
-
-export interface SolarPanelPriceUpdateSchemaRequest {
-  price: number;
-  price_per_w?: number;
-}
-
-export interface SolarPanelPriceSchema {
-  id: number;
-  full_name: string;
-  brand: string | null;
-  power?: number | null;
-  thickness?: number | null;
-  panel_type?: string | null;
-  cell_type?: string | null;
-  panel_color?: string | null;
-  frame_color?: string | null;
-  supplier: string;
-  supplier_status: string;
-  supplier_url?: string;
-  supplier_contact?: string | null;
-  suppliers_cities?: string[] | null;
-  price: number;
-  price_per_w: number;
-  date: string; // ISO string
-}
-
-export interface PaginatedSolarPanelPricesResponse {
-  prices: SolarPanelPriceSchema[];
-  total: number;
-  page: number;
-  page_size: number;
-  pages: number;
-}
-
-
