@@ -39,8 +39,6 @@ export interface SolarPanelPriceListRequestSchema {
   ump_max?: number;
   isc_min?: number;
   isc_max?: number;
-  voltage_min?: number;
-  voltage_max?: number;
   amperage_min?: number;
   amperage_max?: number;
 }

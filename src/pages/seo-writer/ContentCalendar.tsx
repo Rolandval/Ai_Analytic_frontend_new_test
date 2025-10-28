@@ -189,7 +189,7 @@ export default function ContentCalendar() {
               return (
                 <div
                   key={idx}
-                  className={`min-h-[120px] p-2 rounded-lg border-2 transition ${
+                  className={`min-h-[120px] p-2 rounded-lg border-2 transition relative overflow-hidden ${
                     day
                       ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 hover:border-blue-300 dark:hover:border-blue-500'
                       : 'border-transparent bg-slate-100 dark:bg-slate-800'
@@ -197,10 +197,12 @@ export default function ContentCalendar() {
                 >
                   {day && (
                     <>
-                      <div className="font-semibold text-slate-900 dark:text-white mb-2">
-                        {day}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="text-9xl font-black text-slate-200 dark:text-slate-600 opacity-40 leading-none">
+                          {day}
+                        </span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="relative z-10 space-y-1">
                         {plansForDay.map(plan => (
                           <div key={plan.id} className="relative group">
                             <div
@@ -209,9 +211,6 @@ export default function ContentCalendar() {
                             >
                               <div className="font-medium truncate">
                                 {getArticleTitle(plan.articleId).substring(0, 20)}...
-                              </div>
-                              <div className="text-[10px] opacity-75">
-                                {plan.scheduledTime}
                               </div>
                             </div>
                             

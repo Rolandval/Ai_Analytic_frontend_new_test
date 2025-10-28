@@ -103,7 +103,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     ((local.height_min !== undefined || local.height_max !== undefined) ? 1 : 0) +
     ((local.weight_min !== undefined || local.weight_max !== undefined) ? 1 : 0) +
     ((local.impp_min !== undefined || local.impp_max !== undefined) ? 1 : 0) +
-    ((local.voltage_min !== undefined || local.voltage_max !== undefined) ? 1 : 0) +
     ((local.amperage_min !== undefined || local.amperage_max !== undefined) ? 1 : 0) +
     (local.panel_type ? 1 : 0) +
     (local.cell_type ? 1 : 0) +
@@ -233,8 +232,6 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
       weight_max: undefined,
       impp_min: undefined,
       impp_max: undefined,
-      voltage_min: undefined,
-      voltage_max: undefined,
       amperage_min: undefined,
       amperage_max: undefined,
       date_min: undefined,
@@ -511,8 +508,8 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
           <Input
             type="number"
             placeholder="від"
-            value={local.voltage_min || ''}
-            onChange={(e) => setLocal(p => ({ ...p, voltage_min: e.target.value ? Number(e.target.value) : undefined }))}
+            value={local.power_min || ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />
@@ -520,8 +517,8 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
           <Input
             type="number"
             placeholder="до"
-            value={local.voltage_max || ''}
-            onChange={(e) => setLocal(p => ({ ...p, voltage_max: e.target.value ? Number(e.target.value) : undefined }))}
+            value={local.power_max || ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />

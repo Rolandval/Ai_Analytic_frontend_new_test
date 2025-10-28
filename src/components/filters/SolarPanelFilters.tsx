@@ -393,6 +393,8 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
                     weight_max: undefined,
                     impp_min: undefined,
                     impp_max: undefined,
+                    amperage_min: undefined,
+                    amperage_max: undefined,
                     usd_rate: undefined,
                     markup: 15,
                     date_min: undefined,
@@ -853,8 +855,8 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
           <Input
             type="number"
             placeholder="від"
-            value={local.voltage_min ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, voltage_min: e.target.value ? Number(e.target.value) : undefined }))}
+            value={local.power_min ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_min: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />
@@ -862,8 +864,8 @@ export const SolarPanelFilters: React.FC<Props> = ({ current, setFilters, brands
           <Input
             type="number"
             placeholder="до"
-            value={local.voltage_max ?? ''}
-            onChange={(e) => setLocal(p => ({ ...p, voltage_max: e.target.value ? Number(e.target.value) : undefined }))}
+            value={local.power_max ?? ''}
+            onChange={(e) => setLocal(p => ({ ...p, power_max: e.target.value ? Number(e.target.value) : undefined }))}
             className="h-10 text-sm border-gray-300"
             step="0.1"
           />
