@@ -163,6 +163,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const [rowCheckedRows, setRowCheckedRows] = useState<Record<string, boolean>>({});
   // Незалежний стан для чекбоксів у заголовках колонок (щоб вибір рядків їх не змінював)
   const [columnHeaderChecked, setColumnHeaderChecked] = useState<Partial<Record<SiteColumnName, boolean>>>({});
+  // Стан для відстеження кількості кліків по кожному стовпцю
+  const [columnClickCounts, setColumnClickCounts] = useState<Partial<Record<SiteColumnName, number>>>({});
+  // Таймери для скидання лічильника кліків
+  const columnClickTimersRef = useRef<Partial<Record<SiteColumnName, NodeJS.Timeout>>>({});
   // Стан розгортання рядків (незалежний від вибору/чекбоксів)
   const [expandedRowKeys, setExpandedRowKeys] = useState<Record<string, boolean>>({});
   const toggleRowExpanded = (rowKey: string) => setExpandedRowKeys(prev => ({ ...prev, [rowKey]: !prev[rowKey] }));
@@ -436,6 +440,10 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   useEffect(() => () => {
     document.removeEventListener('mousemove', onHeaderResizeMove);
     document.removeEventListener('mouseup', onHeaderResizeEnd);
+    // Очистити всі таймери кліків при розмонтуванні
+    Object.values(columnClickTimersRef.current).forEach(timer => {
+      if (timer) clearTimeout(timer);
+    });
   }, [onHeaderResizeEnd, onHeaderResizeMove]);
   const getColStyle = useCallback((col: SiteColumnName) => {
     const w = columnWidths[col];
@@ -646,35 +654,105 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     return !!categoryColumnHeaderChecked[col];
   };
   
-  const onCategoryColumnCheckedChange = (col: string, checked: boolean | 'indeterminate') => {
-    setCategoryColumnHeaderChecked(prev => ({ ...prev, [col]: checked === true }));
+  // Функція для обробки кліків по заголовках стовпців категорій (тричі-клік функціональність)
+  const handleCategoryColumnHeaderClick = (col: string) => {
+    // Очистити попередній таймер для цього стовпця
+    if (columnClickTimersRef.current[col as SiteColumnName]) {
+      clearTimeout(columnClickTimersRef.current[col as SiteColumnName]);
+    }
+
+    // Збільшити лічильник кліків
+    const currentCount = (columnClickCounts[col as SiteColumnName] || 0) + 1;
+    setColumnClickCounts(prev => ({ ...prev, [col as SiteColumnName]: currentCount }));
+
+    // Встановити новий таймер для скидання лічильника через 1 секунду
+    columnClickTimersRef.current[col as SiteColumnName] = setTimeout(() => {
+      setColumnClickCounts(prev => ({ ...prev, [col as SiteColumnName]: 0 }));
+    }, 1000);
+
+    // Виконати дію залежно від кількості кліків
+    if (currentCount === 1) {
+      // 1 клік - toggle вибору незаповнених полів (вибрати/прибрати)
+      const isCurrentlySelected = getCategoryColumnCheckedState(col);
+      if (isCurrentlySelected) {
+        // Якщо вже вибрано - прибрати вибір
+        onCategoryColumnCheckedChangeWithMode(col, false, 'empty');
+      } else {
+        // Якщо не вибрано - вибрати лише незаповнені
+        onCategoryColumnCheckedChangeWithMode(col, true, 'empty');
+      }
+    } else if (currentCount >= 2) {
+      // 2 кліки - вибрати всі поля в стовпці
+      onCategoryColumnCheckedChangeWithMode(col, true, 'all');
+      // Скинути лічильник після подвійного кліку
+      setColumnClickCounts(prev => ({ ...prev, [col as SiteColumnName]: 0 }));
+      if (columnClickTimersRef.current[col as SiteColumnName]) {
+        clearTimeout(columnClickTimersRef.current[col as SiteColumnName]);
+      }
+    }
+  };
+
+  const onCategoryColumnCheckedChangeWithMode = (col: string, checked: boolean | 'indeterminate', mode: 'empty' | 'all' = 'empty') => {
+    const value = checked === true;
     
-    // Вибираємо всі незаповнені клітинки в колонці
-    if (checked === true) {
-      const updates: Record<string, boolean> = {};
+    let targetCells = 0;
+    let emptyCount = 0;
+    
+    // Підрахувати клітинки залежно від режиму
+    pagedCategories.forEach((cat) => {
+      const cellValue = cat[col as keyof SiteCategoryDescription];
+      const isEmpty = !cellValue || String(cellValue).trim() === '';
       
-      pagedCategories.forEach((cat, idx) => {
-        const rowKey = getCategoryRowKey(cat, idx);
-        const value = cat[col as keyof SiteCategoryDescription];
-        const isEmpty = !value || String(value).trim() === '';
-        
-        if (isEmpty) {
-          updates[`${rowKey}:${col}`] = true;
-        }
-      });
+      if (mode === 'all') {
+        targetCells++;
+      } else if (mode === 'empty' && isEmpty) {
+        targetCells++;
+        emptyCount++;
+      }
+    });
+
+    if (mode === 'empty' && emptyCount === 0) {
+      // Немає що вибирати — показуємо підказку і не перемикаємо стан у "вибрано"
+      toast({ title: 'Немає порожніх клітинок у цій колонці на цій сторінці' });
+      setCategoryColumnHeaderChecked(prev => ({ ...prev, [col]: false }));
+      return;
+    }
+
+    setCategoryColumnHeaderChecked(prev => ({ ...prev, [col]: value }));
+    
+    // Застосовуємо до клітинок залежно від режиму
+    const updates: Record<string, boolean> = {};
+    pagedCategories.forEach((cat, idx) => {
+      const rowKey = getCategoryRowKey(cat, idx);
+      const cellValue = cat[col as keyof SiteCategoryDescription];
+      const isEmpty = !cellValue || String(cellValue).trim() === '';
       
-      setCategorySelectedCells(prev => ({ ...prev, ...updates }));
-    } else {
-      // Знімаємо вибір з усіх клітинок колонки
-      setCategorySelectedCells(prev => {
+      if (mode === 'all') {
+        // Вибрати всі клітинки в стовпці
+        updates[`${rowKey}:${col}`] = value;
+      } else if (mode === 'empty' && isEmpty) {
+        // Вибрати тільки порожні клітинки
+        updates[`${rowKey}:${col}`] = value;
+      }
+    });
+    
+    setCategorySelectedCells(prev => {
+      if (value) {
+        return { ...prev, ...updates };
+      } else {
+        // Знімаємо вибір з усіх клітинок колонки
         const next = { ...prev };
         pagedCategories.forEach((cat, idx) => {
           const rowKey = getCategoryRowKey(cat, idx);
           delete next[`${rowKey}:${col}`];
         });
         return next;
-      });
-    }
+      }
+    });
+  };
+
+  const onCategoryColumnCheckedChange = (col: string, checked: boolean | 'indeterminate') => {
+    onCategoryColumnCheckedChangeWithMode(col, checked, 'empty');
   };
   // Стабільний ключ рядка: product_id+lang (канонічна), інакше id+lang, інакше lang|product
   const getStableKey = (d: ContentDescription) => {
@@ -1275,8 +1353,9 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
   const dragThreshold = 5; // пікселів для активації drag
 
   const handleCellMouseDown = (e: React.MouseEvent, rowKey: string, col: string, currentValue: boolean) => {
-    // Ігноруємо, якщо клік на самому чекбоксі
-    if ((e.target as HTMLElement).closest('button[role="checkbox"]')) {
+    // Ігноруємо, якщо клік на самому чекбоксі або на текстовому полі для редагування
+    if ((e.target as HTMLElement).closest('button[role="checkbox"]') || 
+        (e.target as HTMLElement).closest('[data-editable-text]')) {
       return;
     }
     dragStartPosRef.current = { x: e.clientX, y: e.clientY };
@@ -1375,6 +1454,94 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
       return next;
     });
   };
+
+  // Нова функція для обробки кліків по заголовках стовпців (тричі-клік функціональність)
+  const handleColumnHeaderClick = (col: SiteColumnName) => {
+    // Очистити попередній таймер для цього стовпця
+    if (columnClickTimersRef.current[col]) {
+      clearTimeout(columnClickTimersRef.current[col]);
+    }
+
+    // Збільшити лічильник кліків
+    const currentCount = (columnClickCounts[col] || 0) + 1;
+    setColumnClickCounts(prev => ({ ...prev, [col]: currentCount }));
+
+    // Встановити новий таймер для скидання лічильника через 1 секунду
+    columnClickTimersRef.current[col] = setTimeout(() => {
+      setColumnClickCounts(prev => ({ ...prev, [col]: 0 }));
+    }, 1000);
+
+    // Виконати дію залежно від кількості кліків
+    if (currentCount === 1) {
+      // 1 клік - toggle вибору незаповнених полів (вибрати/прибрати)
+      const isCurrentlySelected = getColumnCheckedState(col);
+      if (isCurrentlySelected) {
+        // Якщо вже вибрано - прибрати вибір
+        onColumnCheckedChangeWithMode(col, false, 'empty');
+      } else {
+        // Якщо не вибрано - вибрати лише незаповнені
+        onColumnCheckedChangeWithMode(col, true, 'empty');
+      }
+    } else if (currentCount >= 2) {
+      // 2 кліки - вибрати всі поля в стовпці
+      onColumnCheckedChangeWithMode(col, true, 'all');
+      // Скинути лічильник після подвійного кліку
+      setColumnClickCounts(prev => ({ ...prev, [col]: 0 }));
+      if (columnClickTimersRef.current[col]) {
+        clearTimeout(columnClickTimersRef.current[col]);
+      }
+    }
+  };
+
+  // Модифікована функція onColumnCheckedChange з підтримкою режимів
+  const onColumnCheckedChangeWithMode = (col: SiteColumnName, checked: boolean | 'indeterminate', mode: 'empty' | 'all' = 'empty') => {
+    const value = checked === true;
+    const field = mapSiteColumnToContentField[col];
+    
+    let targetCells = 0;
+    let emptyCount = 0;
+    
+    // Підрахувати клітинки залежно від режиму
+    pagedDescriptions.forEach((desc) => {
+      const v = (desc as any)[field] as string | null | undefined;
+      const isEmpty = isEmptyCellValue(v);
+      
+      if (mode === 'all') {
+        targetCells++;
+      } else if (mode === 'empty' && isEmpty) {
+        targetCells++;
+        emptyCount++;
+      }
+    });
+
+    if (mode === 'empty' && emptyCount === 0) {
+      // Немає що вибирати — показуємо підказку і не перемикаємо стан у "вибрано"
+      toast({ title: 'Немає порожніх клітинок у цій колонці на цій сторінці' });
+      setColumnHeaderChecked(prev => ({ ...prev, [col]: false }));
+      return;
+    }
+
+    setColumnHeaderChecked(prev => ({ ...prev, [col]: value }));
+    setSelectedCells(prev => {
+      const next = { ...prev };
+      // Застосовуємо до клітинок залежно від режиму
+      pagedDescriptions.forEach((desc, idx) => {
+        const v = (desc as any)[field] as string | null | undefined;
+        const isEmpty = isEmptyCellValue(v);
+        const rowKey = getRowKey(desc, idx);
+        
+        if (mode === 'all') {
+          // Вибрати всі клітинки в стовпці
+          next[`${rowKey}:${col}`] = value;
+        } else if (mode === 'empty' && isEmpty) {
+          // Вибрати тільки порожні клітинки
+          next[`${rowKey}:${col}`] = value;
+        }
+      });
+      return next;
+    });
+  };
+
   // Керування вибором усього рядка: впливає тільки на порожні клітинки, і фіксує незалежний стан чекбокса рядка
   const onRowGenerateCheckedChange = (
     rowKey: string,
@@ -2991,9 +3158,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         const operationInProgress = translating || selectedGenerating || massGenerating || saving;
         if (operationInProgress) return;
         if (!wrapperRef.current) return;
-        const target = e.target as Node;
+        const target = e.target as HTMLElement;
         const insideOverlay = overlayRef.current ? overlayRef.current.contains(target) : false;
-        if (!wrapperRef.current.contains(target) && !insideOverlay) {
+        
+        // Перевіряємо, чи клік не на textarea або її resize handle
+        const isTextareaClick = target.tagName === 'TEXTAREA' || target.closest('textarea');
+        
+        if (!wrapperRef.current.contains(target) && !insideOverlay && !isTextareaClick) {
           commitDraft();
           setEditing(false);
         }
@@ -3014,6 +3185,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           onClick={(e) => { e.stopPropagation(); valueAtEditStartRef.current = value; setEditing(true); }}
           title={value || placeholder}
           data-long={long ? '1' : '0'}
+          data-editable-text="true"
         >
           {loading && <Loader2 className="h-3 w-3 animate-spin text-amber-600" />}
           {shown || placeholder}
@@ -3027,12 +3199,13 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         <div ref={wrapperRef} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} className="w-full flex-1" />
         {/* Оверлей-редактор над таблицею */}
         {overlayPos && createPortal(
-          <div ref={overlayRef} style={{ position: 'fixed', top: overlayPos.top, left: overlayPos.left, width: overlayPos.width, zIndex: 9999 }}>
+          <div ref={overlayRef} style={{ position: 'fixed', top: overlayPos.top, left: overlayPos.left, width: overlayPos.width, zIndex: 9999 }} onClick={(e) => e.stopPropagation()}>
             <Textarea
               ref={inputRef as any}
               className="resize text-xs leading-tight bg-white dark:bg-neutral-900 border border-gray-300 dark:border-gray-600 rounded p-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[64px]"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 // Ctrl+Enter або Cmd+Enter — зберегти і закрити
                 if ((e.key === 'Enter') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitDraft(); setEditing(false); }
@@ -3605,7 +3778,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
               <Checkbox
                 aria-label="Вибрати колонку Категорія"
                 checked={getCategoryColumnCheckedState('category')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('category', checked)}
+                onClick={() => handleCategoryColumnHeaderClick('category')}
                 size="sm"
                 className="dark:bg-neutral-800/70"
                 disabled={massGenerating || translating}
@@ -3620,7 +3793,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
               <Checkbox
                 aria-label="Вибрати колонку Опис"
                 checked={getCategoryColumnCheckedState('description')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('description', checked)}
+                onClick={() => handleCategoryColumnHeaderClick('description')}
                 size="sm"
                 className="dark:bg-neutral-800/70"
                 disabled={massGenerating || translating}
@@ -3635,7 +3808,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
               <Checkbox
                 aria-label="Вибрати колонку Meta keywords"
                 checked={getCategoryColumnCheckedState('meta_keywords')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('meta_keywords', checked)}
+                onClick={() => handleCategoryColumnHeaderClick('meta_keywords')}
                 size="sm"
                 className="dark:bg-neutral-800/70"
                 disabled={massGenerating || translating}
@@ -3650,7 +3823,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
               <Checkbox
                 aria-label="Вибрати колонку Заголовок"
                 checked={getCategoryColumnCheckedState('page_title')}
-                onCheckedChange={(checked) => onCategoryColumnCheckedChange('page_title', checked)}
+                onClick={() => handleCategoryColumnHeaderClick('page_title')}
                 size="sm"
                 className="dark:bg-neutral-800/70"
                 disabled={massGenerating || translating}
@@ -3958,7 +4131,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Назва"
                           checked={getColumnCheckedState('product')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('product', checked)}
+                          onClick={() => handleColumnHeaderClick('product')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -3983,7 +4156,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Коротка"
                           checked={getColumnCheckedState('shortname')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('shortname', checked)}
+                          onClick={() => handleColumnHeaderClick('shortname')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4008,7 +4181,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Опис"
                           checked={getColumnCheckedState('short_description')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('short_description', checked)}
+                          onClick={() => handleColumnHeaderClick('short_description')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4033,7 +4206,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Повний"
                           checked={getColumnCheckedState('full_description')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('full_description', checked)}
+                          onClick={() => handleColumnHeaderClick('full_description')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4058,7 +4231,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Промо"
                           checked={getColumnCheckedState('promo_text')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('promo_text', checked)}
+                          onClick={() => handleColumnHeaderClick('promo_text')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4083,7 +4256,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Мета"
                           checked={getColumnCheckedState('meta_keywords')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('meta_keywords', checked)}
+                          onClick={() => handleColumnHeaderClick('meta_keywords')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4108,7 +4281,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Мета-опис"
                           checked={getColumnCheckedState('meta_description')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('meta_description', checked)}
+                          onClick={() => handleColumnHeaderClick('meta_description')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4133,7 +4306,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Пошукові слова"
                           checked={getColumnCheckedState('searchwords')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('searchwords', checked)}
+                          onClick={() => handleColumnHeaderClick('searchwords')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4158,7 +4331,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         <Checkbox
                           aria-label="Вибрати колонку Заголовок"
                           checked={getColumnCheckedState('page_title')}
-                          onCheckedChange={(checked) => onColumnCheckedChange('page_title', checked)}
+                          onClick={() => handleColumnHeaderClick('page_title')}
                           size="sm"
                           className="dark:bg-neutral-800/70"
                           disabled={massGenerating || translating}
@@ -4698,8 +4871,18 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
             </div>
             {/* Нижня панель дій (дублікат верхньої) */}
             <div className="flex flex-wrap items-center gap-2 justify-start px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+              {/* Кнопка очищення вибору */}
               <Button
+                onClick={handleClearSelection}
                 variant="outline"
+                className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:border-orange-400 dark:text-orange-400 dark:hover:bg-orange-950"
+                title="Зняти вибір з усіх клітинок"
+              >
+                <X className="mr-2 h-4 w-4" />
+                Очистити вибране
+              </Button>
+              {/* Згенерувати/Перекласти вибрані */}
+              <Button
                 onClick={
     isTranslateMode 
       ? handleTranslateSelected 
@@ -4719,6 +4902,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           ? 'Згенерувати AI-контент для вибраних категорій'
           : 'Згенерувати AI-контент для вибраних клітинок поточної сторінки')
   }
+                className={!isTranslateMode ? 'bg-red-600 hover:bg-red-700 text-white font-semibold px-4' : ''}
+                variant={isTranslateMode ? 'outline' : undefined}
               >
                 {(!isTranslateMode && (activeTab === 'categories' ? categoryGeneration.categorySelectedGenerating : selectedGenerating)) && 
     <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
