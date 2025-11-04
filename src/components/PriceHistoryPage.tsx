@@ -784,7 +784,15 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
       {/* Small spacing */}
       <div className="mt-2 mb-2"></div>
       
+      {/* Loading state */}
+      {loading && (
+        <div className="text-center py-10 text-gray-500">
+          <p className="font-medium">Завантаження даних...</p>
+        </div>
+      )}
+      
       {/* Table */}
+      {!loading && (
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
         <table className={`w-full ${compact ? 'text-xs' : ''}`} style={{userSelect: 'text', minWidth: 'max-content', tableLayout: 'auto'}}>
           <thead style={{userSelect: 'none'}} className="[&>tr>th]:bg-[#EBF3F6] dark:[&>tr>th]:bg-gray-900 [&>tr>th:hover]:bg-[#EBF3F6] dark:[&>tr>th:hover]:bg-gray-900 first:[&>tr>th]:rounded-tl-lg last:[&>tr>th]:rounded-tr-lg">
@@ -974,6 +982,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Chart dialog */}
       {chartConfig && (

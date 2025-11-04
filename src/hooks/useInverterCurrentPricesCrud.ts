@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   listInverterCurrentPrices,
@@ -18,6 +18,7 @@ export const useInverterCurrentPricesCrud = () => {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<InverterPriceListRequestSchema>({ page: 1, page_size: 10 });
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Не викликаємо API до першої взаємодії користувача
   const shouldFetchData = hasUserInteracted;
@@ -25,8 +26,8 @@ export const useInverterCurrentPricesCrud = () => {
   const { data, isFetching } = useQuery<PaginatedInverterPricesResponse>({
     queryKey: ['inverter-current-prices', filters, hasUserInteracted],
     queryFn: () => listInverterCurrentPrices({ ...filters, supplier_status: ['SUPPLIER'] }), // Додаємо supplier_status тільки при запиті
-    placeholderData: (prev) => prev,
     enabled: shouldFetchData, // Використовуємо shouldFetchData замість false
+    staleTime: 0, // Дані завжди застарілі, щоб перезавантажувалися при кожній зміні
   });
 
   const updateMut = useMutation({
@@ -60,25 +61,43 @@ export const useInverterCurrentPricesCrud = () => {
     setFilters((f) => ({ ...f, page_size: size, page: 1 }));
   };
 
-  // Wrap setFilters to normalize payload and trigger refetch
+  // Wrap setFilters to normalize payload and trigger refetch with debounce
   const applyFilters = (f: InverterPriceListRequestSchema) => {
     setHasUserInteracted(true);
-    const normalize = (o: Record<string, any>) => {
-      const n: Record<string, any> = {};
-      Object.entries(o).forEach(([k, v]) => {
-        if (v === '' || v === null || v === undefined) return;
-        if (Array.isArray(v)) {
-          if (v.length > 0) n[k] = v.slice();
-          return;
-        }
-        n[k] = v;
-      });
-      return n as InverterPriceListRequestSchema;
-    };
-    const normalized = { ...normalize(f as any), supplier_status: ['SUPPLIER'] };
-    setFilters(normalized);
-    // Query автоматично перезапуститься через зміну filters та hasUserInteracted
+    
+    // Очищуємо попередній таймер
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    
+    // Встановлюємо новий таймер з debounce 500ms
+    debounceTimerRef.current = setTimeout(() => {
+      const normalize = (o: Record<string, any>) => {
+        const n: Record<string, any> = {};
+        Object.entries(o).forEach(([k, v]) => {
+          if (v === '' || v === null || v === undefined) return;
+          if (Array.isArray(v)) {
+            if (v.length > 0) n[k] = v.slice();
+            return;
+          }
+          n[k] = v;
+        });
+        return n as InverterPriceListRequestSchema;
+      };
+      const normalized = { ...normalize(f as any), supplier_status: ['SUPPLIER'] };
+      setFilters(normalized);
+      // Query автоматично перезапуститься через зміну filters та hasUserInteracted
+    }, 500);
   };
+  
+  // Cleanup таймера при розмонтуванні
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['inverter-current-prices'] });
 

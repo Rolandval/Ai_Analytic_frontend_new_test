@@ -180,7 +180,10 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
           <Input
             placeholder="Назва"
             value={local.full_name ?? ''}
-            onChange={(e) => setLocal((p) => ({ ...p, full_name: e.target.value || undefined }))}
+            onChange={(e) => {
+              const trimmed = e.target.value.trim();
+              setLocal((p) => ({ ...p, full_name: trimmed || undefined }));
+            }}
             className="w-64 bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
           />
         </div>

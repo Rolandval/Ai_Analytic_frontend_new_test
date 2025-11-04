@@ -135,7 +135,6 @@ export default function InverterPriceComparison() {
 
         return {
           ...inverter,
-          originalIndex: (comparisonData.page - 1) * comparisonData.page_size + idx + 1,
           totalAvailability: getTotalAvailability(inverter),
           recommendedPrice: finalRecommendedPrice,
           supplierPrices,
@@ -161,7 +160,7 @@ export default function InverterPriceComparison() {
   // Використовуємо хук для сортування
   const { items: sortedInverters, requestSort, sortConfig } = useSortableTable<InverterWithSupplierPrices>(
     processedData,
-    { key: 'full_name', direction: 'asc' } // Початкове сортування за назвою
+    undefined // Без початкового сортування
   );
 
   // Keys for localStorage (namespaced per page)
@@ -327,7 +326,9 @@ export default function InverterPriceComparison() {
 
     const rows = sortedInverters.map((inv, idx) => {
       const cells: string[] = [];
-      if (visibleColumns['index'] !== false) cells.push(String((page - 1) * pageSize + idx + 1));
+      if (visibleColumns['index'] !== false) {
+        cells.push(String((page - 1) * pageSize + idx + 1));
+      }
       if (visibleColumns['full_name'] !== false) cells.push(inv.full_name ?? '');
       if (visibleColumns['brand'] !== false) cells.push(inv.brand ?? '');
       if (visibleColumns['power'] !== false) cells.push(inv.power?.toString() ?? '');
@@ -404,18 +405,24 @@ export default function InverterPriceComparison() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
+    setComparisonData(null); // очищає старі дані при зміні сторінки
+    setProcessedData([]);    // очищає оброблені рядки
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page: newPage }));
   };
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
     setPage(1);
+    setComparisonData(null); // очищає старі дані
+    setProcessedData([]);    // очищає оброблені рядки
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page_size: size, page: 1 }));
   };
 
   const handleFiltersChange = (newFilters: Partial<InverterPriceListRequestSchema>) => {
-    setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
     setPage(1);
+    setComparisonData(null); // очищає старі дані при зміні фільтрів
+    setProcessedData([]);    // очищає оброблені рядки
+    setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
     // Встановлюємо прапор, що фільтри були застосовані
     setFiltersApplied(true);
   };
@@ -568,28 +575,17 @@ export default function InverterPriceComparison() {
                 <p className="font-medium">Застосуйте фільтри для відображення даних</p>
                 <p className="text-sm mt-2">Виберіть параметри фільтрації вище для завантаження даних</p>
               </div>
+            ) : isLoading ? (
+              <div className="text-center py-10 text-gray-500">
+                <p className="font-medium">Завантаження даних...</p>
+              </div>
             ) : comparisonData && comparisonData.inverters.length > 0 ? (
               <Table className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5" style={{userSelect: 'text'}}>
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
                     {visibleColumns['index'] !== false && (
-                      <TableHead 
-                        className="text-center w-8 text-xs"
-                        onClick={(e) => requestSort('originalIndex', (e as any).shiftKey)}
-                        title="Shift+Клік — додати до сортування"
-                      >
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-xs">№</span>
-                          {sortConfig?.key === 'originalIndex' && (
-                            <span className="text-primary">
-                              {sortConfig.direction === 'asc' ? (
-                                <ChevronUp className="h-3 w-3" />
-                              ) : (
-                                <ChevronDown className="h-3 w-3" />
-                              )}
-                            </span>
-                          )}
-                        </div>
+                      <TableHead className="text-center w-8 text-xs">
+                        <span className="text-xs">№</span>
                       </TableHead>
                     )}
                     {visibleColumns['full_name'] !== false && (
@@ -765,7 +761,9 @@ export default function InverterPriceComparison() {
                       }
                     >
                       {visibleColumns['index'] !== false && (
-                        <TableCell className="text-center w-8 text-xs">{(page - 1) * pageSize + index + 1}</TableCell>
+                        <TableCell className="text-center w-8 text-xs">
+                          {(page - 1) * pageSize + index + 1}
+                        </TableCell>
                       )}
                       {visibleColumns['full_name'] !== false && (
                         <TableCell

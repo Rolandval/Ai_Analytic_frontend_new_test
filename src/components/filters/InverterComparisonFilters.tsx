@@ -500,7 +500,8 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
             placeholder="Пошук по назві..."
             value={local.full_name ?? ''}
             onChange={(e) => {
-              const newLocal = { ...local, full_name: e.target.value ? e.target.value : undefined, page: 1 };
+              const trimmed = e.target.value.trim();
+              const newLocal = { ...local, full_name: trimmed || undefined, page: 1 };
               setLocal(newLocal);
               setFilters(newLocal);
             }}
