@@ -100,19 +100,9 @@ export default function InverterPriceComparison() {
   // removed selectionMode; unified single radio toggle will derive state from selection
 
   // Прапор для відстеження, чи були застосовані фільтри користувачем
-  const [filtersApplied, setFiltersApplied] = useState(false);
+  const [filtersApplied, setFiltersApplied] = useState(false); // За замовчуванням false
+  const [lastFetchedFilters, setLastFetchedFilters] = useState<InverterPriceListRequestSchema | null>(null);
   // Name search is handled inside InverterComparisonFilters now
-
-  useEffect(() => {
-    // Виконуємо запит тільки якщо фільтри були застосовані
-    if (filtersApplied) {
-      const timeoutId = setTimeout(() => {
-        fetchComparisonData();
-      }, 500); // Збільшуємо debounce до 500ms для зменшення мерехтіння
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [filters, filtersApplied]);
 
   // removed sync/debounce: full_name is controlled by InverterComparisonFilters
 
@@ -371,60 +361,65 @@ export default function InverterPriceComparison() {
     fetchMetadata();
   }, []);
 
-  const fetchComparisonData = async () => {
-    try {
-      const result = await getInverterComparison({
-        ...filters,
-        page,
-        page_size: pageSize
-      }).unwrap();
-      
-      setComparisonData(result);
-      
-      // Extract unique supplier names to use as columns
-      if (result.inverters.length > 0) {
-        const uniqueSuppliers = [...new Set(
-          result.inverters.flatMap((inverter: InverterWithSupplierPrices) => 
-            inverter.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
-          )
-        )].filter((n) => n.length > 0) as string[];
-        // Move "АКУМУЛЯТОР-Центр" to the end (so it appears just before the recommended column)
-        const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
-        const targetNorm = normalize('АКУМУЛЯТОР-Центр');
-        const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
-        if (idx !== -1) {
-          const [target] = uniqueSuppliers.splice(idx, 1);
-          uniqueSuppliers.push(target);
+  // Виконуємо запит при зміні фільтрів з debounce
+  useEffect(() => {
+    // Перевіряємо, чи фільтри дійсно змінилися
+    const filtersChanged = !lastFetchedFilters || 
+      JSON.stringify(lastFetchedFilters) !== JSON.stringify({ ...filters, page, page_size: pageSize });
+    
+    if (!filtersChanged) return;
+    
+    const timeoutId = setTimeout(async () => {
+      try {
+        const result = await getInverterComparison({
+          ...filters,
+          page,
+          page_size: pageSize
+        }).unwrap();
+        
+        setComparisonData(result);
+        setLastFetchedFilters({ ...filters, page, page_size: pageSize });
+        setFiltersApplied(true); // Встановлюємо прапор, що дані завантажені
+        
+        // Extract unique supplier names to use as columns
+        if (result.inverters.length > 0) {
+          const uniqueSuppliers = [...new Set(
+            result.inverters.flatMap((inverter: InverterWithSupplierPrices) => 
+              inverter.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
+            )
+          )].filter((n) => n.length > 0) as string[];
+          // Move "АКУМУЛЯТОР-Центр" to the end (so it appears just before the recommended column)
+          const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+          const targetNorm = normalize('АКУМУЛЯТОР-Центр');
+          const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
+          if (idx !== -1) {
+            const [target] = uniqueSuppliers.splice(idx, 1);
+            uniqueSuppliers.push(target);
+          }
+          setSupplierColumns(uniqueSuppliers);
         }
-        setSupplierColumns(uniqueSuppliers);
+      } catch (error) {
+        console.error('Error fetching comparison data:', error);
       }
-    } catch (error) {
-      console.error('Error fetching comparison data:', error);
-    }
-  };
+    }, 500); // Debounce 500ms для зменшення мерехтіння
+    
+    return () => clearTimeout(timeoutId);
+  }, [filters, page, pageSize, lastFetchedFilters, getInverterComparison]);
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    setComparisonData(null); // очищає старі дані при зміні сторінки
-    setProcessedData([]);    // очищає оброблені рядки
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page: newPage }));
   };
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
     setPage(1);
-    setComparisonData(null); // очищає старі дані
-    setProcessedData([]);    // очищає оброблені рядки
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page_size: size, page: 1 }));
   };
 
   const handleFiltersChange = (newFilters: Partial<InverterPriceListRequestSchema>) => {
     setPage(1);
-    setComparisonData(null); // очищає старі дані при зміні фільтрів
-    setProcessedData([]);    // очищає оброблені рядки
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
-    // Встановлюємо прапор, що фільтри були застосовані
-    setFiltersApplied(true);
   };
 
   // Format price as whole dollars without decimals, with thousands separators (Ukrainian locale)
@@ -579,7 +574,7 @@ export default function InverterPriceComparison() {
               <div className="text-center py-10 text-gray-500">
                 <p className="font-medium">Завантаження даних...</p>
               </div>
-            ) : comparisonData && comparisonData.inverters.length > 0 ? (
+            ) : sortedInverters && sortedInverters.length > 0 ? (
               <Table className="text-[11px] leading-4 [&_th]:py-1 [&_td]:py-1 [&_th]:px-1.5 [&_td]:px-1.5" style={{userSelect: 'text'}}>
                 <TableHeader className="[&_th]:cursor-pointer" style={{userSelect: 'none'}}>
                   <TableRow>
