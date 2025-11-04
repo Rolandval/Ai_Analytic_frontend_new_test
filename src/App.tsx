@@ -115,6 +115,10 @@ import SeoWriterArticleEditor from './pages/seo-writer/ArticleEditor';
 import SeoWriterArticleViewEdit from './pages/seo-writer/ArticleViewEdit';
 import SeoWriterLayout from './components/SeoWriterLayout';
 
+// Photo-AI-SEO Pages
+import PhotoAiSeoTable from './pages/photo-ai-seo/PhotoAiSeoTable';
+import PhotoAiSeoLayout from './components/layout/PhotoAiSeoLayout';
+
 // Компонент для favicon логіки всередині Router контексту
 function FaviconHandler() {
   useFavicon();
@@ -295,6 +299,12 @@ function App() {
           <Route path="/ai-supply/send-orders" element={<SendOrdersPage />} />
 
           {/* AI Photo Editor - moved to public routes above */}
+
+          {/* Photo-AI-SEO */}
+          <Route path="/photo-ai-seo" element={<PhotoAiSeoLayout />}>
+            <Route index element={<PhotoAiSeoTable />} />
+            <Route path="settings" element={<div className="p-6"><h1 className="text-2xl font-bold text-cyan-700">Settings</h1><p className="text-cyan-600">Coming soon...</p></div>} />
+          </Route>
 
           {/* Profile System */}
           <Route path="/profile" element={<ProfileDashboard />} />

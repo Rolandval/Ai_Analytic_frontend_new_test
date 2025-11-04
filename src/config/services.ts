@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   Brain,
   Camera,
+  ImageIcon,
 } from 'lucide-react';
 
 export type AIService = {
@@ -136,6 +137,13 @@ export const aiServices: AIService[] = [
     icon: Camera,
     path: '/ai-photo-editor',
     color: '#f59e0b',
+  },
+  {
+    name: 'Photo-AI-SEO',
+    description: 'Оптимізація фото для SEO: завантаження до 10 фото, ресайз, конвертація форматів, зміна назв та alt тегів, опис фото та посилань.',
+    icon: ImageIcon,
+    path: '/photo-ai-seo',
+    color: '#8b5cf6',
   },
 ];
 

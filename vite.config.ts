@@ -131,6 +131,22 @@ export default defineConfig({
         target: ANALYTICS_ORIGIN,
         changeOrigin: true,
       },
+      '/photo': {
+        target: BACKEND_ORIGIN,
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('photo proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Photo Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Photo Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
     },
   },
 })

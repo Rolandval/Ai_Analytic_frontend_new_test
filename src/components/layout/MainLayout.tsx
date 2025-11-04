@@ -15,7 +15,7 @@ export const MainLayout = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
-  const hideGlobalSidebar = location.pathname.startsWith('/ai-product-filler') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/auth') || location.pathname.startsWith('/seo-writer') || location.pathname.startsWith('/ai-content');
+  const hideGlobalSidebar = location.pathname.startsWith('/ai-product-filler') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/auth') || location.pathname.startsWith('/seo-writer') || location.pathname.startsWith('/ai-content') || location.pathname.startsWith('/photo-ai-seo');
   
   // Мобільна перевірка як окрема функція для можливості повторного виклику
   const checkMobile = useCallback(() => {
