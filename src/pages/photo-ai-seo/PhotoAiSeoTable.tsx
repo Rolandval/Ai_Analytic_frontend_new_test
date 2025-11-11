@@ -4,26 +4,28 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Upload, Eye, X, Download } from 'lucide-react';
-import { resizePhoto, cropPhoto, convertPhoto, setAltTag } from '@/api/photoApi';
+import { resizePhoto, cropPhoto, convertPhoto, setAltTag, addWatermark } from '@/api/photoApi';
 
-// Модель рядка з 4 чекбокс-діями
+// Модель рядка з 5 чекбокс-діями
 interface PhotoRowItem {
   id: string;
   photo: string;     // прев'ю фото
   resize: string;    // Змінити розмір фото
   crop: string;      // Обрізати фото
   convert: string;   // Конвертувати фото
+  watermark: string; // Додати водяний знак
   altTag: string;    // Встановити тег Alt
   processedImage?: string; // Оброблене фото для порівняння
 }
 
 const columns = [
-  { key: 'photo',   title: 'Фото',                width: '90px' },
-  { key: 'resize',  title: 'Змінити розмір фото', width: '220px', editable: true },
-  { key: 'crop',    title: 'Обрізати фото',       width: '180px', editable: true },
-  { key: 'convert', title: 'Конвертувати фото',   width: '200px', editable: true },
-  { key: 'altTag',  title: 'Встановити тег Alt',  width: '220px', editable: true },
-  { key: 'result',  title: 'Результат',           width: '120px' },
+  { key: 'photo',     title: 'Фото',                width: '90px' },
+  { key: 'resize',    title: 'Змінити розмір фото', width: '180px', editable: true },
+  { key: 'crop',      title: 'Обрізати фото',       width: '150px', editable: true },
+  { key: 'convert',   title: 'Конвертувати фото',   width: '170px', editable: true },
+  { key: 'watermark', title: 'Додати водяний знак', width: '180px', editable: true },
+  { key: 'altTag',    title: 'Встановити тег Alt',  width: '180px', editable: true },
+  { key: 'result',    title: 'Результат',           width: '120px' },
 ] as const;
 
 type ColKey = typeof columns[number]['key'];
@@ -54,7 +56,17 @@ export default function PhotoAiSeoTable() {
     resize_percent: '',
     format: 'webp',
     alt: { src: '', alt: '' },
+    watermark: {
+      file: null as File | null,
+      placement: 'center' as 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
+      margin_x: '',
+      margin_y: '',
+      scale_percent: '',
+      opacity: '',
+    },
   });
+  
+  const watermarkInputRef = useRef<HTMLInputElement>(null);
 
   // API функції
   const processPhoto = async (photoUrl: string, action: string, params: any) => {
@@ -98,6 +110,21 @@ export default function PhotoAiSeoTable() {
           result = await setAltTag(params.alt);
           break;
           
+        case 'watermark':
+          if (!params.watermark) {
+            throw new Error('Watermark file is required');
+          }
+          result = await addWatermark({
+            photo: file,
+            watermark: params.watermark,
+            placement: params.placement,
+            margin_x: params.margin_x ? parseFloat(params.margin_x) : undefined,
+            margin_y: params.margin_y ? parseFloat(params.margin_y) : undefined,
+            scale_percent: params.scale_percent ? parseFloat(params.scale_percent) : undefined,
+            opacity: params.opacity ? parseFloat(params.opacity) : undefined,
+          });
+          break;
+          
         default:
           throw new Error(`Unknown action: ${action}`);
       }
@@ -119,7 +146,7 @@ export default function PhotoAiSeoTable() {
 
   const applyParamsToSelected = async () => {
     const selectedPhotos = rows.filter(
-      r => r.resize === 'completed' || r.crop === 'completed' || r.convert === 'completed' || r.altTag === 'completed'
+      r => r.resize === 'completed' || r.crop === 'completed' || r.convert === 'completed' || r.watermark === 'completed' || r.altTag === 'completed'
     );
 
     if (selectedPhotos.length === 0) {
@@ -158,6 +185,14 @@ export default function PhotoAiSeoTable() {
         if (photo.convert === 'completed' && params.format) {
           console.log(`🔄 Processing convert for photo ${photo.id}`);
           const result = await processPhoto(photo.photo, 'convert', { format: params.format });
+          if (result?.processed_image) {
+            lastProcessedImage = result.processed_image;
+          }
+        }
+
+        if (photo.watermark === 'completed' && params.watermark.file) {
+          console.log(`🔄 Processing watermark for photo ${photo.id}`);
+          const result = await processPhoto(photo.photo, 'watermark', params.watermark);
           if (result?.processed_image) {
             lastProcessedImage = result.processed_image;
           }
@@ -222,6 +257,7 @@ export default function PhotoAiSeoTable() {
         resize: '',
         crop: '',
         convert: '',
+        watermark: '',
         altTag: '',
       });
     });
@@ -232,7 +268,7 @@ export default function PhotoAiSeoTable() {
 
   // Підрахунок фото з обраними діями
   const selectedCount = rows.filter(
-    r => r.resize === 'completed' || r.crop === 'completed' || r.convert === 'completed' || r.altTag === 'completed'
+    r => r.resize === 'completed' || r.crop === 'completed' || r.convert === 'completed' || r.watermark === 'completed' || r.altTag === 'completed'
   ).length;
 
   return (
@@ -291,30 +327,75 @@ export default function PhotoAiSeoTable() {
             </div>
           </div>
 
-          {/* Convert & Alt Tag Section */}
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-                <span className="w-1 h-4 bg-purple-500 rounded"></span>
-                Конвертувати
-              </h3>
-              <select className="w-full h-9 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-3 text-sm" value={params.format} onChange={(e)=>setParams(p=>({...p, format: e.target.value}))}>
-                <option value="webp">webp</option>
-                <option value="jpg">jpg</option>
-                <option value="jpeg">jpeg</option>
-                <option value="png">png</option>
-                <option value="avif">avif</option>
-              </select>
-            </div>
-            <div>
-              <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-                <span className="w-1 h-4 bg-green-500 rounded"></span>
-                Alt Tag
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="src" value={params.alt.src} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, src: e.target.value}}))} className="h-9 text-sm" />
-                <Input placeholder="alt" value={params.alt.alt} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, alt: e.target.value}}))} className="h-9 text-sm" />
+          {/* Convert Section */}
+          <div className="mb-3">
+            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
+              <span className="w-1 h-4 bg-purple-500 rounded"></span>
+              Конвертувати
+            </h3>
+            <select className="w-full h-9 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-3 text-sm" value={params.format} onChange={(e)=>setParams(p=>({...p, format: e.target.value}))}>
+              <option value="webp">webp</option>
+              <option value="jpg">jpg</option>
+              <option value="jpeg">jpeg</option>
+              <option value="png">png</option>
+              <option value="avif">avif</option>
+            </select>
+          </div>
+
+          {/* Watermark Section */}
+          <div className="mb-3">
+            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
+              <span className="w-1 h-4 bg-orange-500 rounded"></span>
+              Водяний знак
+            </h3>
+            <div className="grid grid-cols-6 gap-2">
+              <div className="col-span-2">
+                <Button 
+                  onClick={() => watermarkInputRef.current?.click()} 
+                  className="w-full h-9 text-xs bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300"
+                >
+                  {params.watermark.file ? params.watermark.file.name.substring(0, 15) : 'Вибрати файл'}
+                </Button>
+                <input
+                  ref={watermarkInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setParams(p => ({...p, watermark: {...p.watermark, file}}));
+                    }
+                  }}
+                />
               </div>
+              <select 
+                className="h-9 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-2 text-xs" 
+                value={params.watermark.placement} 
+                onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, placement: e.target.value as any}}))}
+              >
+                <option value="center">Center</option>
+                <option value="top-left">Top-Left</option>
+                <option value="top-right">Top-Right</option>
+                <option value="bottom-left">Bottom-Left</option>
+                <option value="bottom-right">Bottom-Right</option>
+              </select>
+              <Input type="number" placeholder="Margin X" value={params.watermark.margin_x} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, margin_x: e.target.value}}))} className="h-9 text-xs" />
+              <Input type="number" placeholder="Margin Y" value={params.watermark.margin_y} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, margin_y: e.target.value}}))} className="h-9 text-xs" />
+              <Input type="number" step="0.1" placeholder="Scale %" value={params.watermark.scale_percent} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, scale_percent: e.target.value}}))} className="h-9 text-xs" />
+              <Input type="number" step="0.1" placeholder="Opacity" value={params.watermark.opacity} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, opacity: e.target.value}}))} className="h-9 text-xs" />
+            </div>
+          </div>
+
+          {/* Alt Tag Section */}
+          <div className="mb-3">
+            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
+              <span className="w-1 h-4 bg-green-500 rounded"></span>
+              Alt Tag
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="src" value={params.alt.src} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, src: e.target.value}}))} className="h-9 text-sm" />
+              <Input placeholder="alt" value={params.alt.alt} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, alt: e.target.value}}))} className="h-9 text-sm" />
             </div>
           </div>
 

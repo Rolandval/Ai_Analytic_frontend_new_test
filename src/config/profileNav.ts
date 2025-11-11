@@ -9,7 +9,8 @@ import {
   FileText,
   Download,
   Trash2,
-  Activity
+  Activity,
+  TrendingUp
 } from 'lucide-react';
 
 export interface ProfileNavItem {
@@ -69,6 +70,27 @@ export const profileNavItems: ProfileNavItem[] = [
     icon: Activity,
     description: 'Моніторинг MCP з\'єднань та системних сервісів',
     basePath: '/profile/pulse'
+  },
+  {
+    title: 'Статистика',
+    href: '/profile/stats',
+    icon: TrendingUp,
+    description: 'Детальна статистика роботи системи',
+    basePath: '/profile/stats',
+    subItems: [
+      {
+        title: 'Перегляд статистики',
+        href: '/profile/stats',
+        icon: TrendingUp,
+        description: 'Детальна статистика по днях'
+      },
+      {
+        title: 'Налаштування',
+        href: '/profile/stats/settings',
+        icon: Settings,
+        description: 'Курси валют та наценки'
+      }
+    ]
   },
   {
     title: 'Аналітика використання',

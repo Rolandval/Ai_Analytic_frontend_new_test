@@ -81,6 +81,123 @@ const DraggableFilterItem: React.FC<DraggableFilterItemProps> = ({ id, children 
   );
 };
 
+// Quick filters component (non-draggable, displayed below the line)
+interface QuickFiltersProps {
+  local: InverterPriceListRequestSchema;
+  setLocal: (f: InverterPriceListRequestSchema) => void;
+  setFilters: (f: InverterPriceListRequestSchema) => void;
+  brands: string[];
+  suppliers: string[];
+}
+
+const InverterComparisonQuickFilters: React.FC<QuickFiltersProps> = ({ local, setLocal, setFilters, brands, suppliers }) => {
+  return (
+    <div className="flex flex-wrap gap-3 pt-4 mt-4 border-t border-slate-200 items-end">
+      {/* Бренди */}
+      <div className="w-auto">
+        <MultiSelectPopover
+          placeholder="+ Виробник"
+          options={brands}
+          values={local.brands ?? []}
+          onChange={(brands: string[] | undefined) => {
+            const newLocal = { ...local, brands, page: 1 };
+            setLocal(newLocal);
+            setFilters(newLocal);
+          }}
+          showSelectAll
+          selectAllLabel="Вибрати всі бренди"
+          clearLabel="Скинути"
+          className="h-10"
+        />
+      </div>
+
+      {/* Потужність */}
+      <div className="w-auto">
+        <div className="flex flex-col gap-1 h-full justify-end">
+          <span className="text-[12px] font-medium text-slate-600">Потужність, кВт</span>
+          <div className="flex gap-1 items-center">
+            <Input
+              type="number"
+              placeholder="від"
+              value={local.power_min ?? ''}
+              onChange={(e) => {
+                const newLocal = { ...local, power_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
+              className="h-10 text-sm border-gray-300 w-20"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <Input
+              type="number"
+              placeholder="до"
+              value={local.power_max ?? ''}
+              onChange={(e) => {
+                const newLocal = { ...local, power_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
+              className="h-10 text-sm border-gray-300 w-20"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Постачальники */}
+      <div className="w-auto">
+        <MultiSelectPopover
+          placeholder="+ Постачальник"
+          options={suppliers}
+          values={local.suppliers}
+          onChange={(vals) => {
+            const newLocal = { ...local, suppliers: vals, page: 1 };
+            setLocal(newLocal);
+            setFilters(newLocal);
+          }}
+          showSelectAll
+          selectAllLabel="Вибрати всіх постачальників"
+          clearLabel="Скинути"
+          enablePagination
+          pageSize={100}
+          className="h-10"
+        />
+      </div>
+
+      {/* Ціна */}
+      <div className="w-auto">
+        <div className="flex flex-col gap-1 h-full justify-end">
+          <span className="text-[12px] font-medium text-slate-600">Ціна, $</span>
+          <div className="flex gap-1 items-center">
+            <Input
+              type="number"
+              placeholder="від"
+              value={local.price_min ?? ''}
+              onChange={(e) => {
+                const newLocal = { ...local, price_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
+              className="h-10 text-sm border-gray-300 w-20"
+            />
+            <span className="text-xs text-slate-400">-</span>
+            <Input
+              type="number"
+              placeholder="до"
+              value={local.price_max ?? ''}
+              onChange={(e) => {
+                const newLocal = { ...local, price_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
+                setLocal(newLocal);
+                setFilters(newLocal);
+              }}
+              className="h-10 text-sm border-gray-300 w-20"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers }) => {
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current
@@ -90,15 +207,11 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   
   // Drag and drop state
   const defaultFilterOrder = [
-    'brands',
-    'suppliers',
-    'power',
     'inverter_type',
     'string_count',
     'generation',
     'firmware',
     'supplier_status',
-    'price',
     'date_range',
     'price_sort'
   ];
@@ -106,8 +219,8 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   const [filterOrder, setFilterOrder] = useState<string[]>(() => {
     const saved = localStorage.getItem('inverter-comparison-filters-order');
     const base: string[] = saved ? JSON.parse(saved) : defaultFilterOrder;
-    // Ensure legacy keys are removed
-    return base.filter((id) => id !== 'full_name' && id !== 'actions');
+    // Ensure legacy keys are removed and only valid filters are kept
+    return base.filter((id) => defaultFilterOrder.includes(id));
   });
   
   const sensors = useSensors(
@@ -152,73 +265,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {
     // full_name input removed from filters; now rendered externally on the page
-    brands: (
-      <div className="h-[60px] flex flex-col justify-end">
-        <MultiSelectPopover
-          placeholder="+ Виробник"
-          options={brands}
-          values={local.brands ?? []}
-          onChange={(brands: string[] | undefined) => {
-            const newLocal = { ...local, brands, page: 1 };
-            setLocal(newLocal);
-          }}
-          showSelectAll
-          selectAllLabel="Вибрати всі бренди"
-          clearLabel="Скинути"
-          className="h-10"
-        />
-      </div>
-    ),
-    suppliers: (
-      <div className="h-[60px] flex flex-col justify-end">
-        <MultiSelectPopover
-          placeholder="+ Постачальник"
-          options={suppliers}
-          values={local.suppliers}
-          onChange={(vals) => {
-            const newLocal = { ...local, suppliers: vals, page: 1 };
-            setLocal(newLocal);
-            setFilters(newLocal);
-          }}
-          showSelectAll
-          selectAllLabel="Вибрати всіх постачальників"
-          clearLabel="Скинути"
-          enablePagination
-          pageSize={100}
-          className="h-10"
-        />
-      </div>
-    ),
-    power: (
-      <div className="h-[60px] flex flex-col gap-1">
-        <span className="text-[12px] font-medium text-slate-600">Потужність, кВт</span>
-        <div className="flex gap-1 items-center">
-          <Input
-            type="number"
-            placeholder="від"
-            value={local.power_min ?? ''}
-            onChange={(e) => {
-              const newLocal = { ...local, power_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
-              setLocal(newLocal);
-              setFilters(newLocal);
-            }}
-            className="h-10 text-sm border-gray-300"
-          />
-          <span className="text-xs text-slate-400">-</span>
-          <Input
-            type="number"
-            placeholder="до"
-            value={local.power_max ?? ''}
-            onChange={(e) => {
-              const newLocal = { ...local, power_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
-              setLocal(newLocal);
-              setFilters(newLocal);
-            }}
-            className="h-10 text-sm border-gray-300"
-          />
-        </div>
-      </div>
-    ),
     inverter_type: (
       <div className="h-[60px] flex flex-col gap-1 p-1 justify-end">
         <span className="text-[12px] font-medium text-slate-600">Тип</span>
@@ -378,36 +424,6 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         </div>
       </div>
     ),
-    price: (
-      <div className="h-[60px] flex flex-col gap-1">
-        <span className="text-[12px] font-medium text-slate-600">Ціна, $</span>
-        <div className="flex gap-1 items-center">
-          <Input
-            type="number"
-            placeholder="від"
-            value={local.price_min ?? ''}
-            onChange={(e) => {
-              const newLocal = { ...local, price_min: e.target.value ? Number(e.target.value) : undefined, page: 1 };
-              setLocal(newLocal);
-              setFilters(newLocal);
-            }}
-            className="h-10 text-sm border-gray-300"
-          />
-          <span className="text-xs text-slate-400">-</span>
-          <Input
-            type="number"
-            placeholder="до"
-            value={local.price_max ?? ''}
-            onChange={(e) => {
-              const newLocal = { ...local, price_max: e.target.value ? Number(e.target.value) : undefined, page: 1 };
-              setLocal(newLocal);
-              setFilters(newLocal);
-            }}
-            className="h-10 text-sm border-gray-300"
-          />
-        </div>
-      </div>
-    ),
     date_range: (
       <div className="h-[60px] flex flex-col gap-1">
         <span className="text-[12px] font-medium text-slate-600">Період</span>
@@ -503,7 +519,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
               const trimmed = e.target.value.trim();
               const newLocal = { ...local, full_name: trimmed || undefined, page: 1 };
               setLocal(newLocal);
-              setFilters(newLocal);
+              setFilters({ full_name: trimmed || undefined, page: 1 });
             }}
             className="h-8 w-[220px] sm:w-[280px]"
           />
@@ -761,6 +777,15 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
           </div>
         </SortableContext>
       </DndContext>
+
+      {/* Quick Filters Below the Line */}
+      <InverterComparisonQuickFilters
+        local={local}
+        setLocal={setLocal}
+        setFilters={setFilters}
+        brands={brands}
+        suppliers={suppliers}
+      />
     </div>
     </>
   );

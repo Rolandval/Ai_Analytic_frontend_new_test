@@ -24,6 +24,16 @@ export interface SetAltTagRequest {
   alt: string;
 }
 
+export interface AddWatermarkRequest {
+  photo: File;
+  watermark: File;
+  placement?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  margin_x?: number;
+  margin_y?: number;
+  scale_percent?: number;
+  opacity?: number;
+}
+
 export interface PhotoResponse {
   success: boolean;
   message?: string;
@@ -119,4 +129,35 @@ export async function setAltTag(request: SetAltTagRequest): Promise<PhotoRespons
   });
   
   return res?.data as PhotoResponse;
+}
+
+export async function addWatermark(request: AddWatermarkRequest): Promise<PhotoResponse> {
+  const formData = new FormData();
+  formData.append('photo', request.photo);
+  formData.append('watermark', request.watermark);
+  
+  if (request.placement) formData.append('placement', request.placement);
+  if (request.margin_x !== undefined) formData.append('margin_x', request.margin_x.toString());
+  if (request.margin_y !== undefined) formData.append('margin_y', request.margin_y.toString());
+  if (request.scale_percent !== undefined) formData.append('scale_percent', request.scale_percent.toString());
+  if (request.opacity !== undefined) formData.append('opacity', request.opacity.toString());
+
+  const res = await apiClient.post('/photo/add_watermark', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    responseType: 'blob',
+  });
+  
+  const blob = res?.data as Blob;
+  const base64 = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
+  
+  return {
+    success: true,
+    processed_image: base64,
+  };
 }

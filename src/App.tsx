@@ -64,6 +64,8 @@ import ServicesPage from './pages/profile/ServicesPage';
 import ProfileSettings from './pages/profile/ProfileSettings';
 import CompanyPulsePage from './pages/profile/CompanyPulsePage';
 import SubscriptionsPage from './pages/profile/SubscriptionsPage';
+import StatsPage from './pages/profile/StatsPage';
+import StatsSettingsPage from './pages/profile/StatsSettings';
 
 // Google Tables Pages
 import BatteryGoogleTablesPage from './pages/batteries/GoogleTables';
@@ -314,6 +316,8 @@ function App() {
           <Route path="/profile/subscriptions/billing" element={<SubscriptionsPage />} />
           <Route path="/profile/subscriptions/plans" element={<SubscriptionsPage />} />
           <Route path="/profile/pulse" element={<CompanyPulsePage />} />
+          <Route path="/profile/stats" element={<StatsPage />} />
+          <Route path="/profile/stats/settings" element={<StatsSettingsPage />} />
           <Route path="/profile/settings" element={<ProfileSettings />} />
           </Route>
         </Route>

@@ -769,8 +769,6 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
               <div className="flex-1 min-w-0 mb-4">
                 {filtersNode}
               </div>
-              {/* Separator line before actions */}
-              <div className="border-t border-gray-200 dark:border-gray-700  mb-3"></div>
               
               {/* Top-right actions toolbar (outside of any dropdowns) */}
               <div className="w-full flex items-center justify-end gap-2">

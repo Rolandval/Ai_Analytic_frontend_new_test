@@ -369,42 +369,12 @@ export default function InverterPriceComparison() {
     
     if (!filtersChanged) return;
     
-    const timeoutId = setTimeout(async () => {
-      try {
-        const result = await getInverterComparison({
-          ...filters,
-          page,
-          page_size: pageSize
-        }).unwrap();
-        
-        setComparisonData(result);
-        setLastFetchedFilters({ ...filters, page, page_size: pageSize });
-        setFiltersApplied(true); // Встановлюємо прапор, що дані завантажені
-        
-        // Extract unique supplier names to use as columns
-        if (result.inverters.length > 0) {
-          const uniqueSuppliers = [...new Set(
-            result.inverters.flatMap((inverter: InverterWithSupplierPrices) => 
-              inverter.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
-            )
-          )].filter((n) => n.length > 0) as string[];
-          // Move "АКУМУЛЯТОР-Центр" to the end (so it appears just before the recommended column)
-          const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
-          const targetNorm = normalize('АКУМУЛЯТОР-Центр');
-          const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
-          if (idx !== -1) {
-            const [target] = uniqueSuppliers.splice(idx, 1);
-            uniqueSuppliers.push(target);
-          }
-          setSupplierColumns(uniqueSuppliers);
-        }
-      } catch (error) {
-        console.error('Error fetching comparison data:', error);
-      }
+    const timeoutId = setTimeout(() => {
+      fetchComparisonData({ ...filters, page, page_size: pageSize });
     }, 500); // Debounce 500ms для зменшення мерехтіння
     
     return () => clearTimeout(timeoutId);
-  }, [filters, page, pageSize, lastFetchedFilters, getInverterComparison]);
+  }, [filters, page, pageSize, lastFetchedFilters]);
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
@@ -417,9 +387,42 @@ export default function InverterPriceComparison() {
     setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, page_size: size, page: 1 }));
   };
 
+  // Функція для завантаження даних порівняння
+  const fetchComparisonData = async (filtersToUse?: InverterPriceListRequestSchema) => {
+    try {
+      const filtersForRequest = filtersToUse || { ...filters, page, page_size: pageSize };
+      const result = await getInverterComparison(filtersForRequest).unwrap();
+      
+      setComparisonData(result);
+      setLastFetchedFilters(filtersForRequest);
+      setFiltersApplied(true);
+      
+      // Extract unique supplier names to use as columns
+      if (result.inverters.length > 0) {
+        const uniqueSuppliers = [...new Set(
+          result.inverters.flatMap((inverter: InverterWithSupplierPrices) => 
+            inverter.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
+          )
+        )].filter((n) => n.length > 0) as string[];
+        // Move "АКУМУЛЯТОР-Центр" to the end
+        const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+        const targetNorm = normalize('АКУМУЛЯТОР-Центр');
+        const idx = uniqueSuppliers.findIndex((n) => normalize(n) === targetNorm);
+        if (idx !== -1) {
+          const [target] = uniqueSuppliers.splice(idx, 1);
+          uniqueSuppliers.push(target);
+        }
+        setSupplierColumns(uniqueSuppliers);
+      }
+    } catch (error) {
+      console.error('Error fetching comparison data:', error);
+    }
+  };
+
   const handleFiltersChange = (newFilters: Partial<InverterPriceListRequestSchema>) => {
     setPage(1);
-    setFilters((prev: InverterPriceListRequestSchema) => ({ ...prev, ...newFilters, page: 1 }));
+    const updatedFilters = { ...filters, ...newFilters, page: 1 };
+    setFilters(updatedFilters);
   };
 
   // Format price as whole dollars without decimals, with thousands separators (Ukrainian locale)
@@ -784,7 +787,7 @@ export default function InverterPriceComparison() {
                         const canUpdate = canUpdatePriceOnSite(inverter, supplier);
                         return (
                           <TableCell 
-                            key={supplier} 
+                            key={`${inverter.id}-${supplier}`} 
                             className="text-center font-medium w-24"
                           >
                             <div className="flex flex-col items-center gap-0.5">

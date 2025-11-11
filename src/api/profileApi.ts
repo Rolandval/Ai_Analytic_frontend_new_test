@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient } from '@/lib/api-client';
 
 export interface UserProfile {
   id: string;
@@ -207,6 +207,84 @@ export const profileApi = {
     await apiClient.delete('/profile', {
       data: { password }
     });
+  },
+
+  // Отримати статистику
+  async getStats(month: number, year: number): Promise<{
+    prices_count: number;
+    total_token_count: number;
+    total_response_token_count: number;
+    catalog_batteries: number;
+    catalog_inverters: number;
+    catalog_solar_panels: number;
+    items: Array<{
+      id: number;
+      total_token_count: number;
+      total_response_token_count: number;
+      updated_prices: number;
+      site_supplier_solar_panels: number;
+      report_solar_panels: number;
+      report_inverters: number;
+      catalog_batteries: number;
+      catalog_inverters: number;
+      catalog_solar_panels: number;
+      created_at: string;
+    }>;
+  }> {
+    const response = await apiClient.post('/stats/stats', {
+      month,
+      year
+    });
+    return response.data;
+  },
+
+  // Отримати налаштування статистики
+  async getStatsSettings(): Promise<{
+    id: number;
+    usd_rate: number;
+    solar_panels_site_markup_percent: number;
+    solar_panels_report_markup: number;
+    solar_panels_ws_report_markup: number;
+    inverters_markup_report_12: number;
+    inverters_markup_report_25: number;
+    inverters_markup_report_50: number;
+    inverters_markup_report_100: number;
+    inverters_markup_report_101: number;
+    inverters_ws_markup_report_12: number;
+    inverters_ws_markup_report_25: number;
+    inverters_ws_markup_report_50: number;
+    inverters_ws_markup_report_100: number;
+    inverters_ws_markup_report_101: number;
+  }> {
+    // Спробуємо POST замість GET, можливо API очікує POST
+    const response = await apiClient.post('/stats/stats/settings', {});
+    // Якщо відповідь - string, парсимо JSON
+    if (typeof response.data === 'string') {
+      return JSON.parse(response.data);
+    }
+    return response.data;
+  },
+
+  // Оновити налаштування статистики
+  async updateStatsSettings(settings: {
+    id: number;
+    usd_rate: number;
+    solar_panels_site_markup_percent: number;
+    solar_panels_report_markup: number;
+    solar_panels_ws_report_markup: number;
+    inverters_markup_report_12: number;
+    inverters_markup_report_25: number;
+    inverters_markup_report_50: number;
+    inverters_markup_report_100: number;
+    inverters_markup_report_101: number;
+    inverters_ws_markup_report_12: number;
+    inverters_ws_markup_report_25: number;
+    inverters_ws_markup_report_50: number;
+    inverters_ws_markup_report_100: number;
+    inverters_ws_markup_report_101: number;
+  }): Promise<string> {
+    const response = await apiClient.post('/stats/stats/settings_update', settings);
+    return response.data;
   }
 };
 
