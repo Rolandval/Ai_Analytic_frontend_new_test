@@ -16,6 +16,7 @@ export default defineConfig({
   },
   server: {
     cors: true,
+    historyApiFallback: true,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -135,6 +136,12 @@ export default defineConfig({
         target: BACKEND_ORIGIN,
         changeOrigin: true,
         secure: false,
+        bypass: (req, res, options) => {
+          // Пропускаємо клієнтські роути (не API запити)
+          if (req.url?.startsWith('/photo-ai-seo') || req.url?.startsWith('/photo/') === false) {
+            return req.url;
+          }
+        },
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.log('photo proxy error', err);

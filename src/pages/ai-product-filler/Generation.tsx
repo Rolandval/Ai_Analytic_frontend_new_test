@@ -4725,10 +4725,27 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                       </TableRow>
                       {expanded && (
                         ([targetLang] as Array<'ua'|'en'|'ru'>).map((lang) => {
-                          const variant = findLangVariant(desc, lang as 'ua'|'en'|'ru');
+                          let variant = findLangVariant(desc, lang as 'ua'|'en'|'ru');
+                          // В режимі перекладу, якщо варіант не знайдено, створюємо порожній
+                          if (!variant && isTranslateMode) {
+                            variant = {
+                              ...desc,
+                              site_lang_code: lang,
+                              site_product: '',
+                              site_shortname: '',
+                              site_short_description: '',
+                              site_full_description: '',
+                              site_promo_text: '',
+                              site_meta_keywords: '',
+                              site_meta_description: '',
+                              site_searchwords: '',
+                              site_page_title: ''
+                            } as ContentDescription;
+                          }
                           if (!variant) return null;
-                          // Показуємо лише ті мови, де переклад готовий: для EN — латинка без кирилиці; для RU/UA — кирилиця
-                          const isReady = isVariantReadyForLang(lang as 'ua'|'en'|'ru', variant);
+                          // В режимі перекладу показуємо всі варіанти, навіть порожні
+                          // В режимі генерації показуємо лише ті мови, де переклад готовий
+                          const isReady = isTranslateMode ? true : isVariantReadyForLang(lang as 'ua'|'en'|'ru', variant);
                           if (!isReady) return null;
                           const vKey = getRowKey(variant, 0);
                           const label = lang.toUpperCase();

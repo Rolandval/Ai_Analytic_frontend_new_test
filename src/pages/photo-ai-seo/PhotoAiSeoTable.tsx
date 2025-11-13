@@ -20,11 +20,11 @@ interface PhotoRowItem {
 
 const columns = [
   { key: 'photo',     title: 'Фото',                width: '90px' },
-  { key: 'resize',    title: 'Змінити розмір фото', width: '180px', editable: true },
-  { key: 'crop',      title: 'Обрізати фото',       width: '150px', editable: true },
-  { key: 'convert',   title: 'Конвертувати фото',   width: '170px', editable: true },
-  { key: 'watermark', title: 'Додати водяний знак', width: '180px', editable: true },
-  { key: 'altTag',    title: 'Встановити тег Alt',  width: '180px', editable: true },
+  { key: 'resize',    title: 'Змінити розмір фото', width: '100px', editable: true },
+  { key: 'crop',      title: 'Обрізати фото',       width: '100px', editable: true },
+  { key: 'convert',   title: 'Конвертувати фото',   width: '70px', editable: true },
+  { key: 'watermark', title: 'Додати водяний знак', width: '100px', editable: true },
+  { key: 'altTag',    title: 'Встановити тег Alt',  width: '80px', editable: true },
   { key: 'result',    title: 'Результат',           width: '120px' },
 ] as const;
 
@@ -57,7 +57,7 @@ export default function PhotoAiSeoTable() {
     format: 'webp',
     alt: { src: '', alt: '' },
     watermark: {
-      file: null as File | null,
+      file: null as string | null,
       placement: 'center' as 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
       margin_x: '',
       margin_y: '',
@@ -65,7 +65,7 @@ export default function PhotoAiSeoTable() {
       opacity: '',
     },
   });
-  
+
   const watermarkInputRef = useRef<HTMLInputElement>(null);
 
   // API функції
@@ -114,9 +114,14 @@ export default function PhotoAiSeoTable() {
           if (!params.watermark) {
             throw new Error('Watermark file is required');
           }
+          // Конвертуємо URL водяного знаку в File об'єкт
+          const watermarkResponse = await fetch(params.watermark);
+          const watermarkBlob = await watermarkResponse.blob();
+          const watermarkFile = new File([watermarkBlob], 'watermark.png', { type: watermarkBlob.type });
+          
           result = await addWatermark({
             photo: file,
-            watermark: params.watermark,
+            watermark: watermarkFile,
             placement: params.placement,
             margin_x: params.margin_x ? parseFloat(params.margin_x) : undefined,
             margin_y: params.margin_y ? parseFloat(params.margin_y) : undefined,
@@ -192,7 +197,15 @@ export default function PhotoAiSeoTable() {
 
         if (photo.watermark === 'completed' && params.watermark.file) {
           console.log(`🔄 Processing watermark for photo ${photo.id}`);
-          const result = await processPhoto(photo.photo, 'watermark', params.watermark);
+          // Файл водяного знаку береться з завантаженого файлу
+          const result = await processPhoto(photo.photo, 'watermark', {
+            watermark: params.watermark.file, // Використовуємо завантажений файл водяного знаку
+            placement: params.watermark.placement,
+            margin_x: params.watermark.margin_x,
+            margin_y: params.watermark.margin_y,
+            scale_percent: params.watermark.scale_percent,
+            opacity: params.watermark.opacity,
+          });
           if (result?.processed_image) {
             lastProcessedImage = result.processed_image;
           }
@@ -275,7 +288,7 @@ export default function PhotoAiSeoTable() {
     <div className="min-h-screen">
       {/* Floating Header */}
       <div className="sticky top-0 z-10 backdrop-blur-xl bg-cyan-50/80 dark:bg-cyan-950/80 border-b border-cyan-200/50 dark:border-cyan-800/30">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-500 to-sky-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
@@ -298,115 +311,7 @@ export default function PhotoAiSeoTable() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Parameters Panel */}
-        <div className="mb-4 bg-white/70 dark:bg-cyan-950/70 backdrop-blur-xl rounded-xl border border-cyan-200/50 dark:border-cyan-800/30 shadow-sm p-4">
-          {/* Resize Section */}
-          <div className="mb-3">
-            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 bg-cyan-500 rounded"></span>
-              Змінити розмір
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Input type="number" placeholder="Resize %" value={params.resize_percent} onChange={(e)=>setParams(p=>({...p, resize_percent: e.target.value}))} className="h-9 text-sm" />
-            </div>
-          </div>
-
-          {/* Crop Section */}
-          <div className="mb-3">
-            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 bg-blue-500 rounded"></span>
-              Обрізати
-            </h3>
-            <div className="grid grid-cols-5 gap-2">
-              <Input type="number" placeholder="Crop %" value={params.crop_percent} onChange={(e)=>setParams(p=>({...p, crop_percent: e.target.value}))} className="h-9 text-sm" />
-              <Input type="number" placeholder="Top" value={params.top_pct} onChange={(e)=>setParams(p=>({...p, top_pct: e.target.value}))} className="h-9 text-sm" />
-              <Input type="number" placeholder="Bottom" value={params.bottom_pct} onChange={(e)=>setParams(p=>({...p, bottom_pct: e.target.value}))} className="h-9 text-sm" />
-              <Input type="number" placeholder="Left" value={params.left_pct} onChange={(e)=>setParams(p=>({...p, left_pct: e.target.value}))} className="h-9 text-sm" />
-              <Input type="number" placeholder="Right" value={params.right_pct} onChange={(e)=>setParams(p=>({...p, right_pct: e.target.value}))} className="h-9 text-sm" />
-            </div>
-          </div>
-
-          {/* Convert Section */}
-          <div className="mb-3">
-            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 bg-purple-500 rounded"></span>
-              Конвертувати
-            </h3>
-            <select className="w-full h-9 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-3 text-sm" value={params.format} onChange={(e)=>setParams(p=>({...p, format: e.target.value}))}>
-              <option value="webp">webp</option>
-              <option value="jpg">jpg</option>
-              <option value="jpeg">jpeg</option>
-              <option value="png">png</option>
-              <option value="avif">avif</option>
-            </select>
-          </div>
-
-          {/* Watermark Section */}
-          <div className="mb-3">
-            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 bg-orange-500 rounded"></span>
-              Водяний знак
-            </h3>
-            <div className="grid grid-cols-6 gap-2">
-              <div className="col-span-2">
-                <Button 
-                  onClick={() => watermarkInputRef.current?.click()} 
-                  className="w-full h-9 text-xs bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300"
-                >
-                  {params.watermark.file ? params.watermark.file.name.substring(0, 15) : 'Вибрати файл'}
-                </Button>
-                <input
-                  ref={watermarkInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setParams(p => ({...p, watermark: {...p.watermark, file}}));
-                    }
-                  }}
-                />
-              </div>
-              <select 
-                className="h-9 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-2 text-xs" 
-                value={params.watermark.placement} 
-                onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, placement: e.target.value as any}}))}
-              >
-                <option value="center">Center</option>
-                <option value="top-left">Top-Left</option>
-                <option value="top-right">Top-Right</option>
-                <option value="bottom-left">Bottom-Left</option>
-                <option value="bottom-right">Bottom-Right</option>
-              </select>
-              <Input type="number" placeholder="Margin X" value={params.watermark.margin_x} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, margin_x: e.target.value}}))} className="h-9 text-xs" />
-              <Input type="number" placeholder="Margin Y" value={params.watermark.margin_y} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, margin_y: e.target.value}}))} className="h-9 text-xs" />
-              <Input type="number" step="0.1" placeholder="Scale %" value={params.watermark.scale_percent} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, scale_percent: e.target.value}}))} className="h-9 text-xs" />
-              <Input type="number" step="0.1" placeholder="Opacity" value={params.watermark.opacity} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, opacity: e.target.value}}))} className="h-9 text-xs" />
-            </div>
-          </div>
-
-          {/* Alt Tag Section */}
-          <div className="mb-3">
-            <h3 className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 mb-2 flex items-center gap-2">
-              <span className="w-1 h-4 bg-green-500 rounded"></span>
-              Alt Tag
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="src" value={params.alt.src} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, src: e.target.value}}))} className="h-9 text-sm" />
-              <Input placeholder="alt" value={params.alt.alt} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, alt: e.target.value}}))} className="h-9 text-sm" />
-            </div>
-          </div>
-
-          {/* Action Button */}
-          <div className="flex items-center gap-3 pt-2 border-t border-cyan-200/50 dark:border-cyan-800/30">
-            <Button onClick={applyParamsToSelected} className="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white text-sm px-4 py-2">
-              Застосувати до вибраних
-            </Button>
-            <span className="text-xs text-cyan-600 dark:text-cyan-400">Поставте галочки в стовпцях дій</span>
-          </div>
-        </div>
+      <div className="w-full px-6 py-6">
         {/* Modern Glass Card */}
         <div className="bg-white/70 dark:bg-cyan-950/70 backdrop-blur-xl rounded-3xl border border-cyan-200/50 dark:border-cyan-800/30 shadow-xl shadow-cyan-500/5 dark:shadow-cyan-900/20 overflow-hidden">
           {rows.length === 0 ? (
@@ -433,13 +338,96 @@ export default function PhotoAiSeoTable() {
                   {columns.map((col) => (
                     <th 
                       key={col.key} 
-                      className="px-3 py-4 text-center"
+                      className={`px-2 py-2 text-center ${col.key === 'photo' || col.key === 'result' ? 'align-middle' : 'align-top'}`}
                       style={{ width: col.width }}
                     >
-                      <div className="flex items-center justify-center gap-2 min-w-0">
-                        <span className="text-xs font-semibold text-cyan-700 dark:text-cyan-300 truncate">
+                      <div className="flex flex-col items-center gap-0.5 min-w-0">
+                        <span className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 truncate whitespace-nowrap">
                           {col.title}
                         </span>
+                        {/* Параметри в заголовках */}
+                        {col.key === 'resize' && (
+                          <Input 
+                            type="number" 
+                            placeholder="%" 
+                            value={params.resize_percent} 
+                            onChange={(e)=>setParams(p=>({...p, resize_percent: e.target.value}))} 
+                            className="h-5 text-[9px] w-full px-1 py-0"
+                          />
+                        )}
+                        {col.key === 'crop' && (
+                          <div className="flex flex-col gap-0.5 w-full">
+                            <Input type="number" placeholder="Crop %" value={params.crop_percent} onChange={(e)=>setParams(p=>({...p, crop_percent: e.target.value}))} className="h-5 text-[9px] w-full px-1 py-0" />
+                            <div className="grid grid-cols-2 gap-0.5">
+                              <Input type="number" placeholder="Top" value={params.top_pct} onChange={(e)=>setParams(p=>({...p, top_pct: e.target.value}))} className="h-5 text-[9px] px-1 py-0" />
+                              <Input type="number" placeholder="Bot" value={params.bottom_pct} onChange={(e)=>setParams(p=>({...p, bottom_pct: e.target.value}))} className="h-5 text-[9px] px-1 py-0" />
+                              <Input type="number" placeholder="Left" value={params.left_pct} onChange={(e)=>setParams(p=>({...p, left_pct: e.target.value}))} className="h-5 text-[9px] px-1 py-0" />
+                              <Input type="number" placeholder="Right" value={params.right_pct} onChange={(e)=>setParams(p=>({...p, right_pct: e.target.value}))} className="h-5 text-[9px] px-1 py-0" />
+                            </div>
+                          </div>
+                        )}
+                        {col.key === 'convert' && (
+                          <select 
+                            className="h-5 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-1 text-[9px] w-full py-0" 
+                            value={params.format} 
+                            onChange={(e)=>setParams(p=>({...p, format: e.target.value}))}
+                          >
+                            <option value="webp">webp</option>
+                            <option value="jpg">jpg</option>
+                            <option value="jpeg">jpeg</option>
+                            <option value="png">png</option>
+                            <option value="avif">avif</option>
+                          </select>
+                        )}
+                        {col.key === 'watermark' && (
+                          <div className="flex flex-col gap-0.5 w-full">
+                            <Button
+                              onClick={() => watermarkInputRef.current?.click()}
+                              className="w-full h-5 text-[9px] bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 px-1 py-0"
+                            >
+                              {params.watermark.file ? '✓ Файл' : '+ Файл'}
+                            </Button>
+                            <input
+                              ref={watermarkInputRef}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  // Очищуємо попередній URL якщо він існує
+                                  if (params.watermark.file) {
+                                    URL.revokeObjectURL(params.watermark.file);
+                                  }
+                                  const url = URL.createObjectURL(file);
+                                  setParams(p => ({...p, watermark: {...p.watermark, file: url}}));
+                                }
+                              }}
+                            />
+                            <select 
+                              className="h-5 rounded-md border border-cyan-200 dark:border-cyan-800 bg-white/80 dark:bg-cyan-900/80 px-1 text-[9px] w-full py-0" 
+                              value={params.watermark.placement} 
+                              onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, placement: e.target.value as any}}))}>
+                              <option value="center">Center</option>
+                              <option value="top-left">Top-L</option>
+                              <option value="top-right">Top-R</option>
+                              <option value="bottom-left">Bot-L</option>
+                              <option value="bottom-right">Bot-R</option>
+                            </select>
+                            <div className="grid grid-cols-2 gap-0.5">
+                              <Input type="number" placeholder="MX" value={params.watermark.margin_x} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, margin_x: e.target.value}}))} className="h-5 text-[9px] px-1 py-0" />
+                              <Input type="number" placeholder="MY" value={params.watermark.margin_y} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, margin_y: e.target.value}}))} className="h-5 text-[9px] px-1 py-0" />
+                              <Input type="number" step="0.1" placeholder="Scale" value={params.watermark.scale_percent} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, scale_percent: e.target.value}}))} className="h-5 text-[9px] px-1 py-0" />
+                              <Input type="number" step="0.1" placeholder="Opac" value={params.watermark.opacity} onChange={(e)=>setParams(p=>({...p, watermark: {...p.watermark, opacity: e.target.value}}))} className="h-5 text-[9px] px-1 py-0" />
+                            </div>
+                          </div>
+                        )}
+                        {col.key === 'altTag' && (
+                          <div className="flex flex-col gap-0.5 w-full">
+                            <Input placeholder="src" value={params.alt.src} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, src: e.target.value}}))} className="h-5 text-[9px] w-full px-1 py-0" />
+                            <Input placeholder="alt" value={params.alt.alt} onChange={(e)=>setParams(p=>({...p, alt: {...p.alt, alt: e.target.value}}))} className="h-5 text-[9px] w-full px-1 py-0" />
+                          </div>
+                        )}
                       </div>
                     </th>
                   ))}
@@ -641,12 +629,19 @@ export default function PhotoAiSeoTable() {
         )}
 
         {/* Toolbar */}
-        <div className="mt-6 flex justify-center">
+        <div className="mt-6 flex justify-center gap-3">
           <Button
             onClick={openFileDialog}
             className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
           >
             <Upload className="w-4 h-4 mr-2" /> Додати фото
+          </Button>
+          <Button 
+            onClick={applyParamsToSelected} 
+            className="rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
+            disabled={selectedCount === 0}
+          >
+            Застосувати до вибраних ({selectedCount})
           </Button>
         </div>
         <input
