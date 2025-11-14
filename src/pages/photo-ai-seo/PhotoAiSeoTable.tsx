@@ -1,9 +1,8 @@
 import { useRef, useState } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Upload, Eye, X, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Upload, Eye, X, Download, Loader2 } from 'lucide-react';
 import { resizePhoto, cropPhoto, convertPhoto, setAltTag, addWatermark } from '@/api/photoApi';
 
 // Модель рядка з 5 чекбокс-діями
@@ -16,6 +15,7 @@ interface PhotoRowItem {
   watermark: string; // Додати водяний знак
   altTag: string;    // Встановити тег Alt
   processedImage?: string; // Оброблене фото для порівняння
+  isProcessing?: boolean; // Чи обробляється зараз
 }
 
 const columns = [
@@ -67,6 +67,15 @@ export default function PhotoAiSeoTable() {
   });
 
   const watermarkInputRef = useRef<HTMLInputElement>(null);
+
+  // Функції для вибору всієї колонки
+  const toggleColumn = (columnKey: 'resize' | 'crop' | 'convert' | 'watermark' | 'altTag') => {
+    const allChecked = rows.every(r => r[columnKey] === 'completed');
+    setRows(prev => prev.map(r => ({
+      ...r,
+      [columnKey]: allChecked ? '' : 'completed'
+    })));
+  };
 
   // API функції
   const processPhoto = async (photoUrl: string, action: string, params: any) => {
@@ -162,6 +171,9 @@ export default function PhotoAiSeoTable() {
     console.log(`🚀 Починаємо обробку ${selectedPhotos.length} фото`);
 
     for (const photo of selectedPhotos) {
+      // Встановлюємо стан обробки
+      setRows(prev => prev.map(r => r.id === photo.id ? { ...r, isProcessing: true } : r));
+      
       try {
         let lastProcessedImage: string | undefined;
 
@@ -226,7 +238,7 @@ export default function PhotoAiSeoTable() {
             const updated = prev.map(r => {
               if (r.id === photo.id) {
                 console.log(`💾 Updating row ${r.id} with processedImage`);
-                return { ...r, processedImage: lastProcessedImage };
+                return { ...r, processedImage: lastProcessedImage, isProcessing: false };
               }
               return r;
             });
@@ -234,9 +246,11 @@ export default function PhotoAiSeoTable() {
           });
         } else {
           console.warn(`⚠️ No processed image for photo ${photo.id}`);
+          setRows(prev => prev.map(r => r.id === photo.id ? { ...r, isProcessing: false } : r));
         }
       } catch (error) {
         console.error(`❌ Failed to process photo ${photo.id}:`, error);
+        setRows(prev => prev.map(r => r.id === photo.id ? { ...r, isProcessing: false } : r));
       }
     }
 
@@ -342,10 +356,18 @@ export default function PhotoAiSeoTable() {
                       style={{ width: col.width }}
                     >
                       <div className="flex flex-col items-center gap-0.5 min-w-0">
-                        <span className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 truncate whitespace-nowrap">
-                          {col.title}
-                        </span>
-                        {/* Параметри в заголовках */}
+                        <div className="flex items-center gap-1">
+                          {(col.key === 'resize' || col.key === 'crop' || col.key === 'convert' || col.key === 'watermark' || col.key === 'altTag') && (
+                            <Checkbox
+                              checked={rows.length > 0 && rows.every(r => r[col.key] === 'completed')}
+                              onCheckedChange={() => toggleColumn(col.key as 'resize' | 'crop' | 'convert' | 'watermark' | 'altTag')}
+                              className="w-3 h-3"
+                            />
+                          )}
+                          <span className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-300 truncate whitespace-nowrap">
+                            {col.title}
+                          </span>
+                        </div>
                         {col.key === 'resize' && (
                           <Input 
                             type="number" 
@@ -437,85 +459,91 @@ export default function PhotoAiSeoTable() {
               <tbody>
                 {rows.map((row) => (
                   <tr
-                    key={row.id}
-                    className="group border-b border-cyan-100 dark:border-cyan-800 hover:bg-gradient-to-r hover:from-cyan-50/50 hover:to-blue-50/30 dark:hover:from-cyan-950/20 dark:hover:to-blue-950/10 transition-all duration-200"
-                  >
-                    {/* Data Cells */}
-                    {columns.map((col) => {
-                      const val = row[col.key as keyof PhotoRowItem];
+                        key={row.id}
+                        className="group border-b border-cyan-100 dark:border-cyan-800 hover:bg-gradient-to-r hover:from-cyan-50/50 hover:to-blue-50/30 dark:hover:from-cyan-950/20 dark:hover:to-blue-950/10 transition-all duration-200"
+                      >
+                        {/* Data Cells */}
+                        {columns.map((col) => {
+                          const val = row[col.key as keyof PhotoRowItem];
 
-                      return (
-                        <td
-                          key={col.key}
-                          className="px-3 py-3 group-hover:bg-white/50 dark:group-hover:bg-cyan-800/50 transition-colors overflow-hidden"
-                          style={{ width: col.width }}
-                        >
-                          {col.key === 'photo' ? (
-                            // Фото колонка
-                            <div className="w-16 h-12 rounded-lg overflow-hidden bg-cyan-100 dark:bg-cyan-800 flex items-center justify-center">
-                              <img
-                                src={String(val)}
-                                alt="Photo"
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNDgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCA2NCA0OCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNTYgNEg4YTQgNCAwIDAwLTQgNHYzMmE0IDQgMCAwMDQgNGg0OGE0IDQgMCAwMDQtNFY4YTQgNCAwIDAwLTQtNHpNOCA0MGEyIDIgMCAwMS0yLTJWOGEyIDIgMCAwMTItMmg0OGEyIDIgMCAwMTIgMnYzMGEyIDIgMCAwMS0yIDJIOHoiIGZpbGw9IiNjZGQ5ZTUiLz48cGF0aCBkPSJNMjQgMTZhNCA0IDAgMTEtOCAwIDQgNCAwIDAxOCAweiIgZmlsbD0iI2NkZDllNSIvPjxwYXRoIGQ9Im00IDM0IDEyLTEyIDggOCA4LTggMTIgMTJ2NGE0IDQgMCAwMS00IDRIOGE0IDQgMCAwMS00LTR2LTR6IiBmaWxsPSIjY2RkOWU1Ii8+PC9zdmc+';
-                                }}
-                              />
-                            </div>
-                          ) : col.key === 'result' ? (
-                            // Кнопки показати результат та скачати
-                            <div className="flex items-center justify-center gap-2">
-                              <Button
-                                onClick={() => {
-                                  console.log('🖼️ Row processedImage:', row.processedImage);
-                                  if (row.processedImage) {
-                                    setSliderPosition(50); // Скидаємо позицію слайдера
-                                    setComparisonModal({
-                                      isOpen: true,
-                                      original: row.photo,
-                                      processed: row.processedImage
-                                    });
-                                  } else {
-                                    console.warn('⚠️ No processed image available for this photo');
-                                  }
-                                }}
-                                disabled={!row.processedImage}
-                                className="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white p-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Показати порівняння"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  if (row.processedImage) {
-                                    const link = document.createElement('a');
-                                    link.href = row.processedImage;
-                                    link.download = `processed-${row.id}.jpg`;
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                  }
-                                }}
-                                disabled={!row.processedImage}
-                                className="rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white p-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Скачати оброблене фото"
-                              >
-                                <Download className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            // Всі інші колонки - тільки галочки
-                            <div className="flex items-center justify-center">
-                                <Checkbox
-                                    checked={val === 'completed'}
-                                    onCheckedChange={(checked) => {
-                                        // Просто ставимо/знімаємо галочку без обробки
-                                        setRows((prev) =>
-                                            prev.map((r) =>
-                                                r.id === row.id ? { ...r, [col.key]: checked ? 'completed' : '' } : r
-                                            )
-                                        );
+                          return (
+                            <td
+                              key={col.key}
+                              className="px-3 py-3 group-hover:bg-white/50 dark:group-hover:bg-cyan-800/50 transition-colors overflow-hidden"
+                              style={{ width: col.width }}
+                            >
+                              {col.key === 'photo' ? (
+                                // Фото колонка
+                                <div className="w-16 h-12 rounded-lg overflow-hidden bg-cyan-100 dark:bg-cyan-800 flex items-center justify-center">
+                                  <img
+                                    src={String(val)}
+                                    alt="Photo"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNDgiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCA2NCA0OCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNTYgNEg4YTQgNCAwIDAwLTQgNHYzMmE0IDQgMCAwMDQgNGg0OGE0IDQgMCAwMDQtNFY4YTQgNCAwIDAwLTQtNHpNOCA0MGEyIDIgMCAwMS0yLTJWOGEyIDIgMCAwMTItMmg0OGEyIDIgMCAwMTIgMnYzMGEyIDIgMCAwMS0yIDJIOHoiIGZpbGw9IiNjZGQ5ZTUiLz48cGF0aCBkPSJNMjQgMTZhNCA0IDAgMTEtOCAwIDQgNCAwIDAxOCAweiIgZmlsbD0iI2NkZDllNSIvPjxwYXRoIGQ9Im00IDM0IDEyLTEyIDggOCA4LTggMTIgMTJ2NGE0IDQgMCAwMS00IDRIOGE0IDQgMCAwMS00LTR2LTR6IiBmaWxsPSIjY2RkOWU1Ii8+PC9zdmc+';
                                     }}
+                                  />
+                                </div>
+                              ) : col.key === 'result' ? (
+                                // Лоадер або кнопки показати результат та скачати
+                                <div className="flex items-center justify-center gap-2">
+                                  {row.isProcessing ? (
+                                    <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+                                  ) : (
+                                    <>
+                                      <Button
+                                        onClick={() => {
+                                          console.log('🖼️ Row processedImage:', row.processedImage);
+                                          if (row.processedImage) {
+                                            setSliderPosition(50); // Скидаємо позицію слайдера
+                                            setComparisonModal({
+                                              isOpen: true,
+                                              original: row.photo,
+                                              processed: row.processedImage
+                                            });
+                                          } else {
+                                            console.warn('⚠️ No processed image available for this photo');
+                                          }
+                                        }}
+                                        disabled={!row.processedImage}
+                                        className="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Показати порівняння"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        onClick={() => {
+                                          if (row.processedImage) {
+                                            const link = document.createElement('a');
+                                            link.href = row.processedImage;
+                                            link.download = `processed-${row.id}.jpg`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                          }
+                                        }}
+                                        disabled={!row.processedImage}
+                                        className="rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Скачати оброблене фото"
+                                      >
+                                        <Download className="w-4 h-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              ) : (
+                                // Всі інші колонки - тільки галочки
+                                <div className="flex items-center justify-center">
+                                    <Checkbox
+                                        checked={val === 'completed'}
+                                        onCheckedChange={(checked) => {
+                                            // Просто ставимо/знімаємо галочку без обробки
+                                            setRows((prev) =>
+                                                prev.map((r) =>
+                                                    r.id === row.id ? { ...r, [col.key]: checked ? 'completed' : '' } : r
+                                                )
+                                            );
+                                        }}
                                     className="w-5 h-5 rounded-lg border-2 border-cyan-300 dark:border-cyan-600
     data-[state=checked]:bg-gradient-to-br data-[state=checked]:from-cyan-500
     data-[state=checked]:to-blue-600 data-[state=checked]:border-cyan-500
