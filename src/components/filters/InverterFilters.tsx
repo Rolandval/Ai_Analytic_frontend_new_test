@@ -198,10 +198,33 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
     usd_rate: current.usd_rate !== undefined ? current.usd_rate : 40,
     markup: current.markup !== undefined ? current.markup : 15,
   });
+  const [localFullName, setLocalFullName] = useState(current.full_name || '');
+  const isTypingRef = useRef(false);
 
   useEffect(() => {
     setLocal(current);
+    if (!isTypingRef.current) {
+      setLocalFullName(current.full_name || '');
+    }
   }, [current]);
+
+  // Debounce full_name input
+  useEffect(() => {
+    console.log('🔵 [INVERTER FILTER] localFullName changed:', localFullName);
+    isTypingRef.current = true;
+    const timer = setTimeout(() => {
+      console.log('⏰ [INVERTER FILTER] Debounce timer fired, applying filter:', localFullName);
+      setLocal(p => ({ ...p, full_name: localFullName || undefined }));
+      // Keep isTypingRef true for a bit longer to prevent race conditions
+      setTimeout(() => {
+        isTypingRef.current = false;
+      }, 100);
+    }, 300);
+    return () => {
+      console.log('🧹 [INVERTER FILTER] Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
+  }, [localFullName]);
 
   // [removed]: migration placed below after filterOrder is declared
 
@@ -281,10 +304,10 @@ export const InverterTopSearch: React.FC<TopSearchProps> = ({ current, setFilter
         <div className="flex-shrink-0">
           <Input
             placeholder="Назва"
-            value={local.full_name ?? ''}
+            value={localFullName}
             onChange={(e) => {
-              const trimmed = e.target.value.trim();
-              setLocal((p) => ({ ...p, full_name: trimmed || undefined }));
+              console.log('⌨️ [INVERTER FILTER] Input onChange:', e.target.value);
+              setLocalFullName(e.target.value);
             }}
             className="w-64 bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
           />

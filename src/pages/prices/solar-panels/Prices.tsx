@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSolarPanelPrices } from '@/hooks/useSolarPanelPrices';
 import { useSolarPanelBrands } from '@/hooks/useSolarPanelBrands';
 import { SolarPanelPriceListRequest, SupplierStatusEnum, SolarPanelPriceSchema, PanelTypeEnum, CellTypeEnum } from '@/types/solarPanel';
@@ -11,6 +11,8 @@ import { Pagination } from '@/components/ui/Pagination';
 export const SolarPanelPrices = () => {
   const [filters, setFilters] = useState<Omit<SolarPanelPriceListRequest, 'page' | 'page_size'>>({});
   const [page, setPage] = useState(1);
+  const [localFullName, setLocalFullName] = useState('');
+  const isTypingRef = useRef(false);
   const { data, isLoading, error } = useSolarPanelPrices({ ...filters, page, page_size: 10 });
   const { brands: brandOptions } = useSolarPanelBrands();
 
@@ -19,6 +21,32 @@ export const SolarPanelPrices = () => {
     const finalValue = value === '' || (Array.isArray(value) && value.length === 0) ? undefined : value;
     setFilters(prev => ({ ...prev, [name]: finalValue }));
   };
+
+  // Debounce full_name filter
+  useEffect(() => {
+    console.log('🔵 [SOLAR] localFullName changed:', localFullName);
+    isTypingRef.current = true;
+    const timer = setTimeout(() => {
+      console.log('⏰ [SOLAR] Debounce timer fired, applying filter:', localFullName);
+      handleFilterChange('full_name', localFullName || undefined);
+      isTypingRef.current = false;
+    }, 300);
+    return () => {
+      console.log('🧹 [SOLAR] Cleanup: clearing timer');
+      clearTimeout(timer);
+      isTypingRef.current = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localFullName]);
+
+  // Sync localFullName with filters only when not typing
+  useEffect(() => {
+    console.log('🔄 [SOLAR] filters.full_name changed:', filters.full_name, 'isTyping:', isTypingRef.current, 'localFullName:', localFullName);
+    if (!isTypingRef.current && filters.full_name !== localFullName) {
+      console.log('⚠️ [SOLAR] RESETTING localFullName to:', filters.full_name || '');
+      setLocalFullName(filters.full_name || '');
+    }
+  }, [filters.full_name, localFullName]);
 
   const totalPages = data ? Math.ceil(data.total / 10) : 0;
 
@@ -30,7 +58,11 @@ export const SolarPanelPrices = () => {
          <input
             type="text"
             placeholder="Пошук за назвою..."
-            onChange={(e) => handleFilterChange('full_name', e.target.value)}
+            value={localFullName}
+            onChange={(e) => {
+              console.log('⌨️ [SOLAR] Input onChange:', e.target.value);
+              setLocalFullName(e.target.value);
+            }}
             className="p-2 bg-slate-700 rounded-md text-white placeholder-slate-400"
           />
         <div className="grid grid-cols-2 gap-2">

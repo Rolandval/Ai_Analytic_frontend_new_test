@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Upload, Eye, X, Download, Loader2 } from 'lucide-react';
 import { resizePhoto, cropPhoto, convertPhoto, setAltTag, addWatermark } from '@/api/photoApi';
 

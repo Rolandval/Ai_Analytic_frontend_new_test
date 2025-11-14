@@ -145,10 +145,33 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
     ...current,
     markup: current.markup !== undefined ? current.markup : 15,
   });
+  const [localFullName, setLocalFullName] = useState(current.full_name || '');
+  const isTypingRef = useRef(false);
 
   useEffect(() => {
     setLocal(current);
+    if (!isTypingRef.current) {
+      setLocalFullName(current.full_name || '');
+    }
   }, [current]);
+
+  // Debounce full_name input
+  useEffect(() => {
+    console.log('🔵 [SOLAR FILTER] localFullName changed:', localFullName);
+    isTypingRef.current = true;
+    const timer = setTimeout(() => {
+      console.log('⏰ [SOLAR FILTER] Debounce timer fired, applying filter:', localFullName);
+      setLocal(p => ({ ...p, full_name: localFullName || undefined }));
+      // Keep isTypingRef true for a bit longer to prevent race conditions
+      setTimeout(() => {
+        isTypingRef.current = false;
+      }, 100);
+    }, 300);
+    return () => {
+      console.log('🧹 [SOLAR FILTER] Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
+  }, [localFullName]);
 
   useEffect(() => {
     const fetchCities = async () => {
@@ -209,8 +232,11 @@ export const SolarPanelTopSearch: React.FC<TopSearchProps> = ({ current, setFilt
         <div className="w-full sm:w-auto">
           <Input
             placeholder="Пошук по назві..."
-            value={local.full_name ?? ''}
-            onChange={(e) => setLocal((p) => ({ ...p, full_name: e.target.value || undefined }))}
+            value={localFullName}
+            onChange={(e) => {
+              console.log('⌨️ [SOLAR FILTER] Input onChange:', e.target.value);
+              setLocalFullName(e.target.value);
+            }}
             className="h-10 w-full sm:w-[280px]"
           />
         </div>
