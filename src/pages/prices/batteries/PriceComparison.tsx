@@ -605,9 +605,9 @@ export default function BatteryPriceComparison() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 space-y-4">
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на акумулятори</h1>
-      
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
         <div className="p-4">
           <div className="mb-4">

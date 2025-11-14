@@ -87,6 +87,8 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   const [local, setLocal] = useState<SolarPanelPriceListRequestSchema>({
     ...current
   });
+  const [localFullName, setLocalFullName] = useState(current.full_name || '');
+  const isTypingRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { toast } = useToast();
   // total active badges counter for unified "Показати всі"
@@ -110,6 +112,31 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
     ((local.supplier_status && local.supplier_status.length > 0) ? local.supplier_status.length : 0) +
     ((local.date_min !== undefined || local.date_max !== undefined) ? 1 : 0)
   );
+
+  // Sync localFullName with current.full_name when not typing
+  useEffect(() => {
+    if (!isTypingRef.current) {
+      setLocalFullName(current.full_name || '');
+    }
+  }, [current.full_name]);
+
+  // Debounce full_name input
+  useEffect(() => {
+    console.log('🔵 [SOLAR COMPARISON] localFullName changed:', localFullName);
+    isTypingRef.current = true;
+    const timer = setTimeout(() => {
+      console.log('⏰ [SOLAR COMPARISON] Debounce timer fired, applying filter:', localFullName);
+      setLocal(p => ({ ...p, full_name: localFullName || undefined }));
+      // Keep isTypingRef true for a bit longer to prevent race conditions
+      setTimeout(() => {
+        isTypingRef.current = false;
+      }, 100);
+    }, 300);
+    return () => {
+      console.log('🧹 [SOLAR COMPARISON] Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
+  }, [localFullName]);
 
   // Drag and drop setup
   const sensors = useSensors(
@@ -671,8 +698,11 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
         <div className="flex-shrink-0">
           <Input
             placeholder="Назва"
-            value={local.full_name || ''}
-            onChange={e => setLocal(p => ({ ...p, full_name: e.target.value || undefined }))}
+            value={localFullName}
+            onChange={(e) => {
+              console.log('⌨️ [SOLAR COMPARISON] Input onChange:', e.target.value);
+              setLocalFullName(e.target.value);
+            }}
             className="w-64 bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
           />
         </div>

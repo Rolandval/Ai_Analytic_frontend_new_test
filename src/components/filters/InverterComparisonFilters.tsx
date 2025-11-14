@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
@@ -202,6 +202,8 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   const [local, setLocal] = useState<InverterPriceListRequestSchema>({
     ...current
   });
+  const [localFullName, setLocalFullName] = useState(current.full_name || '');
+  const isTypingRef = useRef(false);
   // const [isExpanded, setIsExpanded] = useState(false);
   // Active badges: simple full render without clamping/popover
   
@@ -246,9 +248,30 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
   // Keep local.full_name in sync with external current.full_name (controlled outside)
   useEffect(() => {
     setLocal((prev) => ({ ...prev, full_name: current.full_name }));
+    if (!isTypingRef.current) {
+      setLocalFullName(current.full_name || '');
+    }
     // We only care about current.full_name changes here
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current.full_name]);
+
+  // Debounce full_name input
+  useEffect(() => {
+    console.log('🔵 [INVERTER COMPARISON] localFullName changed:', localFullName);
+    isTypingRef.current = true;
+    const timer = setTimeout(() => {
+      console.log('⏰ [INVERTER COMPARISON] Debounce timer fired, applying filter:', localFullName);
+      setLocal(p => ({ ...p, full_name: localFullName || undefined }));
+      // Keep isTypingRef true for a bit longer to prevent race conditions
+      setTimeout(() => {
+        isTypingRef.current = false;
+      }, 100);
+    }, 300);
+    return () => {
+      console.log('🧹 [INVERTER COMPARISON] Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
+  }, [localFullName]);
 
   // Debounced sync of local state to filters
   useEffect(() => {
@@ -514,12 +537,10 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
         <div className="flex-shrink-0">
           <Input
             placeholder="Пошук по назві..."
-            value={local.full_name ?? ''}
+            value={localFullName}
             onChange={(e) => {
-              const trimmed = e.target.value.trim();
-              const newLocal = { ...local, full_name: trimmed || undefined, page: 1 };
-              setLocal(newLocal);
-              setFilters({ full_name: trimmed || undefined, page: 1 });
+              console.log('⌨️ [INVERTER COMPARISON] Input onChange:', e.target.value);
+              setLocalFullName(e.target.value);
             }}
             className="h-8 w-[220px] sm:w-[280px]"
           />

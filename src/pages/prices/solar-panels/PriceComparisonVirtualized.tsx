@@ -436,11 +436,11 @@ export default function SolarPanelPriceComparisonVirtualized() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 space-y-4">
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">
         Порівняння цін на сонячні панелі (Віртуалізовано)
       </h1>
-      
+
       <div className="space-y-4 mb-4">
         <SolarPanelComparisonFilters 
           current={filters}

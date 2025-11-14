@@ -261,9 +261,9 @@ export default function InverterPriceComparisonOptimized() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="p-4 space-y-4">
       <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4">Порівняння цін на інвертори</h1>
-      
+
       <div className="space-y-4 mb-4">
         <InverterComparisonFilters 
           current={filters}

@@ -172,9 +172,36 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current
   });
+  const [localFullName, setLocalFullName] = useState(current.full_name || '');
+  const isTypingRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const { toast } = useToast();
   
+
+  // Sync localFullName with current.full_name when not typing
+  useEffect(() => {
+    if (!isTypingRef.current) {
+      setLocalFullName(current.full_name || '');
+    }
+  }, [current.full_name]);
+
+  // Debounce full_name input
+  useEffect(() => {
+    console.log('🔵 [BATTERY COMPARISON] localFullName changed:', localFullName);
+    isTypingRef.current = true;
+    const timer = setTimeout(() => {
+      console.log('⏰ [BATTERY COMPARISON] Debounce timer fired, applying filter:', localFullName);
+      setLocal(p => ({ ...p, full_name: localFullName || undefined }));
+      // Keep isTypingRef true for a bit longer to prevent race conditions
+      setTimeout(() => {
+        isTypingRef.current = false;
+      }, 100);
+    }, 300);
+    return () => {
+      console.log('🧹 [BATTERY COMPARISON] Cleanup: clearing timer');
+      clearTimeout(timer);
+    };
+  }, [localFullName]);
 
   // Auto-apply filters with debounce
   const lastAppliedRef = useRef<string>('');
@@ -537,8 +564,11 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
         <div className="flex-shrink-0">
           <Input
             placeholder="Назва"
-            value={local.full_name || ''}
-            onChange={e => setLocal(p => ({ ...p, full_name: e.target.value || undefined }))}
+            value={localFullName}
+            onChange={(e) => {
+              console.log('⌨️ [BATTERY COMPARISON] Input onChange:', e.target.value);
+              setLocalFullName(e.target.value);
+            }}
             className="w-64 bg-white text-slate-800 placeholder-slate-400 border border-slate-300 focus-visible:ring-2 focus-visible:ring-primary/40"
           />
         </div>
