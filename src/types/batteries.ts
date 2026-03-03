@@ -18,6 +18,7 @@ export interface BatteryPriceListRequestSchema {
   date_min?: string;
   date_max?: string;
   supplier_status?: string[];
+  usd_rate?: number; // Optional USD exchange rate used in some price views
   markup?: number;
   page?: number;
   page_size?: number;

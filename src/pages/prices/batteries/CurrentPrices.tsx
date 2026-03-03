@@ -58,7 +58,7 @@ const createColumns = (markup: number = 15): TableColumn<BatteryPriceSchema>[] =
   { key: 'supplier_status', header: 'Статус', sortable: true },
   { 
     key: 'price', 
-    header: '₴',
+    header: '$',
     sortable: true,
     sortKey: 'price_sort',
     render: (row) => (
@@ -69,10 +69,10 @@ const createColumns = (markup: number = 15): TableColumn<BatteryPriceSchema>[] =
   },
   { 
     key: 'price_markup', 
-    header: '₴ з нац.',
+    header: '$ з нац.',
     render: (row) => (
       <span className="font-medium text-blue-800">
-        {(row.price * (1 + markup/100)).toLocaleString('uk-UA', { maximumFractionDigits: 0 })}
+        {(row.price * (1 + markup/100)).toFixed(2)}
       </span>
     )
   },
@@ -84,7 +84,7 @@ const createColumns = (markup: number = 15): TableColumn<BatteryPriceSchema>[] =
   },
   { 
     key: 'price_per_watt',
-    header: '$/Вт',
+    header: '$/Ah',
     sortable: true,
     sortKey: 'price_per_watt_sort',
     render: (row) => (
@@ -155,7 +155,7 @@ export default function BatteryCurrentPricesPage() {
   return (
     <PriceHistoryPage
       title="Актуальні ціни – Акумулятори"
-      currencySymbol="₴"
+      currencySymbol="$"
       columns={createColumns(hook.filters.markup || markup)}
       hook={hook as any}
       compact
@@ -176,6 +176,8 @@ export default function BatteryCurrentPricesPage() {
             }
           }}
           onReset={resetFilters}
+          priceCurrencyLabel={"$"}
+          excludeFields={["c_amps", "polarity"]}
         />
       }
       filterComponent={
@@ -188,10 +190,12 @@ export default function BatteryCurrentPricesPage() {
             }
           }} 
           brands={hook.brands} 
-          suppliers={hook.suppliers} 
+          suppliers={hook.suppliers}
+          priceCurrencyLabel={"$"}
+          excludeFields={["c_amps", "polarity"]}
         />
       }
-      createFormComponent={<CreateBatteryPriceForm currencySymbol="₴" brands={hook.brands} suppliers={hook.suppliers} onSubmit={hook.createPrice} />}
+      createFormComponent={<CreateBatteryPriceForm currencySymbol="$" brands={hook.brands} suppliers={hook.suppliers} onSubmit={hook.createPrice} />}
     />
   );
 }

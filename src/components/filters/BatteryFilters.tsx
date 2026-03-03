@@ -111,16 +111,24 @@ interface Props {
   suppliers: string[];
   // Optional actions passed from parent page to render inside a draggable tile
   actionsButtonGroup?: React.ReactNode;
+  // Optional: label for price currency in UI (e.g. 'грн' or '$')
+  priceCurrencyLabel?: string;
+  // Optional: hide specific filter tiles by id (e.g. ['c_amps','polarity'])
+  excludeFields?: string[];
 }
 
 interface TopSearchProps {
   current: BatteryPriceListRequestSchema;
   setFilters: (f: BatteryPriceListRequestSchema) => void;
   onReset: () => void;
+  // Optional: label for price currency in UI (e.g. 'грн' or '$')
+  priceCurrencyLabel?: string;
+  // Optional: hide specific badges for excluded filters (e.g. ['c_amps','polarity'])
+  excludeFields?: string[];
 }
 
 // Компонент для верхньої секції з пошуком та активними фільтрами
-export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters, onReset }) => {
+export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters, onReset, priceCurrencyLabel, excludeFields }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current,
@@ -272,7 +280,7 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
               );
             }
             // Полярність
-            if (local.polarity) {
+            if (!excludeFields?.includes('polarity') && local.polarity) {
               items.push(
                 <Badge key={`polarity`} variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
                   Полярність: {local.polarity}
@@ -312,7 +320,7 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
               );
             }
             // Пускові ампери
-            if (local.c_amps_min || local.c_amps_max) {
+            if (!excludeFields?.includes('c_amps') && (local.c_amps_min || local.c_amps_max)) {
               items.push(
                 <Badge key={`c-amps`} variant="secondary" className="bg-cyan-100 text-cyan-800 border-cyan-200">
                   Пуск А: {local.c_amps_min || '∞'}-{local.c_amps_max || '∞'} A
@@ -324,7 +332,7 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
             if (local.price_min || local.price_max) {
               items.push(
                 <Badge key={`price`} variant="secondary" className="bg-red-100 text-red-800 border-red-200">
-                  Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} грн
+                  Ціна: {local.price_min || '∞'}-{local.price_max || '∞'} {priceCurrencyLabel ?? 'грн'}
                   <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => setLocal(p => ({ ...p, price_min: undefined, price_max: undefined }))} />
                 </Badge>
               );
@@ -357,7 +365,7 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
 };
 
 
-export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, actionsButtonGroup }) => {
+export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, actionsButtonGroup, priceCurrencyLabel, excludeFields }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current,
@@ -541,7 +549,7 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
     ),
     price: (
       <div className="h-[60px] flex flex-col gap-1">
-        <span className="text-[12px] font-medium text-slate-600">Ціна, грн</span>
+        <span className="text-[12px] font-medium text-slate-600">Ціна, {priceCurrencyLabel ?? 'грн'}</span>
         <div className="flex gap-1 items-center">
           <Input
             type="number"
@@ -722,6 +730,11 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
     ),
   };
 
+  // Apply excludeFields to filter order at render time
+  const finalOrder = (excludeFields && excludeFields.length > 0)
+    ? filterOrder.filter((id) => !excludeFields.includes(id))
+    : filterOrder;
+
   return (
     <>
     <div className="w-auto mx-auto flex flex-col gap-4">
@@ -730,10 +743,10 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={filterOrder} strategy={verticalListSortingStrategy}>
+        <SortableContext items={finalOrder} strategy={verticalListSortingStrategy}>
           {/* Filter Grid with drag and drop */}
           <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-            {filterOrder.map((filterId) => {
+            {finalOrder.map((filterId) => {
               const component = filterComponents[filterId];
               if (!component) return null;
               
