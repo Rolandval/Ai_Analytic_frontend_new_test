@@ -1,7 +1,7 @@
 services:
   frontend-dev-test:
     image: node:18-alpine
-    container_name: ai-analytic-frontend-dev
+    container_name: ai-analytic-frontend-dev-test
     working_dir: /app
     ports:
       - "0.0.0.0:${FRONTEND_PORT:-5177}:5177"
