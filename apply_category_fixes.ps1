@@ -22,3 +22,4 @@ Write-Host "Changes made:" -ForegroundColor Yellow
 Write-Host "1. Mass generate button now supports categories" -ForegroundColor Cyan
 Write-Host "2. Generate selected button now supports categories" -ForegroundColor Cyan
 Write-Host "3. Progress indicators updated for both modes" -ForegroundColor Cyan
+
