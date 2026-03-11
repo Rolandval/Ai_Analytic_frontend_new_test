@@ -1,5 +1,5 @@
 services:
-  frontend-dev:
+  frontend-dev-test:
     image: node:18-alpine
     container_name: ai-analytic-frontend-dev
     working_dir: /app
