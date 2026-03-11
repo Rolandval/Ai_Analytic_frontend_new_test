@@ -4,7 +4,7 @@ services:
     container_name: ai-analytic-frontend-dev
     working_dir: /app
     ports:
-      - "0.0.0.0:${FRONTEND_PORT:-5177}:5177"
+      - "0.0.0.0:${FRONTEND_PORT:-5174}:5174"
     volumes:
       - ./:/app
       - node_modules:/app/node_modules
@@ -13,11 +13,11 @@ services:
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
-      - FRONTEND_PORT=${FRONTEND_PORT:-5177}
+      - FRONTEND_PORT=${FRONTEND_PORT:-5174}
       - BACKEND_PORT=${BACKEND_PORT:-8002}
       - SERVER_HOST=localhost
     command: >
-      sh -c "npm ci --force && npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5177}"
+      sh -c "npm ci --force && npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5174}"
     networks:
       - app-network
     restart: unless-stopped
