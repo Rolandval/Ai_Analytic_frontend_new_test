@@ -44,8 +44,8 @@ export const CreateInverterPriceForm: React.FC<Props> = ({ brands, suppliers, cu
         e.preventDefault();
         await onSubmit({
           ...form,
-          power: form.power === undefined || form.power === null || form.power === '' ? undefined : Number(form.power),
-          string_count: form.string_count === undefined || form.string_count === null || form.string_count === '' ? undefined : Number(form.string_count),
+          power: form.power === undefined || form.power === null || (form.power as unknown) === '' ? undefined : Number(form.power),
+          string_count: form.string_count === undefined || form.string_count === null || (form.string_count as unknown) === '' ? undefined : Number(form.string_count),
           price: Number(form.price),
         } as any);
       }}

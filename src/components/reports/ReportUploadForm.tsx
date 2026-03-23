@@ -98,8 +98,14 @@ export const ReportUploadForm: React.FC<ReportUploadFormProps> = ({ productType 
   const sheetMutation = useMutation({ mutationFn: uploadSheetFetchers[productType], onSuccess: handleUploadSuccess, onError: handleUploadError });
   const textMutation = useMutation({ mutationFn: uploadTextFetchers[productType], onSuccess: handleUploadSuccess, onError: handleUploadError });
 
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
   const handleFileSubmit = () => {
     if (!file || !supplier) return;
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setUploadResult({ new_count: 0, updated_count: 0, error: 'Файл перевищує максимальний розмір 10MB' });
+      return;
+    }
     fileMutation.mutate({ file, supplier_name: supplier, comment });
   };
 
@@ -152,8 +158,8 @@ export const ReportUploadForm: React.FC<ReportUploadFormProps> = ({ productType 
           <TabsContent value="file" className="mt-4">
             <div className="space-y-4">
               <div>
-                <Label htmlFor="file-upload">Оберіть файл (будь-який формат)</Label>
-                <Input id="file-upload" type="file" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] ?? null)} disabled={isSubmitting} />
+                <Label htmlFor="file-upload">Оберіть файл (.xlsx, .xls, .csv)</Label>
+                <Input id="file-upload" type="file" accept=".xlsx,.xls,.csv" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFile(e.target.files?.[0] ?? null)} disabled={isSubmitting} />
               </div>
               <Button onClick={handleFileSubmit} disabled={!file || !supplier || isSubmitting}>Завантажити файл</Button>
             </div>

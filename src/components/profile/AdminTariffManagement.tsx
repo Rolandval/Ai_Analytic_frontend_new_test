@@ -7,17 +7,16 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/Dialog';
 import { Badge } from '@/components/ui/Badge';
 import { useTariffs, useCreateTariff, useUpdateTariff, useDeleteTariff } from '@/hooks/useTariffs';
-import { Plus, Settings, Calendar, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { Plus, Settings, Calendar, DollarSign } from 'lucide-react';
 import type { TariffCreateRequest } from '@/api/tariffs';
 
 const AdminTariffManagement: React.FC = () => {
   const { data: tariffs, isLoading } = useTariffs();
   const createTariffMutation = useCreateTariff();
-  const updateTariffMutation = useUpdateTariff();
-  const deleteTariffMutation = useDeleteTariff();
+  useUpdateTariff();
+  useDeleteTariff();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingTariff, setEditingTariff] = useState<number | null>(null);
   const [formData, setFormData] = useState<TariffCreateRequest>({
     name: '',
     description: '',

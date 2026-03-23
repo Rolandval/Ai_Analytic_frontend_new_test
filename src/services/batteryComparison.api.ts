@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import {
+import type {
   BatteryPriceListRequestSchema,
   BatteryMultiPriceListResponseSchema
 } from '@/types/batteries';

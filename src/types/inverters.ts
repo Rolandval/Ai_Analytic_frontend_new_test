@@ -64,3 +64,40 @@ export interface PaginatedInverterPricesResponse {
   page_size: number;
   pages: number;
 }
+
+// Comparison API response — paginated inverters with per-supplier prices
+export interface InverterSupplierPriceItem {
+  supplier_id: number;
+  supplier_name: string;
+  supplier_url: string | null;
+  supplier_status: string;
+  price: number | null;
+  promo_price: number | null;
+  recommended_price: number | null;
+  availability: number | null;
+  site_id: number | null;
+  date: string | null;
+  updated_at: string | null;
+}
+
+export interface InverterComparisonItem {
+  id: number;
+  inverter_id: number;
+  full_name: string;
+  brand: string;
+  power: number | null;
+  inverter_type: string | null;
+  generation: string | null;
+  string_count: number | null;
+  firmware: string | null;
+  recommendedPrice?: number | null;
+  supplier_prices: InverterSupplierPriceItem[];
+}
+
+export interface InverterMultiPriceListResponseSchema {
+  inverters: InverterComparisonItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}

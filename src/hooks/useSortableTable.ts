@@ -25,8 +25,8 @@ export function useSortableTable<T>(items: T[], defaultSortConfig: SortConfig | 
   };
 
   const compareBy = (a: any, b: any, cfg: SortConfig) => {
-    let aValue = getValueByKey(a, cfg.key);
-    let bValue = getValueByKey(b, cfg.key);
+    const aValue = getValueByKey(a, cfg.key);
+    const bValue = getValueByKey(b, cfg.key);
 
     // null/undefined в кінець
     if (aValue === null || aValue === undefined) return 1;

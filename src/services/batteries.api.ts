@@ -26,9 +26,10 @@ const ANALYTICS_BASE_URL = '/batteries/analytics';
 
 // == DIRECTORY ENDPOINTS ==
 export const getBatteriesDirectory = async (
-  params: BatteryDirectoryParams
+  params: BatteryDirectoryParams,
+  signal?: AbortSignal
 ): Promise<PaginatedBatteriesResponse> => {
-  const response = await api.post(`${API_BASE_URL}/batteries/`, params);
+  const response = await api.post(`${API_BASE_URL}/batteries/`, params, { signal });
   return response.data;
 };
 

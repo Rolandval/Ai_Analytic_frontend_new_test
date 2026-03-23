@@ -32,6 +32,11 @@ const BatteriesDirectory = () => {
     { type: 'select', name: 'page_size', label: 'Розмір', options: [10,20,50,100].map(n=>({label:String(n), value:String(n)})) }
   ];
 
+  /* -------- hooks for CRUD (must be at component top level) -------- */
+  const { mutate: createBattery } = useCreateBattery();
+  const { mutate: updateBattery } = useUpdateBattery();
+  const { mutate: deleteBattery } = useDeleteBattery();
+
   /* -------- wrap list hook to fit DirectoryPage shape -------- */
   const useList = (params: BatteryDirectoryParams) => {
     const q = useGetBatteriesDirectory(params);
@@ -47,18 +52,9 @@ const BatteriesDirectory = () => {
       columns={columns}
       filterFields={filterFields}
       useList={useList as any}
-      useCreate={() => {
-        const { mutate } = useCreateBattery();
-        return { mutate: (d) => mutate(d as any) };
-      }}
-      useUpdate={() => {
-        const { mutate } = useUpdateBattery();
-        return { mutate: ({ id, data }) => mutate({ id, data: data as any }) };
-      }}
-      useDelete={() => {
-        const { mutate } = useDeleteBattery();
-        return { mutate };
-      }}
+      useCreate={() => ({ mutate: (d) => createBattery(d as any) })}
+      useUpdate={() => ({ mutate: ({ id, data }) => updateBattery({ id, data: data as any }) })}
+      useDelete={() => ({ mutate: deleteBattery })}
       initialParams={{ page: 1, page_size: 15 } as BatteryDirectoryParams}
       lostPath="/batteries/directory/lost"
     />

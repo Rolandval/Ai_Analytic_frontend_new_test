@@ -84,9 +84,9 @@ class CacheManager {
           ? await dataCache.getCachedProducts(lang)
           : await dataCache.getCachedCategories(lang);
 
-        if (data && data.length > 0) {
+        if (data && data.data.length > 0) {
           info.exists = true;
-          info.count = data.length;
+          info.count = data.data.length;
           info.lang = lang;
           // Вік кешу можна отримати з timestamp (якщо додати в майбутньому)
           break;
@@ -147,7 +147,7 @@ class CacheManager {
         : await dataCache.getCachedCategories(lang);
 
       // Якщо кешу немає - потрібно оновити
-      if (!data || data.length === 0) {
+      if (!data || data.data.length === 0) {
         return true;
       }
 

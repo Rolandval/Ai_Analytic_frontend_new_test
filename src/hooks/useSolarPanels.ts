@@ -16,21 +16,27 @@ export const useSolarPanels = (initialParams: SolarPanelListRequest): UseSolarPa
   const [error, setError] = useState<Error | null>(null);
   const [params, setParams] = useState<SolarPanelListRequest>(initialParams);
 
-  const fetchSolarPanels = useCallback(async (fetchParams: SolarPanelListRequest) => {
+  const fetchSolarPanels = useCallback(async (fetchParams: SolarPanelListRequest, signal: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getSolarPanels(fetchParams);
+      const result = await getSolarPanels(fetchParams, signal);
       setData(result);
     } catch (err) {
-      setError(err as Error);
+      if ((err as Error).name !== 'CanceledError' && (err as Error).name !== 'AbortError') {
+        setError(err as Error);
+      }
     } finally {
-      setLoading(false);
+      if (!signal.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchSolarPanels(params);
+    const controller = new AbortController();
+    fetchSolarPanels(params, controller.signal);
+    return () => controller.abort();
   }, [params, fetchSolarPanels]);
 
   return { data, loading, error, params, setParams };

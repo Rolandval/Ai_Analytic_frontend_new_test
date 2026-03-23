@@ -3,13 +3,10 @@ import axios from 'axios';
 // Створюємо екземпляр axios з базовими налаштуваннями
 export const apiClient = axios.create({
   // В development використовуємо відносні URL для проксі Vite
-  // В production використовуємо повний URL
-  baseURL: import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || 'http://185.233.44.234:8002'),
+  // В production використовуємо повний URL через env змінну
+  baseURL: import.meta.env.DEV ? '' : (import.meta.env.VITE_API_URL || ''),
   headers: {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   },
 });
 

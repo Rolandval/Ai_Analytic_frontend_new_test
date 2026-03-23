@@ -45,7 +45,7 @@ interface ScheduledReport {
 export default function BusinessAgentReports() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [, setShowCreateModal] = useState(false);
 
   const reportTemplates: ReportTemplate[] = [
     {

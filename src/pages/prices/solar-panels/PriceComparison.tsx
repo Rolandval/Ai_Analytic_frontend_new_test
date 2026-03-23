@@ -977,7 +977,7 @@ export default function SolarPanelPriceComparison() {
                                 title={panel.full_name}
                                 onClick={(e) => {
                                   e.preventDefault();
-                                  window.open(panel.datasheet_url, '_blank');
+                                  window.open(panel.datasheet_url ?? undefined, '_blank');
                                 }}
                               >
                                 {panel.full_name}

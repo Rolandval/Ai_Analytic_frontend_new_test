@@ -20,8 +20,8 @@ import { UploadResponse } from '@/types/reports';
 const BASE_URL = '/inverters/backend';
 const ANALYTICS_BASE_URL = '/inverters/analytics';
 
-export const getInverters = async (params: InverterListRequest): Promise<PaginatedInvertersResponse> => {
-  const response = await api.post(`${BASE_URL}/inverters/`, params);
+export const getInverters = async (params: InverterListRequest, signal?: AbortSignal): Promise<PaginatedInvertersResponse> => {
+  const response = await api.post(`${BASE_URL}/inverters/`, params, { signal });
   return response.data;
 };
 

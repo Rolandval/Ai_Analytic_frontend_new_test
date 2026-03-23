@@ -20,8 +20,8 @@ import { UploadResponse } from '@/types/reports';
 const BASE_URL = '/solar_panels/backend';
 const ANALYTICS_BASE_URL = '/solar_panels/analytics';
 
-export const getSolarPanels = async (params: SolarPanelListRequest): Promise<PaginatedSolarPanelsResponse> => {
-  const response = await api.post(`${BASE_URL}/solar_panels/`, params);
+export const getSolarPanels = async (params: SolarPanelListRequest, signal?: AbortSignal): Promise<PaginatedSolarPanelsResponse> => {
+  const response = await api.post(`${BASE_URL}/solar_panels/`, params, { signal });
   return response.data;
 };
 

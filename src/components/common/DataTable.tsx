@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
-import { Button } from '@/components/ui/Button';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -70,6 +69,9 @@ export function DataTable<T>({
       const aValue = column.accessor!(a);
       const bValue = column.accessor!(b);
 
+      if (aValue == null && bValue == null) return 0;
+      if (aValue == null) return -1;
+      if (bValue == null) return 1;
       if (aValue === bValue) return 0;
 
       const comparison = aValue > bValue ? 1 : -1;

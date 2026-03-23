@@ -36,7 +36,7 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, className }:
     const halfMaxPagesToShow = Math.floor(maxPagesToShow / 2);
     
     let startPage = Math.max(1, currentPage - halfMaxPagesToShow);
-    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
     
     // adjust startPage if we are near the end
     if (endPage - startPage < maxPagesToShow - 1) {

@@ -65,3 +65,39 @@ export interface PaginatedBatteryPricesResponse {
   page_size: number;
   pages: number;
 }
+
+// Comparison API response — paginated batteries with per-supplier prices
+export interface BatterySupplierPriceItem {
+  supplier_id: number;
+  supplier_name: string;
+  supplier_url: string | null;
+  supplier_status: string;
+  price: number | null;
+  promo_price: number | null;
+  recommended_price: number | null;
+  availability: number | null;
+  site_id: number | null;
+  date: string | null;
+  updated_at: string | null;
+}
+
+export interface BatteryComparisonItem {
+  id: number;
+  battery_id: number;
+  full_name: string;
+  brand: string;
+  volume: number | null;
+  c_amps: number | null;
+  region: string | null;
+  polarity: string | null;
+  electrolyte: string | null;
+  supplier_prices: BatterySupplierPriceItem[];
+}
+
+export interface BatteryMultiPriceListResponseSchema {
+  batteries: BatteryComparisonItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}

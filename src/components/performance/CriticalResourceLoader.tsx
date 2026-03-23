@@ -1,37 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { LoadingFallback } from '@/components/ui/LoadingFallback';
-
-// Критичні компоненти завантажуються одразу
-const CriticalComponents = {
-  Header: lazy(() => import('@/components/layout/Header')),
-  Navigation: lazy(() => import('@/components/layout/Navigation')),
-  Dashboard: lazy(() => import('@/pages/Dashboard'))
-};
-
-// Некритичні компоненти завантажуються з затримкою
-const NonCriticalComponents = {
-  Charts: lazy(() => 
-    new Promise(resolve => {
-      setTimeout(() => {
-        resolve(import('@/components/charts'));
-      }, 100); // Затримка 100ms після FCP
-    })
-  ),
-  Suppliers: lazy(() => 
-    new Promise(resolve => {
-      setTimeout(() => {
-        resolve(import('@/pages/inverters/Suppliers'));
-      }, 200);
-    })
-  ),
-  PriceComparison: lazy(() => 
-    new Promise(resolve => {
-      setTimeout(() => {
-        resolve(import('@/pages/prices/inverters/PriceComparison'));
-      }, 300);
-    })
-  )
-};
 
 interface CriticalResourceLoaderProps {
   children: React.ReactNode;
@@ -120,17 +88,6 @@ export const useFCPOptimization = () => {
 // Компонент для preload критичних ресурсів
 export const ResourcePreloader = () => {
   useEffect(() => {
-    // Preload критичних шрифтів
-    const preloadFont = (href: string) => {
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'font';
-      link.type = 'font/woff2';
-      link.crossOrigin = 'anonymous';
-      link.href = href;
-      document.head.appendChild(link);
-    };
-
     // Preload критичних API endpoints
     const preloadAPI = (url: string) => {
       const link = document.createElement('link');

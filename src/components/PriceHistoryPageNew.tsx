@@ -73,7 +73,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
     delete: true,
     chart: true
   });
-  const [columnsSettingsOpen, setColumnsSettingsOpen] = useState(false);
+  const [_columnsSettingsOpen, _setColumnsSettingsOpen] = useState(false);
 
   // Стан для сортування
   const [sortConfig, setSortConfig] = useState<{ key: string | null; direction: 'asc' | 'desc' | null }>({ 
@@ -234,7 +234,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
               // Копіювання даних таблиці
               const tableData = sortedRows
                 .map(row => {
-                  let rowData = {};
+                  const rowData: Record<string, unknown> = {};
                   columns.forEach(col => {
                     // Перевірка чи колонка видима
                     if (visibleColumns[col.key as string] !== false) {
@@ -316,7 +316,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                           checked={visibleColumns[columnKey] !== false}
                           onCheckedChange={(checked) => {
                             const newVisibility = { ...visibleColumns };
-                            newVisibility[columnKey] = checked;
+                            newVisibility[columnKey] = checked === true;
                             setVisibleColumns(newVisibility);
                             saveColumnSettings(newVisibility);
                           }}

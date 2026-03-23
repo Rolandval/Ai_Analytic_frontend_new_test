@@ -30,7 +30,7 @@ ChartJS.register(
 );
 
 // Типи для наших компонентів
-type ChartProps<TType = 'line' | 'bar' | 'pie'> = {
+type ChartProps<TType extends keyof import('chart.js').ChartTypeRegistry = 'line' | 'bar' | 'pie'> = {
   data: ChartData<TType, (number | ScatterDataPoint | null)[], unknown>;
   options?: ChartOptions<TType>;
   height?: number;

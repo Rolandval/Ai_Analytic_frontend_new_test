@@ -1,4 +1,4 @@
-import axios from "axios";
+import { apiClient } from "@/lib/api-client";
 
 export interface Chat {
   id: number;
@@ -20,42 +20,32 @@ export interface SendMessagePayload {
   use_extention?: boolean;
 }
 
-// Використовуємо порожній BACKEND_ORIGIN, щоб працював проксі Vite в режимі розробки
-// Налаштований проксі в vite.config.ts перенаправляє /chat на http://localhost:8002
-const BACKEND_ORIGIN = "";
-
-// Створюємо екземпляр axios з базовою URL для чат-API
-const api = axios.create({
-  baseURL: `/chat`,
-});
-
-// Small helper – drop leading slash so we never end up with /chat/chat, /chat/chats etc.
-const endpoint = (path: string) => path.replace(/^\//, "");
+const BASE = "/chat";
 
 export const chatApi = {
   async getChats() {
-    const { data } = await api.get<{ chats: Chat[] }>(endpoint("chats"));
+    const { data } = await apiClient.get<{ chats: Chat[] }>(`${BASE}/chats`);
     return data.chats;
   },
   async createChat(name: string, model: string) {
-    const { data } = await api.post<Chat>(endpoint("create-chat/"), { name, model });
+    const { data } = await apiClient.post<Chat>(`${BASE}/create-chat/`, { name, model });
     return data;
   },
   async updateChatName(id: number, name: string) {
-    await api.patch(endpoint(`chat-update-name/${id}`), null, { params: { name } });
+    await apiClient.patch(`${BASE}/chat-update-name/${id}`, null, { params: { name } });
   },
   async switchChatModel(id: number, model: string) {
-    await api.patch(endpoint(`chat-switch-model/${id}`), null, { params: { model } });
+    await apiClient.patch(`${BASE}/chat-switch-model/${id}`, null, { params: { model } });
   },
   async deleteChat(id: number) {
-    await api.delete(endpoint(`chat-delete/${id}`));
+    await apiClient.delete(`${BASE}/chat-delete/${id}`);
   },
   async getModels() {
-    const { data } = await api.get<ChatModel[]>(endpoint("chat-models"));
+    const { data } = await apiClient.get<ChatModel[]>(`${BASE}/chat-models`);
     return data;
   },
   async sendMessage(payload: SendMessagePayload) {
-    const { data } = await api.post<{ reply: string }>(endpoint("chat"), payload);
+    const { data } = await apiClient.post<{ reply: string }>(`${BASE}/chat`, payload);
     return data.reply;
   },
 };

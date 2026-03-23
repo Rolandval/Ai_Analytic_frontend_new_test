@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DataTable, Column } from '../DataTable';
-import { TableActions, ActionIcons } from '../TableActions';
+import { TableActions } from '../TableActions';
 import { DateCell, LinkCell, TruncatedCell } from '../TableCellVariants';
 import { GoogleTable } from '@/types/googleTable';
 import { runSolarPanelGoogleTableImport } from '@/services/solarPanelGoogleTables.api';
@@ -22,13 +22,13 @@ import {
 
 const GoogleTablesOptimized = () => {
   const { data = [], isLoading, refetch } = useGetSolarGoogleTables();
-  const addMut = useAddSolarGoogleTable();
-  const updMut = useUpdateSolarGoogleTable();
+  useAddSolarGoogleTable();
+  useUpdateSolarGoogleTable();
   const delMut = useDeleteSolarGoogleTable();
 
   const [loadingImport, setLoadingImport] = useState<number | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [current, setCurrent] = useState<Partial<GoogleTable> | null>(null);
+  const [, setDialogOpen] = useState(false);
+  const [, setCurrent] = useState<Partial<GoogleTable> | null>(null);
 
   const handleRunImport = async (id: number) => {
     setLoadingImport(id);

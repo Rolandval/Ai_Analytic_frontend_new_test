@@ -19,7 +19,7 @@ export const useAllSolarPanels = (): UseAllSolarPanelsReturn => {
       setError(null);
       try {
         const response = await getAllSolarPanels();
-        setSolarPanels(response.data);
+        setSolarPanels(response.solar_panels);
       } catch (err) {
         setError(err as Error);
       } finally {

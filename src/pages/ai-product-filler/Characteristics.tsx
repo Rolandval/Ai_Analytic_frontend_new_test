@@ -148,7 +148,7 @@ export default function AIProductFillerCharacteristics() {
             {/* Кнопки дій (без логіки) */}
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={() => setSaving(true) || setTimeout(() => setSaving(false), 800)}
+              onClick={() => { setSaving(true); setTimeout(() => setSaving(false), 800); }}
               disabled={saving}
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -157,7 +157,7 @@ export default function AIProductFillerCharacteristics() {
             </Button>
             <Button
               className="bg-purple-600 hover:bg-purple-700 text-white"
-              onClick={() => setMassGenerating(true) || setTimeout(() => setMassGenerating(false), 800)}
+              onClick={() => { setMassGenerating(true); setTimeout(() => setMassGenerating(false), 800); }}
               disabled={massGenerating}
             >
               {massGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -167,7 +167,7 @@ export default function AIProductFillerCharacteristics() {
               {t('buttons.update')}
             </Button>
             <Button
-              onClick={() => setSelectedGenerating(true) || setTimeout(() => setSelectedGenerating(false), 800)}
+              onClick={() => { setSelectedGenerating(true); setTimeout(() => setSelectedGenerating(false), 800); }}
               disabled={selectedGenerating}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold px-4"
             >

@@ -62,23 +62,13 @@ const UnifiedFilter: React.FC<FilterProps> = ({ filters, onFilterChange, filterO
         ))}
       </Select>
       <MultiSelect
-        name="electrolyte"
-        values={localFilters.electrolyte || []}
-        onChange={value => handleMultiSelectChange('electrolyte', value)}
-      >
-        {filterOptions.electrolytes.map(electrolyte => (
-          <SelectItem key={electrolyte} value={electrolyte}>{electrolyte}</SelectItem>
-        ))}
-      </MultiSelect>
+        options={filterOptions.electrolytes.map(v => ({ value: v, label: v }))}
+        onValueChange={(value: string[]) => handleMultiSelectChange('electrolyte', value)}
+      />
       <MultiSelect
-        name="brands"
-        values={localFilters.brands || []}
-        onChange={value => handleMultiSelectChange('brands', value)}
-      >
-        {filterOptions.brands.map(brand => (
-          <SelectItem key={brand} value={brand}>{brand}</SelectItem>
-        ))}
-      </MultiSelect>
+        options={filterOptions.brands.map(v => ({ value: v, label: v }))}
+        onValueChange={(value: string[]) => handleMultiSelectChange('brands', value)}
+      />
       <Button onClick={applyFilters}>Apply Filters</Button>
     </div>
   );

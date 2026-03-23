@@ -22,7 +22,7 @@ export interface GenerateCSVRequest {
 }
 
 export interface CSVDataItem {
-  [key: string]: string | number | null;
+  [key: string]: string | number | null | undefined;
   TheDate: string;
   weekday?: string;
   temperature?: number;

@@ -16,21 +16,27 @@ export const useInverters = (initialParams: InverterListRequest): UseInvertersRe
   const [error, setError] = useState<Error | null>(null);
   const [params, setParams] = useState<InverterListRequest>(initialParams);
 
-  const fetchInverters = useCallback(async (fetchParams: InverterListRequest) => {
+  const fetchInverters = useCallback(async (fetchParams: InverterListRequest, signal: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getInverters(fetchParams);
+      const result = await getInverters(fetchParams, signal);
       setData(result);
     } catch (err) {
-      setError(err as Error);
+      if ((err as Error).name !== 'CanceledError' && (err as Error).name !== 'AbortError') {
+        setError(err as Error);
+      }
     } finally {
-      setLoading(false);
+      if (!signal.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchInverters(params);
+    const controller = new AbortController();
+    fetchInverters(params, controller.signal);
+    return () => controller.abort();
   }, [params, fetchInverters]);
 
   return { data, loading, error, params, setParams };

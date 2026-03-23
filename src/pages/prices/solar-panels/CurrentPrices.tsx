@@ -24,7 +24,7 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
             onClick={(e) => {
               // Запобігаємо завантаженню, дозволяємо браузеру відкрити в новій вкладці
               e.preventDefault();
-              window.open(row.datasheet_url, '_blank');
+              window.open(row.datasheet_url || undefined, '_blank');
             }}
           >
             {row.full_name}
@@ -72,16 +72,16 @@ const createColumns = (usdRate: number, markup: number = 15): TableColumn<SolarP
     } 
   },
   {
-    key: 'suppliers_cities',
+    key: 'supplier_cities',
     header: 'Міста',
     sortable: true,
     render: (row) => {
-      if (!row.suppliers_cities || row.suppliers_cities.length === 0) {
+      if (!row.supplier_cities || row.supplier_cities.length === 0) {
         return <span className="text-gray-500">Невідомо</span>;
       }
       return (
         <div className="flex flex-wrap gap-1">
-          {row.suppliers_cities.map((city: string, index: number) => (
+          {row.supplier_cities.map((city: string, index: number) => (
             <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
               {city}
             </span>

@@ -315,7 +315,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     const stable = getCategoryStableKey(cat);
     const map = readCategoryUnsaved();
     if (!map[stable]) map[stable] = {};
-    map[stable][key as any] = value;
+    (map[stable] as any)[key] = value;
     writeCategoryUnsaved(map);
   };
 
@@ -554,8 +554,9 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
         if (!mounted) return;
         setModelsError((e as any)?.message || 'Помилка завантаження моделей');
       } finally {
-        if (!mounted) return;
-        setModelsLoading(false);
+        if (mounted) {
+          setModelsLoading(false);
+        }
       }
     })();
     return () => { mounted = false; };
@@ -793,8 +794,8 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
 
   // Детальне логування для кожної колонки
   ['product', 'short_description', 'meta_keywords', 'page_title'].forEach(col => {
-    const categoryList = categoryPrompts[col] || [];
-    const regularList = templatesState?.prompts?.[col] || [];
+    const categoryList = categoryPrompts[col as keyof typeof categoryPrompts] || [];
+    const regularList = (templatesState?.prompts as any)?.[col] as SiteContentPrompt[] || [];
     console.log(`[Generation] Prompts for ${col}:`, {
       category: categoryList.length,
       regular: regularList.length,
@@ -1838,7 +1839,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
           
           console.log(`⏳ [GenerateSelected] Calling generateAiDescription...`);
           const res = await generateAiDescription(payload);
-          console.log(`✅ [GenerateSelected] API response received:`, res?.substring(0, 100) + '...');
+          console.log(`✅ [GenerateSelected] API response received:`, (res as string)?.substring(0, 100) + '...');
           const generated = extractGeneratedText(res);
           if (generated && typeof generated === 'string') {
             const field = mapSiteColumnToContentField[job.col];
@@ -2123,7 +2124,7 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
     
     await categoryGeneration.handleGenerateSelectedCategories(
       categorySelectedCells,
-      onCategoryCellCheckedChange,
+      (onCategoryCellCheckedChange as unknown) as (key: string, selected: boolean) => void,
       () => {
         setCategorySelectedCells({});
         setCategoryRowCheckedRows({});
@@ -3433,7 +3434,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                       {chatModels.map((m) => (
                         <SelectItem key={m.id} value={m.name} className="flex items-center">
                           <div className="flex items-center gap-2">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={m.icon} alt="icon" className="w-4 h-4 rounded-sm" />
                             <span>{m.name}</span>
                             {typeof m.input_tokens_price === 'number' && typeof m.output_tokens_price === 'number' && (
@@ -3460,7 +3460,6 @@ const [categoryColumnHeaderChecked, setCategoryColumnHeaderChecked] = useState<P
                         {chatModels.map((m) => (
                           <SelectItem key={m.id} value={m.name} className="flex items-center">
                             <div className="flex items-center gap-2">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={m.icon} alt="icon" className="w-4 h-4 rounded-sm" />
                               <span>{m.name}</span>
                               {typeof m.input_tokens_price === 'number' && typeof m.output_tokens_price === 'number' && (

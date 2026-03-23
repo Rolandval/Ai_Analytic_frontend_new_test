@@ -1,5 +1,5 @@
 import { generateAiCategoryDescription } from '@/api/contentDescriptions';
-import { type SiteColumnName, type SiteContentPrompt, fetchCategoryPrompts } from '@/api/contentPrompts';
+import type { SiteColumnName, SiteContentPrompt } from '@/api/contentPrompts';
 import type { SiteCategoryDescription } from '@/api/siteCategoriesDescriptions';
 
 // Колонки для категорій (відповідають полям SiteCategoryDescription)

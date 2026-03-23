@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { getAllBatteries } from '@/services/batteries.api';
-import { Battery } from '@/types/battery';
+import { BatteryDirectoryItem } from '@/types/battery';
 
 interface UseAllBatteriesReturn {
-  batteries: Battery[];
+  batteries: BatteryDirectoryItem[];
   loading: boolean;
   error: Error | null;
 }
 
 export const useAllBatteries = (): UseAllBatteriesReturn => {
-  const [batteries, setBatteries] = useState<Battery[]>([]);
+  const [batteries, setBatteries] = useState<BatteryDirectoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -19,7 +19,7 @@ export const useAllBatteries = (): UseAllBatteriesReturn => {
       setError(null);
       try {
         const response = await getAllBatteries();
-        setBatteries(response.data);
+        setBatteries(response.batteries);
       } catch (err) {
         setError(err as Error);
       } finally {

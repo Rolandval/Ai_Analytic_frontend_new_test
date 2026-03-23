@@ -1,4 +1,4 @@
-import { lazy } from 'react';
+import React, { lazy } from 'react';
 
 // Lazy-завантаження важких компонентів
 export const LazyInverterPriceComparison = lazy(() => 
@@ -26,15 +26,15 @@ export const LazyBatterySuppliers = lazy(() =>
 );
 
 // Lazy charts для графіків
-export const LazyCharts = lazy(() => 
+export const LazyCharts = lazy(() =>
   import('@/components/charts').then(module => ({
-    default: module
+    default: module as unknown as React.ComponentType<unknown>
   }))
 );
 
 // Lazy CreatableCombobox для важких форм
-export const LazyCreatableCombobox = lazy(() => 
+export const LazyCreatableCombobox = lazy(() =>
   import('@/components/ui/CreatableCombobox').then(module => ({
-    CreatableCombobox: module.CreatableCombobox
+    default: module.CreatableCombobox
   }))
 );

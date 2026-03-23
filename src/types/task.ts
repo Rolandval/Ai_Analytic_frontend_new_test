@@ -20,12 +20,16 @@ export enum TaskTypeEnum {
 export interface UploadTask {
   id: number;
   name: string;
+  description?: string;
   interval: UploadTasksIntervalEnum;
   start_time: string; // ISO string from backend
   product_type: ProductTypeEnum;
   is_active: boolean;
   task_type: TaskTypeEnum;
   last_run: string | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface PaginatedUploadTasksResponse {
@@ -43,5 +47,7 @@ export enum TaskStatus {
   RUNNING = 'running',
   SUCCESS = 'success',
   FAILED = 'failed',
+  COMPLETED = 'completed',
+  IN_PROGRESS = 'in_progress',
 }
 export type PaginatedTasksResponse = PaginatedUploadTasksResponse;

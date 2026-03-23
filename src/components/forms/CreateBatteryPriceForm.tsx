@@ -48,8 +48,8 @@ export const CreateBatteryPriceForm: React.FC<Props> = ({ brands, suppliers, cur
         e.preventDefault();
         await onSubmit({
           ...form,
-          volume: form.volume === undefined || form.volume === null || form.volume === '' ? undefined : Number(form.volume),
-          c_amps: form.c_amps === undefined || form.c_amps === null || form.c_amps === '' ? undefined : Number(form.c_amps),
+          volume: form.volume === undefined || form.volume === null || (form.volume as unknown) === '' ? undefined : Number(form.volume),
+          c_amps: form.c_amps === undefined || form.c_amps === null || (form.c_amps as unknown) === '' ? undefined : Number(form.c_amps),
           price: Number(form.price),
         } as any);
       }}

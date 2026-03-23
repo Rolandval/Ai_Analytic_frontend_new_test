@@ -36,7 +36,7 @@ export const InverterPrices = () => {
       clearTimeout(timer);
       isTypingRef.current = false;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [localFullName]);
 
   // Sync localFullName with filters only when not typing

@@ -25,7 +25,7 @@ export const useSolarPanelCurrentPricesCrud = () => {
   const { data, isFetching } = useQuery<PaginatedSolarPanelPricesResponse>({
     queryKey: ['solar-panel-current-prices', filters, hasUserInteracted],
     queryFn: () => listSolarPanelCurrentPrices({ ...filters, supplier_status: ['SUPPLIER'] }), // Додаємо supplier_status тільки при запиті
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: PaginatedSolarPanelPricesResponse | undefined) => prev,
     enabled: shouldFetchData, // Використовуємо shouldFetchData замість false
   });
 

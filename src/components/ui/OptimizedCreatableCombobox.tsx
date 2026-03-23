@@ -122,7 +122,6 @@ export const OptimizedCreatableCombobox = React.memo(({
     const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
       const option = allOptions[index];
       const isSelected = value === option.value;
-      const isCreateOption = index === 0 && showCreateOption;
       
       return (
         <div style={style}>
@@ -138,6 +137,7 @@ export const OptimizedCreatableCombobox = React.memo(({
     return (
       <List
         height={Math.min(height, allOptions.length * itemHeight)}
+        width="100%"
         itemCount={allOptions.length}
         itemSize={itemHeight}
         className="scrollbar-thin scrollbar-thumb-gray-300"

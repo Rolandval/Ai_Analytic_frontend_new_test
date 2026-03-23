@@ -90,7 +90,7 @@ export const SolarPanelComparisonFilters: React.FC<Props> = ({ current, setFilte
   const [localFullName, setLocalFullName] = useState(current.full_name || '');
   const isTypingRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const { toast } = useToast();
+  const { toast: _toast } = useToast();
   // total active badges counter for unified "Показати всі"
   const totalActiveBadges = (
     (local.brands?.length || 0) +

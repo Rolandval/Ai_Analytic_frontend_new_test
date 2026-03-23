@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '@/lib/api-client';
 
 // Base URL proxied by Vite to backend
 // Endpoints example provided assume baseUrl, we'll use "/content" per existing proxy in vite.config.ts
@@ -21,7 +21,7 @@ export interface DatabaseItem {
 }
 
 export async function getDatabases() {
-  const { data } = await axios.get<DatabaseItem[]>(`${BASE}/get_databases`);
+  const { data } = await apiClient.get<DatabaseItem[]>(`${BASE}/get_databases`);
   return data;
 }
 
@@ -36,7 +36,7 @@ export interface CreateDatabasePayload {
 }
 
 export async function createDatabase(payload: CreateDatabasePayload) {
-  const { data } = await axios.post<DatabaseItem>(`${BASE}/create_database`, payload);
+  const { data } = await apiClient.post<DatabaseItem>(`${BASE}/create_database`, payload);
   return data;
 }
 
@@ -45,17 +45,17 @@ export interface UpdateDatabasePayload extends CreateDatabasePayload {
 }
 
 export async function updateDatabase(payload: UpdateDatabasePayload) {
-  const { data } = await axios.post<DatabaseItem>(`${BASE}/update_database`, payload);
+  const { data } = await apiClient.post<DatabaseItem>(`${BASE}/update_database`, payload);
   return data;
 }
 
 export async function deleteDatabase(id: number) {
-  const { data } = await axios.delete<{ success: boolean }>(`${BASE}/delete_database/${id}`);
+  const { data } = await apiClient.delete<{ success: boolean }>(`${BASE}/delete_database/${id}`);
   return data;
 }
 
 export async function checkDatabaseConnection(id: number) {
-  const { data } = await axios.get<{ ok: boolean; message?: string } | null>(
+  const { data } = await apiClient.get<{ ok: boolean; message?: string } | null>(
     `${BASE}/check_database_connection/${id}`
   );
   // Some backends may return 200 with empty body; normalize it
@@ -73,7 +73,7 @@ export interface CreateExtentionPayload {
 }
 
 export async function createExtention(payload: CreateExtentionPayload) {
-  const { data } = await axios.post(`${BASE}/extentions/create`, payload);
+  const { data } = await apiClient.post(`${BASE}/extentions/create`, payload);
   return data;
 }
 
@@ -83,11 +83,11 @@ export interface UpdateExtentionPayload {
 }
 
 export async function updateExtention(payload: UpdateExtentionPayload) {
-  const { data } = await axios.patch(`${BASE}/extentions/update`, payload);
+  const { data } = await apiClient.patch(`${BASE}/extentions/update`, payload);
   return data;
 }
 
 export async function deleteExtention(id: number) {
-  const { data } = await axios.delete(`${BASE}/extentions/delete/${id}`);
+  const { data } = await apiClient.delete(`${BASE}/extentions/delete/${id}`);
   return data;
 }
