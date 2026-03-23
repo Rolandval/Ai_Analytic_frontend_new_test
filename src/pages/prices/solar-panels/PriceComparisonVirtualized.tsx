@@ -482,6 +482,7 @@ export default function SolarPanelPriceComparisonVirtualized() {
             {/* Віртуалізована таблиця */}
             <List
               height={550}
+              width="100%"
               itemCount={sortedPanels.length}
               itemSize={60}
               itemData={virtualizedData}

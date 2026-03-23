@@ -227,7 +227,7 @@ export default function AIProductFillerTemplates() {
         if (wasActive && list.length > 0) {
           // шукаємо найбільший id, що менший за видалений; якщо немає — просто максимальний id
           const less = list.filter((x: SiteContentPrompt) => x.id < id);
-          let toActivate = less.length > 0 ? less.reduce((a, b) => (a.id > b.id ? a : b)) : list.reduce((a, b) => (a.id > b.id ? a : b));
+          const toActivate = less.length > 0 ? less.reduce((a, b) => (a.id > b.id ? a : b)) : list.reduce((a, b) => (a.id > b.id ? a : b));
           if (toActivate && !toActivate.is_active) {
             await activateSiteContentPrompt(toActivate.id);
             if (entity === 'product') {
@@ -269,8 +269,8 @@ export default function AIProductFillerTemplates() {
       ]);
       
       console.log(`[Templates] Loaded prompts:`, {
-        regular: Object.keys(data).map(k => ({ column: k, count: data[k].length })),
-        category: Object.keys(categoryData).map(k => ({ column: k, count: categoryData[k].length }))
+        regular: Object.keys(data).map(k => ({ column: k, count: (data as any)[k].length })),
+        category: Object.keys(categoryData).map(k => ({ column: k, count: (categoryData as any)[k].length }))
       });
       
       setPromptsByLang(prev => ({ ...prev, [lang]: data }));
@@ -295,7 +295,7 @@ export default function AIProductFillerTemplates() {
         }
       });
       
-      console.log(`[Templates] Initialized baseline for ${lang}:`, Object.keys(last).map(k => ({ column: k, length: last[k]?.length || 0 })));
+      console.log(`[Templates] Initialized baseline for ${lang}:`, Object.keys(last).map(k => ({ column: k, length: (last as any)[k]?.length || 0 })));
       setLastSavedTextByLang(prev => ({ ...prev, [lang]: last }));
     } catch (e) {
       console.error('Не вдалося завантажити підказки', e);

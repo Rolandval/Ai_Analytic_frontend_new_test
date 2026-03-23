@@ -18,28 +18,26 @@ import {
 import { Badge } from '@/components/ui/Badge.tsx';
 
 const TaskAutomationPage = () => {
-  const { data: tasks, isLoading } = useGetBatteryTasks();
   const createTask = useCreateBatteryTask();
   const runTask = useRunBatteryTask();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({ name: '', description: '' });
-    const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Task; direction: 'ascending' | 'descending' } | null>({ key: 'created_at', direction: 'descending' });
+  const { data: tasks, isLoading } = useGetBatteryTasks(currentPage, ITEMS_PER_PAGE);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Task; direction: 'ascending' | 'descending' } | null>({ key: 'name', direction: 'descending' });
 
-    const processedTasks = useMemo(() => {
-    let items = [...(tasks || [])];
+  const processedTasks = useMemo(() => {
+    let items = [...((tasks as any)?.results || [])] as Task[];
     // Sorting logic
     if (sortConfig !== null) {
       items.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
+        const aVal = (a[sortConfig.key] ?? '') as string;
+        const bVal = (b[sortConfig.key] ?? '') as string;
+        if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
     }
@@ -48,7 +46,7 @@ const TaskAutomationPage = () => {
       items = items.filter(
         (task) =>
           task.name.toLowerCase().includes(filter.toLowerCase()) ||
-          task.description.toLowerCase().includes(filter.toLowerCase()),
+          (task.description ?? '').toLowerCase().includes(filter.toLowerCase()),
       );
     }
     return items;
@@ -77,7 +75,7 @@ const TaskAutomationPage = () => {
   };
 
   const handleCreateTask = () => {
-    createTask.mutate(newTask, {
+    createTask.mutate(newTask as any, {
       onSuccess: () => {
         setIsDialogOpen(false);
         setNewTask({ name: '', description: '' });
@@ -85,8 +83,8 @@ const TaskAutomationPage = () => {
     });
   };
 
-  const getStatusVariant = (status: TaskStatus) => {
-    switch (status) {
+  const getStatusVariant = (status: string | undefined) => {
+    switch (status as TaskStatus) {
       case TaskStatus.COMPLETED:
         return 'success';
       case TaskStatus.IN_PROGRESS:
@@ -136,8 +134,8 @@ const TaskAutomationPage = () => {
                   <TableCell>
                     <Badge variant={getStatusVariant(task.status)}>{task.status}</Badge>
                   </TableCell>
-                  <TableCell>{new Date(task.created_at).toLocaleString()}</TableCell>
-                  <TableCell>{new Date(task.updated_at).toLocaleString()}</TableCell>
+                  <TableCell>{task.created_at ? new Date(task.created_at).toLocaleString() : '-'}</TableCell>
+                  <TableCell>{task.updated_at ? new Date(task.updated_at).toLocaleString() : '-'}</TableCell>
                   <TableCell>
                     <Button
                       variant="outline"

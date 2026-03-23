@@ -2,16 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { InverterPriceListRequestSchema } from '@/types/inverters';
 import { Input } from '@/components/ui/Input';
 import { MultiSelectPopover } from './ui/MultiSelectPopover';
-import { getInverterCities } from '@/services/cities.api';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { Button } from '@/components/ui/Button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { GripVertical, X } from 'lucide-react';
 import {

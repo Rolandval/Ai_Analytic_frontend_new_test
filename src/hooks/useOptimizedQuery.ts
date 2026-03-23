@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useDebounce } from 'use-debounce';
 
 interface UseOptimizedQueryOptions<T> {
@@ -39,7 +39,7 @@ export function useOptimizedQuery<T>({
     queryFn: memoizedQueryFn,
     enabled,
     staleTime,
-    cacheTime,
+    gcTime: cacheTime,
     // Додаткові оптимізації
     refetchOnWindowFocus: false,
     refetchOnMount: false,

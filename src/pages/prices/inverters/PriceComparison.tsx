@@ -54,6 +54,7 @@ interface InverterWithSupplierPrices {
   generation: string | null;
   string_count: number | null;
   firmware: string | null;
+  recommendedPrice?: number | null;
   supplier_prices: SupplierPrice[];
 }
 
@@ -403,7 +404,7 @@ export default function InverterPriceComparison() {
           result.inverters.flatMap((inverter: InverterWithSupplierPrices) => 
             inverter.supplier_prices.map((sp: SupplierPrice) => (sp.supplier_name ?? '').toString().trim())
           )
-        )].filter((n) => n.length > 0) as string[];
+        )].filter((n): n is string => typeof n === 'string' && n.length > 0);
         // Move "АКУМУЛЯТОР-Центр" to the end
         const normalize = (s: string) => s.toLowerCase().replace(/[-\s]+/g, ' ').trim();
         const targetNorm = normalize('АКУМУЛЯТОР-Центр');
@@ -819,7 +820,7 @@ export default function InverterPriceComparison() {
                       {/* Recommended price column */}
                       {visibleColumns['recommended'] !== false && (
                         <TableCell className="text-center font-medium">
-                          {inverter.recommendedPrice !== null ? (
+                          {inverter.recommendedPrice != null ? (
                             <div className="flex flex-col items-center">
                               <span className="text-purple-700 dark:text-purple-400 font-medium text-[11px]">
                                 {formatPrice(inverter.recommendedPrice)}&nbsp;$

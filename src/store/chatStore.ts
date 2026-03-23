@@ -61,6 +61,7 @@ interface ChatState {
   renameChat: (id: number, name: string) => Promise<void>;
   switchModel: (id: number, model: string) => Promise<void>;
   deleteChat: (id: number) => Promise<void>;
+  cleanup: () => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -90,7 +91,11 @@ export const useChatStore = create<ChatState>()(
     },
     selectChat(id) {
       const { ws } = get();
-      if (ws) ws.close();
+      // Close previous WebSocket and null out handler to prevent stale messages
+      if (ws) {
+        ws.onmessage = null;
+        ws.close();
+      }
       const newWs = openChatWebSocket(id);
       newWs.onmessage = (ev) => {
         const data = JSON.parse(ev.data);
@@ -105,14 +110,27 @@ export const useChatStore = create<ChatState>()(
         s.ws = newWs;
       });
     },
+    cleanup() {
+      const { ws } = get();
+      if (ws) {
+        ws.onmessage = null;
+        ws.close();
+      }
+      set((s) => {
+        s.ws = undefined;
+        s.currentChatId = null;
+      });
+    },
     async sendMessage(text, useExtension = false) {
       const state = get();
       const chatId = state.currentChatId;
-      if (!chatId) return;
+      if (chatId === null) return;
+      // chatId is narrowed to number from here
+      const numericChatId: number = chatId;
       // optimistic add
       set((s) => {
-        s.messages[chatId] = s.messages[chatId] || [];
-        s.messages[chatId].push({ id: generateUUID(), role: "user", content: text });
+        s.messages[numericChatId] = s.messages[numericChatId] || [];
+        s.messages[numericChatId].push({ id: generateUUID(), role: "user", content: text });
       });
       
       // Перевіряємо, що WebSocket дійсно встановлений та відкритий
@@ -132,26 +150,25 @@ export const useChatStore = create<ChatState>()(
       
       // Функція для відправки повідомлення через HTTP
       async function fallbackToHttpRequest() {
-        const chat = state.chats.find((c) => c.id === chatId);
+        const chat = state.chats.find((c) => c.id === numericChatId);
         const model = chat?.model ?? undefined;
         try {
-          const reply = await chatApi.sendMessage({ 
-            chat_id: chatId, 
-            message: text, 
+          const reply = await chatApi.sendMessage({
+            chat_id: numericChatId,
+            message: text,
             model,
-            use_extention: useExtension 
+            use_extention: useExtension
           });
           set((s) => {
-            s.messages[chatId].push({ id: generateUUID(), role: "assistant", content: reply });
+            s.messages[numericChatId].push({ id: generateUUID(), role: "assistant", content: reply });
           });
         } catch (error) {
           console.error("HTTP send message error:", error);
-          // Додаємо повідомлення про помилку в чат
           set((s) => {
-            s.messages[chatId].push({ 
-              id: generateUUID(), 
-              role: "assistant", 
-              content: "Помилка відправки повідомлення. Спробуйте ще раз." 
+            s.messages[numericChatId].push({
+              id: generateUUID(),
+              role: "assistant",
+              content: "Помилка відправки повідомлення. Спробуйте ще раз."
             });
           });
         }

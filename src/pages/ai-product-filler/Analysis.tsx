@@ -59,7 +59,7 @@ export default function AIProductFillerAnalysis() {
       const PAGE_SIZE = 2000;
       let page = 1;
       let all: ContentDescription[] = [];
-      // eslint-disable-next-line no-constant-condition
+       
       while (true) {
         const resp = await fetchContentDescriptions<ContentDescription>({ page, limit: PAGE_SIZE });
         const items = resp.items || [];

@@ -1,7 +1,5 @@
 import {
   FileText,
-  LayoutGrid,
-  FilePlus,
   FileCheck
 } from 'lucide-react';
 

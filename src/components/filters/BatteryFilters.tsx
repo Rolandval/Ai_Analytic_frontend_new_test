@@ -129,7 +129,7 @@ interface TopSearchProps {
 
 // Компонент для верхньої секції з пошуком та активними фільтрами
 export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters, onReset, priceCurrencyLabel, excludeFields }) => {
-  const [cities, setCities] = useState<string[]>([]);
+  const [, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current,
     markup: current.markup !== undefined ? current.markup : 15,
@@ -365,7 +365,7 @@ export const BatteryTopSearch: React.FC<TopSearchProps> = ({ current, setFilters
 };
 
 
-export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, actionsButtonGroup, priceCurrencyLabel, excludeFields }) => {
+export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, suppliers, actionsButtonGroup: _actionsButtonGroup, priceCurrencyLabel, excludeFields }) => {
   const [cities, setCities] = useState<string[]>([]);
   const [local, setLocal] = useState<BatteryPriceListRequestSchema>({
     ...current,
@@ -453,14 +453,6 @@ export const BatteryFilters: React.FC<Props> = ({ current, setFilters, brands, s
     return () => clearTimeout(t);
   }, [local, setFilters]);
 
-  const reset = () => {
-    const resetFilters: BatteryPriceListRequestSchema = {
-      page: 1,
-      markup: 15,
-    };
-    setLocal(resetFilters);
-    setFilters(resetFilters);
-  };
 
   // Filter components mapping
   const filterComponents: Record<string, React.ReactNode> = {

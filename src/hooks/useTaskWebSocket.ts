@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface TaskProgressData {
   status?: 'init' | 'started' | 'finished' | 'error' | 'done';
@@ -44,6 +44,9 @@ export const useTaskWebSocket = (): UseTaskWebSocketReturn => {
   const tablesInProgress = useRef<Set<string>>(new Set());
   const keepAliveRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs to avoid stale closures in WebSocket handlers
+  const isRunningRef = useRef(false);
+  const isCompleteRef = useRef(false);
 
   const resetProgress = useCallback(() => {
     setProgress(0);
@@ -65,6 +68,8 @@ export const useTaskWebSocket = (): UseTaskWebSocketReturn => {
 
     resetProgress();
     setIsRunning(true);
+    isRunningRef.current = true;
+    isCompleteRef.current = false;
 
     // Clear any existing intervals
     if (keepAliveRef.current) {
@@ -197,7 +202,9 @@ export const useTaskWebSocket = (): UseTaskWebSocketReturn => {
         else if (data.status === 'done') {
           console.log('Task completed:', data);
           setIsComplete(true);
+          isCompleteRef.current = true;
           setIsRunning(false);
+          isRunningRef.current = false;
           setProgress(100);
           setCurrentTables([]); // Clear current tables
           
@@ -233,7 +240,8 @@ export const useTaskWebSocket = (): UseTaskWebSocketReturn => {
       }
       
       // If task is still running and connection was lost unexpectedly, try to reconnect
-      if (isRunning && !isComplete && event.code !== 1000) {
+      // Use refs to avoid stale closure on captured state values
+      if (isRunningRef.current && !isCompleteRef.current && event.code !== 1000) {
         console.log('Attempting to reconnect in 5 seconds...');
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('Reconnecting WebSocket...');
@@ -245,11 +253,26 @@ export const useTaskWebSocket = (): UseTaskWebSocketReturn => {
     };
   }, [totalTables, completedTables.length, resetProgress]);
 
+  // Cleanup on unmount — prevents setState on unmounted component
+  useEffect(() => {
+    return () => {
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (wsRef.current) {
+        wsRef.current.onmessage = null;
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, []);
+
   return {
     isConnected,
     isRunning,
     progress,
-    currentTables, // Return array instead of single table
+    currentTables,
     completedTables,
     totalTables,
     totalUpdatedPrices,

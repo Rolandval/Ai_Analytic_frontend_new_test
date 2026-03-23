@@ -9,7 +9,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { generateCsv } from '@/api/analytics';
 import { CSVDataItem, ProductType } from '@/types/forecasting';
-import { BarChart, LineChart, PieChart } from '@/components/charts';
+import { LineChart } from '@/components/charts';
 
 const AnalyticsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ProductType>('batteries');

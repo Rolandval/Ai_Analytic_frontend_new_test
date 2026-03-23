@@ -43,24 +43,20 @@ const InvertersDirectory = () => {
     ],
   };
 
+  /* -------- hooks for CRUD (must be at component top level) -------- */
+  const { mutate: createInverter } = useCreateInverter();
+  const { mutate: updateInverter } = useUpdateInverter();
+  const { mutate: deleteInverter } = useDeleteInverter();
+
   return (
     <DirectoryPage<Inverter, InverterListRequest>
       title="Довідник – Інвертори"
       columns={columns}
       filterFields={filterFields}
       useList={useList as any}
-      useCreate={() => {
-        const { mutate } = useCreateInverter();
-        return { mutate: (d) => mutate(d as any) };
-      }}
-      useUpdate={() => {
-        const { mutate } = useUpdateInverter();
-        return { mutate: ({ id, data }) => mutate({ id, data: data as any }) };
-      }}
-      useDelete={() => {
-        const { mutate } = useDeleteInverter();
-        return { mutate };
-      }}
+      useCreate={() => ({ mutate: (d) => createInverter(d as any) })}
+      useUpdate={() => ({ mutate: ({ id, data }) => updateInverter({ id, data: data as any }) })}
+      useDelete={() => ({ mutate: deleteInverter })}
       initialParams={{ page: 1, page_size: 15 } as InverterListRequest}
       lostPath="/inverters/directory/lost"
       formSelectOptions={formSelectOptions}

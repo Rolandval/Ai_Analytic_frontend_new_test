@@ -175,8 +175,8 @@ export const BatteryComparisonFilters: React.FC<Props> = ({ current, setFilters,
   const [localFullName, setLocalFullName] = useState(current.full_name || '');
   const isTypingRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const { toast } = useToast();
-  
+  const { toast: _toast } = useToast();
+
 
   // Sync localFullName with current.full_name when not typing
   useEffect(() => {

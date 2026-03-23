@@ -252,7 +252,7 @@ export const InverterComparisonFilters: React.FC<Props> = ({ current, setFilters
       setLocalFullName(current.full_name || '');
     }
     // We only care about current.full_name changes here
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [current.full_name]);
 
   // Debounce full_name input

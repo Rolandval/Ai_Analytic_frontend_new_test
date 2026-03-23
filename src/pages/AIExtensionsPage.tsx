@@ -47,7 +47,7 @@ export const AIExtensionsPage = () => {
   // Filter extensions based on search query
   const filteredExtensions = extensions.filter(ext => 
     ext.table_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    ext.description.toLowerCase().includes(searchQuery.toLowerCase())
+    ext.descriptions.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Handle edit extension

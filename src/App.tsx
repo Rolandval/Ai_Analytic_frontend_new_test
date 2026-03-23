@@ -150,12 +150,7 @@ function App() {
   }, [accentColor]);
 
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
+    <BrowserRouter>
       <FaviconHandler />
       <Toaster />
       <Routes>

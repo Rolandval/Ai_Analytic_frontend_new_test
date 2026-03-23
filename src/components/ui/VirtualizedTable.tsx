@@ -1,4 +1,4 @@
-import { useMemo, useCallback, CSSProperties } from 'react';
+import { useCallback, CSSProperties } from 'react';
 import { FixedSizeList as List } from 'react-window';
 
 interface VirtualizedTableProps<T> {
@@ -30,6 +30,7 @@ export function VirtualizedTable<T>({
     <div className={`virtualized-table ${className}`}>
       <List
         height={height}
+        width="100%"
         itemCount={itemCount}
         itemSize={itemHeight}
         overscanCount={overscan}
@@ -62,7 +63,7 @@ export const VirtualizedSupplierTable = ({
   onDelete,
   className = ""
 }: VirtualizedSupplierTableProps) => {
-  const renderSupplierRow = useCallback((supplier: any, index: number, style: CSSProperties) => (
+  const renderSupplierRow = useCallback((supplier: any, _index: number, style: CSSProperties) => (
     <div 
       style={style} 
       className="flex items-center border-b border-gray-200 hover:bg-gray-50 px-4"

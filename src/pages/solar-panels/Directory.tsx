@@ -49,24 +49,20 @@ const SolarPanelsDirectory = () => {
     return { ...q, data: mapped } as const;
   };
 
+  /* -------- hooks for CRUD (must be at component top level) -------- */
+  const { mutate: createSolarPanel } = useCreateSolarPanel();
+  const { mutate: updateSolarPanel } = useUpdateSolarPanel();
+  const { mutate: deleteSolarPanel } = useDeleteSolarPanel();
+
   return (
     <DirectoryPage<SolarPanel, SolarPanelListRequest>
       title="Довідник – Сонячні панелі"
       columns={columns}
       filterFields={filterFields}
       useList={useList as any}
-      useCreate={() => {
-        const { mutate } = useCreateSolarPanel();
-        return { mutate: (d) => mutate(d as any) };
-      }}
-      useUpdate={() => {
-        const { mutate } = useUpdateSolarPanel();
-        return { mutate: ({ id, data }) => mutate({ id, data: data as any }) };
-      }}
-      useDelete={() => {
-        const { mutate } = useDeleteSolarPanel();
-        return { mutate };
-      }}
+      useCreate={() => ({ mutate: (d) => createSolarPanel(d as any) })}
+      useUpdate={() => ({ mutate: ({ id, data }) => updateSolarPanel({ id, data: data as any }) })}
+      useDelete={() => ({ mutate: deleteSolarPanel })}
       initialParams={{ page: 1, page_size: 15 } as SolarPanelListRequest}
       lostPath="/solar-panels/directory/lost"
       formSelectOptions={{

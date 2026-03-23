@@ -102,7 +102,7 @@ export const useFavicon = () => {
       document.title = config.title;
       
       // Змінюємо theme-color
-      let themeColorMeta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
+      const themeColorMeta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
       if (themeColorMeta) {
         themeColorMeta.content = config.themeColor;
       }
@@ -111,7 +111,7 @@ export const useFavicon = () => {
       faviconLink.href = '/favicon.svg';
       document.title = 'AI Аналітика';
       
-      let themeColorMeta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
+      const themeColorMeta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
       if (themeColorMeta) {
         themeColorMeta.content = '#2563eb';
       }

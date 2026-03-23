@@ -583,7 +583,7 @@ export function PriceHistoryPage<T, CreatePayload = any, UpdatePayload = any>(
                       onClick={() => {
                         const newVisibility = {} as Record<string, boolean>;
                         // Базові колонки для всіх сторінок
-                        let desired = ['full_name', 'brand', 'supplier'];
+                        const desired = ['full_name', 'brand', 'supplier'];
                         
                         // Додаємо специфічні колонки залежно від типу продукту
                         const availableColumns = columns.map(col => col.key as string);

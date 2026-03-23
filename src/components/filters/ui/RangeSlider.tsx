@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState } from "react";
 import { Slider } from "@/components/ui/Slider";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,6 @@ export function RangeSlider({
     vmax ?? max,
   ]);
 
-  const trackRef = useRef<HTMLDivElement>(null);
   const [positions, setPositions] = useState<[number, number]>([
     ((vmin ?? min) - min) / (max - min),
     ((vmax ?? max) - min) / (max - min),

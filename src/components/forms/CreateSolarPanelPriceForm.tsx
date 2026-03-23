@@ -35,7 +35,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
 
   const handle = (field: keyof SolarPanelPriceCreateSchemaRequest) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
-    setForm((p) => ({ ...p, [field]: v }));
+    setForm((p: SolarPanelPriceCreateSchemaRequest) => ({ ...p, [field]: v }));
   };
 
   const valid =
@@ -68,7 +68,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       />
 
       {/* Brand */}
-      <Select value={form.brand} onValueChange={(v) => setForm((p) => ({ ...p, brand: v }))}>
+      <Select value={form.brand} onValueChange={(v) => setForm((p: SolarPanelPriceCreateSchemaRequest) => ({ ...p, brand: v }))}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Бренд" />
         </SelectTrigger>
@@ -82,7 +82,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       </Select>
 
       {/* Supplier */}
-      <Select value={form.supplier} onValueChange={(v) => setForm((p) => ({ ...p, supplier: v }))}>
+      <Select value={form.supplier} onValueChange={(v) => setForm((p: SolarPanelPriceCreateSchemaRequest) => ({ ...p, supplier: v }))}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Постачальник" />
         </SelectTrigger>
@@ -96,7 +96,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       </Select>
 
       {/* Supplier status */}
-      <Select value={form.supplier_status as string} onValueChange={(v) => setForm((p) => ({ ...p, supplier_status: v as any }))}>
+      <Select value={form.supplier_status as string} onValueChange={(v) => setForm((p: SolarPanelPriceCreateSchemaRequest) => ({ ...p, supplier_status: v as any }))}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Статус постачальника" />
         </SelectTrigger>
@@ -114,7 +114,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       <Input type="number" placeholder="Товщина, мм" value={form.thickness ?? ''} onChange={handle('thickness')} />
 
       {/* Panel type */}
-      <Select value={form.panel_type ?? ''} onValueChange={(v) => setForm((p) => ({ ...p, panel_type: v }))}>
+      <Select value={form.panel_type ?? ''} onValueChange={(v) => setForm((p: SolarPanelPriceCreateSchemaRequest) => ({ ...p, panel_type: v }))}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Тип панелі" />
         </SelectTrigger>
@@ -128,7 +128,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       </Select>
 
       {/* Cell type */}
-      <Select value={form.cell_type ?? ''} onValueChange={(v) => setForm((p) => ({ ...p, cell_type: v }))}>
+      <Select value={form.cell_type ?? ''} onValueChange={(v) => setForm((p: SolarPanelPriceCreateSchemaRequest) => ({ ...p, cell_type: v }))}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Тип елементу" />
         </SelectTrigger>
@@ -142,7 +142,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       </Select>
 
       {/* Panel color */}
-      <Select value={form.panel_color ?? ''} onValueChange={(v)=>setForm(p=>({...p,panel_color:v}))}>
+      <Select value={form.panel_color ?? ''} onValueChange={(v)=>setForm((p: SolarPanelPriceCreateSchemaRequest)=>({...p,panel_color:v}))}>
         <SelectTrigger className="w-full"><SelectValue placeholder="Колір панелі" /></SelectTrigger>
         <SelectContent>
           {panelColors.map(c=>(<SelectItem key={c} value={c}>{c}</SelectItem>))}
@@ -150,7 +150,7 @@ export const CreateSolarPanelPriceForm: React.FC<Props> = ({ brands, suppliers, 
       </Select>
 
       {/* Frame color */}
-      <Select value={form.frame_color ?? ''} onValueChange={(v)=>setForm(p=>({...p,frame_color:v}))}>
+      <Select value={form.frame_color ?? ''} onValueChange={(v)=>setForm((p: SolarPanelPriceCreateSchemaRequest)=>({...p,frame_color:v}))}>
         <SelectTrigger className="w-full"><SelectValue placeholder="Колір рами" /></SelectTrigger>
         <SelectContent>
           {frameColors.map(c=>(<SelectItem key={c} value={c}>{c}</SelectItem>))}

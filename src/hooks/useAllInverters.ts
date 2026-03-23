@@ -19,7 +19,7 @@ export const useAllInverters = (): UseAllInvertersReturn => {
       setError(null);
       try {
         const response = await getAllInverters();
-        setInverters(response.data);
+        setInverters(response.inverters);
       } catch (err) {
         setError(err as Error);
       } finally {

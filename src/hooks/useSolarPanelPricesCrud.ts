@@ -22,7 +22,7 @@ export const useSolarPanelPricesCrud = () => {
   const { data, isFetching } = useQuery<PaginatedSolarPanelPricesResponse>({
     queryKey: ['solar-prices', filters],
     queryFn: () => listSolarPanelPrices(filters),
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: PaginatedSolarPanelPricesResponse | undefined) => prev,
   });
 
   const createMut = useMutation({

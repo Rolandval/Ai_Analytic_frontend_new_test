@@ -44,17 +44,11 @@ const ServiceManager: React.FC<ServiceManagerProps> = ({
   onUpgradePlan,
   onRemoveService
 }) => {
-  const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
 
   const allServices = [currentService, ...aiServices];
 
-  const getServiceSubscription = (serviceId: string) => {
-    return subscriptions.find(sub => sub.serviceId === serviceId) || 
-           { serviceId, isActive: false, plan: 'free' as const };
-  };
 
   const getPlanBadgeColor = (plan: string) => {
     switch (plan) {

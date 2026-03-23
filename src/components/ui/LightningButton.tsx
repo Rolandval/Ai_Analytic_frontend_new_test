@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from './Button';
 import { Zap, Loader2 } from 'lucide-react';
 import { UploadTask } from '@/types/task';

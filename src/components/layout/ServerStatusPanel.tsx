@@ -15,23 +15,30 @@ export const ServerStatusPanel = () => {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [isOpen, setIsOpen] = useState<boolean>(false); // Згорнуто за замовчуванням
 
-  const fetchHealth = async () => {
-    try {
-      const response = await fetch('/health');
-      if (response.ok) {
-        const data = await response.json();
-        setHealth(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch server health:', error);
-    }
-  };
-
   useEffect(() => {
+    const abortController = new AbortController();
+
+    const fetchHealth = async () => {
+      try {
+        const response = await fetch('/health', { signal: abortController.signal });
+        if (response.ok) {
+          const data = await response.json();
+          setHealth(data);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Failed to fetch server health:', error);
+        }
+      }
+    };
+
     fetchHealth();
     // Refresh every 30 seconds
     const interval = setInterval(fetchHealth, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      abortController.abort();
+      clearInterval(interval);
+    };
   }, []);
 
   // Get status indicator color based on connection status

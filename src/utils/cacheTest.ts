@@ -82,12 +82,12 @@ export async function testCache() {
     
     const cachedProducts = await dataCache.getCachedProducts('ua');
     const readTime = performance.now() - readStart;
-    console.log(`   ✅ Products retrieved: ${cachedProducts?.length || 0} items (${readTime.toFixed(2)}ms)`);
+    console.log(`   ✅ Products retrieved: ${cachedProducts?.data.length || 0} items (${readTime.toFixed(2)}ms)`);
     
     const readCatStart = performance.now();
     const cachedCategories = await dataCache.getCachedCategories('ua');
     const readCatTime = performance.now() - readCatStart;
-    console.log(`   ✅ Categories retrieved: ${cachedCategories?.length || 0} items (${readCatTime.toFixed(2)}ms)`);
+    console.log(`   ✅ Categories retrieved: ${cachedCategories?.data.length || 0} items (${readCatTime.toFixed(2)}ms)`);
 
     // 6. Перевірка валідації мови
     console.log('\n6️⃣ Testing language validation...');

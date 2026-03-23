@@ -1,40 +1,46 @@
 import { useState, useEffect, useCallback, Dispatch, SetStateAction } from 'react';
-import { getBatteries } from '@/services/batteries.api';
-import { BatteryListRequest, PaginatedBatteriesResponse } from '@/types/battery';
+import { getBatteriesDirectory } from '@/services/batteries.api';
+import { BatteryDirectoryParams, PaginatedBatteriesResponse } from '@/types/battery';
 
 interface UseBatteriesReturn {
   data: PaginatedBatteriesResponse | null;
   loading: boolean;
   error: Error | null;
-  params: BatteryListRequest;
-  setParams: Dispatch<SetStateAction<BatteryListRequest>>;
-  refetch: (params: BatteryListRequest) => void;
+  params: BatteryDirectoryParams;
+  setParams: Dispatch<SetStateAction<BatteryDirectoryParams>>;
+  refetch: (params: BatteryDirectoryParams) => void;
 }
 
-export const useBatteries = (initialParams: BatteryListRequest): UseBatteriesReturn => {
+export const useBatteries = (initialParams: BatteryDirectoryParams): UseBatteriesReturn => {
   const [data, setData] = useState<PaginatedBatteriesResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
-  const [params, setParams] = useState<BatteryListRequest>(initialParams);
+  const [params, setParams] = useState<BatteryDirectoryParams>(initialParams);
 
-  const fetchBatteries = useCallback(async (fetchParams: BatteryListRequest) => {
+  const fetchBatteries = useCallback(async (fetchParams: BatteryDirectoryParams, signal: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getBatteries(fetchParams);
+      const result = await getBatteriesDirectory(fetchParams, signal);
       setData(result);
     } catch (err) {
-      setError(err as Error);
+      if ((err as Error).name !== 'CanceledError' && (err as Error).name !== 'AbortError') {
+        setError(err as Error);
+      }
     } finally {
-      setLoading(false);
+      if (!signal.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchBatteries(params);
+    const controller = new AbortController();
+    fetchBatteries(params, controller.signal);
+    return () => controller.abort();
   }, [params, fetchBatteries]);
 
-  const refetch = (newParams: BatteryListRequest) => {
+  const refetch = (newParams: BatteryDirectoryParams) => {
     setParams(newParams);
   };
 

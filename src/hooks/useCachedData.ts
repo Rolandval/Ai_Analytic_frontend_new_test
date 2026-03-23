@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { dataCache } from '@/utils/dataCache';
 
 interface UseCachedDataOptions<T> {
   /**

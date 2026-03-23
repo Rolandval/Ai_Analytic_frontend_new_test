@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { useGenerateGoogleAdMutation } from '@/services/adsManager/facebook.api';
 import { Loader2, Download, Copy, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';

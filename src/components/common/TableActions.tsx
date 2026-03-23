@@ -84,7 +84,7 @@ export const TableActions: React.FC<TableActionsProps> = ({
             <React.Fragment key={index}>
               {action.variant === 'destructive' && index > 0 && <DropdownMenuSeparator />}
               <DropdownMenuItem
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   action.onClick();
                 }}

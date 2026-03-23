@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -140,7 +140,7 @@ const operationLabels = {
 export default function PhotoGallery() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [, setSelectedPhotos] = useState<string[]>([]);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
@@ -165,13 +165,6 @@ export default function PhotoGallery() {
     photo.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const togglePhotoSelection = (photoId: string) => {
-    setSelectedPhotos(prev =>
-      prev.includes(photoId)
-        ? prev.filter(id => id !== photoId)
-        : [...prev, photoId]
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 dark:from-gray-900 dark:to-gray-800">
