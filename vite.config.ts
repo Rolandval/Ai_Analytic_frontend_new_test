@@ -1,175 +1,105 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from "path"
 
-const BACKEND_ORIGIN = "http://185.233.44.234:8002";
-const MCP_ORIGIN = "http://185.233.44.234:8080";
-const Upload = 'http://185.233.44.234:8003'
-const ANALYTICS_ORIGIN = 'http://185.233.44.234:8003'
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
+  const BACKEND_ORIGIN = env.VITE_BACKEND_URL || "http://185.233.44.234:8002";
+  const MCP_ORIGIN = env.VITE_MCP_URL || "http://185.233.44.234:8080";
+  const UPLOAD_ORIGIN = env.VITE_UPLOAD_URL || "http://185.233.44.234:8003";
+  const ANALYTICS_ORIGIN = env.VITE_ANALYTICS_URL || "http://185.233.44.234:8003";
+
+  return {
+    plugins: [react()],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
     },
-  },
-  server: {
-    cors: true,
-    historyApiFallback: true,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            charts: ['chart.js', 'react-chartjs-2', 'recharts'],
+            ui: ['@radix-ui/react-dialog', '@radix-ui/react-select', '@radix-ui/react-popover', '@radix-ui/react-tabs', '@radix-ui/react-toast'],
+            query: ['@tanstack/react-query'],
+            dnd: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          },
+        },
+      },
+      sourcemap: false,
+      chunkSizeWarningLimit: 1000,
     },
-    proxy: {
-      '/batteries/backend': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
+    server: {
+      cors: true,
+      historyApiFallback: true,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
-      '/inverters/backend': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/solar_panels/backend': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/batteries/upload': {
-        target: Upload,
-        changeOrigin: true,
-      },
-      '/inverters/upload': {
-        target: Upload,
-        changeOrigin: true,
-      },
-      '/solar_panels/upload': {
-        target: Upload,
-        changeOrigin: true,
-      },
-      '/batteries/analytics': {
-        target: ANALYTICS_ORIGIN,
-        changeOrigin: true,
-      },
-      '/inverters/analytics': {
-        target: ANALYTICS_ORIGIN,
-        changeOrigin: true,
-      }, 
-      '/solar_panels/analytics': {
-        target: ANALYTICS_ORIGIN,
-        changeOrigin: true,
-      },
-      // Деякі ендпоїнти використовують дефіси в шляху
-      '/solar-panels/analytics': {
-        target: ANALYTICS_ORIGIN,
-        changeOrigin: true,
-      },
-      '/batteries/exports': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/inverters/exports': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/solar_panels/exports': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/tasks': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/chat': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/reports': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/users': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/auth': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/ads_manager': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/characters': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/health': {
-        target: MCP_ORIGIN,
-        changeOrigin: true,
-      },
-      '/content': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-          });
+      proxy: {
+        '/batteries/backend': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/inverters/backend': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/solar_panels/backend': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/batteries/upload': { target: UPLOAD_ORIGIN, changeOrigin: true },
+        '/inverters/upload': { target: UPLOAD_ORIGIN, changeOrigin: true },
+        '/solar_panels/upload': { target: UPLOAD_ORIGIN, changeOrigin: true },
+        '/batteries/analytics': { target: ANALYTICS_ORIGIN, changeOrigin: true },
+        '/inverters/analytics': { target: ANALYTICS_ORIGIN, changeOrigin: true },
+        '/solar_panels/analytics': { target: ANALYTICS_ORIGIN, changeOrigin: true },
+        '/solar-panels/analytics': { target: ANALYTICS_ORIGIN, changeOrigin: true },
+        '/batteries/exports': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/inverters/exports': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/solar_panels/exports': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/tasks': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/chat': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/reports': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/users': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/auth': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/ads_manager': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/characters': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/health': { target: MCP_ORIGIN, changeOrigin: true },
+        '/content': {
+          target: BACKEND_ORIGIN,
+          changeOrigin: true,
+          secure: false,
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.error('[proxy /content] error:', err.message);
+            });
+          },
         },
-      },
-      '/extentions': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-      },
-      '/analytics': {
-        target: ANALYTICS_ORIGIN,
-        changeOrigin: true,
-      },
-      '/photo': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-        secure: false,
-        bypass: (req, res, options) => {
-          // Пропускаємо клієнтські роути (не API запити)
-          if (req.url?.startsWith('/photo-ai-seo') || req.url?.startsWith('/photo/') === false) {
-            return req.url;
-          }
+        '/extentions': { target: BACKEND_ORIGIN, changeOrigin: true },
+        '/analytics': { target: ANALYTICS_ORIGIN, changeOrigin: true },
+        '/photo': {
+          target: BACKEND_ORIGIN,
+          changeOrigin: true,
+          secure: false,
+          bypass: (req) => {
+            if (req.url?.startsWith('/photo-ai-seo') || !req.url?.startsWith('/photo/')) {
+              return req.url;
+            }
+          },
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.error('[proxy /photo] error:', err.message);
+            });
+          },
         },
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            console.log('photo proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Photo Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Photo Response from the Target:', proxyRes.statusCode, req.url);
-          });
-        },
-      },
-      '/stats': {
-        target: BACKEND_ORIGIN,
-        changeOrigin: true,
-        secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
-            console.log('stats proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            console.log('Sending Stats Request to the Target:', req.method, req.url);
-          });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
-            console.log('Received Stats Response from the Target:', proxyRes.statusCode, req.url);
-          });
+        '/stats': {
+          target: BACKEND_ORIGIN,
+          changeOrigin: true,
+          secure: false,
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.error('[proxy /stats] error:', err.message);
+            });
+          },
         },
       },
     },
-  },
+  }
 })
